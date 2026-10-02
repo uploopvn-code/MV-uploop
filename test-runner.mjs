@@ -1,7 +1,90 @@
 import http from 'node:http';
 import assert from 'node:assert/strict';
-let launches=0,runs=0,busy=false,fail=false;
-const hub=http.createServer(async(req,res)=>{let raw='';for await(const c of req)raw+=c;res.setHeader('Content-Type','application/json');let out={};if(req.url==='/api/login'){res.setHeader('Set-Cookie','orbit_session=test; HttpOnly');}else if(req.url==='/api/auth-status')out={user:{email:'test@example.com'}};else if(req.url==='/api/apps')out=[{id:'a',name:'App',enabled:true,public_params:[{key:'prompt'}]}];else if(req.url==='/api/apps/a/run'){const b=JSON.parse(raw);assert.equal(b.profile_id,'p');assert.equal(b.inputs.prompt,'test prompt');assert.equal(b.inputs.mv_aspect_ratio,'16:9');assert.equal(b.force,false);out={ok:true};}else if(req.url==='/api/profiles')out=[{id:'p',name:'Nick'}];else if(req.url==='/api/flows')out=[];else if(req.url.startsWith('/api/workflows'))out=[{id:'w',name:'Script'}];else if(req.url.endsWith('/launch')){launches++;out={ok:true};}else if(req.url.endsWith('/run-workflow')){runs++;const b=JSON.parse(raw);assert.equal(b.force,false);assert.equal(b.async,true);assert.equal(b.vars.prompt,'test prompt');out={ok:true,data:{started:true}};}else if(req.url.endsWith('/flow-progress'))out=busy?{running:true}:runs?{done:true,ok:!fail,running:false}:{running:false};res.end(JSON.stringify(out));});
-await new Promise(r=>hub.listen(17790,'127.0.0.1',r));process.env.MV_ORBIT_URL='http://127.0.0.1:17790';
-const {loginOrbit,executeOrbit}=await import('./orbit-client.mjs');let cookie='';const req={headers:{}};
-try{await loginOrbit(req,{setHeader:(k,v)=>cookie=v.split(';')[0]},{email:'test@example.com',password:'mock'});req.headers.cookie=cookie;const job={id:'job',kind:'image',payload:{prompt:'test prompt',timing:{duration:8},orbit:{type:'workflow',scriptId:'w',profileId:'p',owner:'test@example.com'}}};await executeOrbit(req,job,()=>{});assert.equal(launches,1);assert.equal(runs,1);busy=true;await assert.rejects(executeOrbit(req,job,()=>{}),/đang chạy/);assert.equal(runs,1);busy=false;fail=true;await assert.rejects(executeOrbit(req,job,()=>{}),/báo lỗi/);assert.equal(runs,2);fail=false;job.payload.orbit={...job.payload.orbit,type:'app',scriptId:'a'};await executeOrbit(req,job,()=>{});console.log('PASS: App inputs dispatch; open nick, dispatch once, prompt variables, async completion, busy protection, failed run reporting');}finally{hub.close();}
+let launches = 0,
+  runs = 0,
+  busy = false,
+  fail = false;
+const hub = http.createServer(async (req, res) => {
+  let raw = '';
+  for await (const c of req) raw += c;
+  res.setHeader('Content-Type', 'application/json');
+  let out = {};
+  if (req.url === '/api/login') {
+    res.setHeader('Set-Cookie', 'orbit_session=test; HttpOnly');
+  } else if (req.url === '/api/auth-status') out = { user: { email: 'test@example.com' } };
+  else if (req.url === '/api/apps')
+    out = [{ id: 'a', name: 'App', enabled: true, public_params: [{ key: 'prompt' }] }];
+  else if (req.url === '/api/apps/a/run') {
+    const b = JSON.parse(raw);
+    assert.equal(b.profile_id, 'p');
+    assert.equal(b.inputs.prompt, 'test prompt');
+    assert.equal(b.inputs.mv_aspect_ratio, '16:9');
+    assert.equal(b.force, false);
+    out = { ok: true };
+  } else if (req.url === '/api/profiles') out = [{ id: 'p', name: 'Nick' }];
+  else if (req.url === '/api/flows') out = [];
+  else if (req.url.startsWith('/api/workflows')) out = [{ id: 'w', name: 'Script' }];
+  else if (req.url.endsWith('/launch')) {
+    launches++;
+    out = { ok: true };
+  } else if (req.url.endsWith('/run-workflow')) {
+    runs++;
+    const b = JSON.parse(raw);
+    assert.equal(b.force, false);
+    assert.equal(b.async, true);
+    assert.equal(b.vars.prompt, 'test prompt');
+    out = { ok: true, data: { started: true } };
+  } else if (req.url.endsWith('/flow-progress'))
+    out = busy
+      ? { running: true }
+      : runs
+        ? { done: true, ok: !fail, running: false }
+        : { running: false };
+  res.end(JSON.stringify(out));
+});
+await new Promise(r => hub.listen(17790, '127.0.0.1', r));
+process.env.MV_ORBIT_URL = 'http://127.0.0.1:17790';
+const { loginOrbit, executeOrbit } = await import('./orbit-client.mjs');
+let cookie = '';
+const req = { headers: {} };
+try {
+  await loginOrbit(
+    req,
+    { setHeader: (k, v) => (cookie = v.split(';')[0]) },
+    { email: 'test@example.com', password: 'mock' },
+  );
+  req.headers.cookie = cookie;
+  const job = {
+    id: 'job',
+    kind: 'image',
+    payload: {
+      prompt: 'test prompt',
+      timing: { duration: 8 },
+      orbit: { type: 'workflow', scriptId: 'w', profileId: 'p', owner: 'test@example.com' },
+    },
+  };
+  await executeOrbit(req, job, () => {});
+  assert.equal(launches, 1);
+  assert.equal(runs, 1);
+  busy = true;
+  await assert.rejects(
+    executeOrbit(req, job, () => {}),
+    /đang chạy/,
+  );
+  assert.equal(runs, 1);
+  busy = false;
+  fail = true;
+  await assert.rejects(
+    executeOrbit(req, job, () => {}),
+    /báo lỗi/,
+  );
+  assert.equal(runs, 2);
+  fail = false;
+  job.payload.orbit = { ...job.payload.orbit, type: 'app', scriptId: 'a' };
+  await executeOrbit(req, job, () => {});
+  console.log(
+    'PASS: App inputs dispatch; open nick, dispatch once, prompt variables, async completion, busy protection, failed run reporting',
+  );
+} finally {
+  hub.close();
+}

@@ -6,6 +6,6 @@
  * Await the actual saved file. Do not return a placeholder or claim a result
  * before the website finishes. Stop for login/CAPTCHA/user confirmation.
  */
-export async function runJob(payload,context){
- throw new Error('Chưa cấu hình API Orbit và kịch bản website. Không mở profile hoặc gửi prompt.');
+export async function runJob(payload, context) {
+  throw new Error('Chưa cấu hình API Orbit và kịch bản website. Không mở profile hoặc gửi prompt.');
 }

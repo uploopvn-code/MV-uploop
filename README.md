@@ -2,6 +2,16 @@
 
 Mở http://127.0.0.1:7788 hoặc chạy Start-MV-Director.ps1.
 
+## Cài đặt & chạy
+Yêu cầu Node.js 22 trở lên. Không cần `npm install` (không có thư viện phụ thuộc).
+
+    npm start            # chạy server tại http://127.0.0.1:7788
+    npm test             # chạy toàn bộ 5 bộ kiểm thử
+    npm run format       # định dạng lại code bằng Prettier
+
+Biến môi trường: `MV_PORT` (cổng, mặc định 7788), `MV_DATA_DIR` (thư mục dữ liệu,
+mặc định `data/`). Thư mục `data/` chứa project, media và token worker; không đưa lên git.
+
 Luồng cố định: Ca sĩ + Sân khấu → Ghép cảnh → Toàn / Trung / Cận → Video.
 Bấm một thẻ để sửa prompt, upload ảnh/video hoặc xếp tác vụ. Mô tả nhân vật,
 trang phục, nhạc cụ, ánh sáng được kế thừa từ Chỉnh mô tả chung.

@@ -1,0 +1,4 @@
+# Runtime data: project state, uploaded media and the worker secret.
+# Note: files already tracked in data/ stay tracked until removed with `git rm --cached`.
+data/
+node_modules/
