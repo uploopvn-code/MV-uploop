@@ -50,8 +50,8 @@
         </div>
         <p id="autoStatus" class="field-hint"></p>
         <p id="connectHint" class="field-hint">
-          Kéo dây từ Out sang In · Kéo thanh tên để di chuyển node · Kéo nền để pan · Lăn chuột để
-          zoom.
+          Kéo dây từ Out sang In · Bấm vào dây rồi bấm × (hoặc phím Delete) để xóa · Kéo thanh tên
+          để di chuyển node · Kéo nền để pan · Lăn chuột để zoom.
         </p>
         <div class="graph-scroll"><div id="graphCanvas"></div></div>
         <div id="edgeList" class="edge-list"></div>
@@ -88,10 +88,10 @@
       </section>
       <section id="connect" class="view" hidden>
         <div class="section-heading">
-          <h2>Dùng chính website bạn đang làm việc.</h2>
+          <h2>Chọn nơi tạo ảnh và video.</h2>
           <p>
-            Node gửi job tới API local. Kịch bản web nhận job, thao tác trên website và trả ảnh hoặc
-            video về đây.
+            Seedvis tạo trực tiếp qua API. Orbit chạy kịch bản trên website bạn đang dùng. Mỗi node
+            chọn riêng nguồn cho ảnh và cho video.
           </p>
         </div>
         <div class="connection-flow">
@@ -99,7 +99,37 @@
           <b>→</b>
           <div>API local<small>Hàng đợi & trạng thái</small></div>
           <b>→</b>
-          <div>Web automation<small>Website tạo ảnh / video</small></div>
+          <div>Seedvis API / Orbit<small>Tạo ảnh / video</small></div>
+        </div>
+        <div class="settings-panel">
+          <h3>Seedvis API · tạo ảnh &amp; video</h3>
+          <p>
+            <a href="https://seedvis.com" target="_blank" rel="noopener">seedvis.com ↗</a>
+          </p>
+          <p id="seedvisStatus">Đang kiểm tra…</p>
+          <form id="seedvisKeyForm">
+            <label
+              >API key Seedvis<input
+                id="seedvisKey"
+                type="password"
+                autocomplete="off"
+                placeholder="Dán API key Seedvis"
+                required
+            /></label>
+            <p class="muted">
+              Key lưu trên máy này (data/seedvis-key.txt), không gửi về trình duyệt và không đưa lên
+              git. Mỗi lần tạo ảnh/video trên Seedvis sẽ trừ credit.
+            </p>
+            <button class="button primary" type="submit">Lưu key</button>
+          </form>
+          <div class="actions">
+            <button id="testSeedvis" class="button">Kiểm tra kết nối</button
+            ><button id="removeSeedvis" class="button" hidden>Xóa key</button>
+          </div>
+          <p class="muted">
+            Node chưa cấu hình Orbit sẽ dùng Seedvis. Mở node → Nguồn tạo để chọn model cho ảnh và
+            video.
+          </p>
         </div>
         <div class="settings-panel">
           <h3>Orbit Hub</h3>

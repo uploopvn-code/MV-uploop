@@ -22,6 +22,16 @@ export async function prepareInputs(job, mediaDir) {
     if (e.code !== 'ENOENT') throw e;
   }
 }
+// Detects the real media type from the file signature, never from the extension.
+export function sniffMime(b) {
+  if (b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return 'image/png';
+  if (b[0] === 255 && b[1] === 216 && b[2] === 255) return 'image/jpeg';
+  if (b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP')
+    return 'image/webp';
+  if (b.toString('ascii', 4, 8) === 'ftyp') return 'video/mp4';
+  if (b.subarray(0, 4).equals(Buffer.from([26, 69, 223, 163]))) return 'video/webm';
+  return '';
+}
 export async function readOutput(job, timeout = 60000) {
   const file = job.payload.output.path,
     until = Date.now() + timeout;
@@ -34,14 +44,7 @@ export async function readOutput(job, timeout = 60000) {
       const stamp = st.size + ':' + st.mtimeMs;
       if (st.size && stamp === previous) {
         const b = await fs.readFile(file);
-        let mime = '';
-        if (b.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])))
-          mime = 'image/png';
-        else if (b[0] === 255 && b[1] === 216 && b[2] === 255) mime = 'image/jpeg';
-        else if (b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP')
-          mime = 'image/webp';
-        else if (b.toString('ascii', 4, 8) === 'ftyp') mime = 'video/mp4';
-        else if (b.subarray(0, 4).equals(Buffer.from([26, 69, 223, 163]))) mime = 'video/webm';
+        const mime = sniffMime(b);
         if (!mime.startsWith(job.kind + '/'))
           throw new Error('Nội dung file không đúng loại ảnh/video yêu cầu.');
         return { mime, base64: b.toString('base64'), name: path.basename(file) };

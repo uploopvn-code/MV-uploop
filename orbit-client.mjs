@@ -9,6 +9,8 @@ const sid = req =>
     .find(s => s.startsWith('mv_orbit='))
     ?.slice(9);
 const session = req => sessions.get(sid(req));
+// The Orbit user of this browser session, without calling the Hub.
+export const sessionUser = req => session(req)?.user || null;
 async function request(endpoint, cookie, options = {}) {
   const r = await fetch(base + endpoint, {
     ...options,

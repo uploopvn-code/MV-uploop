@@ -34,6 +34,7 @@ const context = {
   savedPositions: { a: { x: 30, y: 40 }, b: { x: 300, y: 40 } },
   gesture: null,
   suppressNodeClick: false,
+  selectedEdge: null,
   connectSource: null,
   state: { edges: [] },
   $: s => els[s],

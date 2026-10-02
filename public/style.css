@@ -420,6 +420,7 @@ audio {
 }
 .settings-panel {
   max-width: 760px;
+  margin-bottom: 22px;
   border: 1px solid var(--line);
   padding: 28px;
   border-radius: 12px;
@@ -832,6 +833,39 @@ h4 {
   fill: none;
   stroke: #9fc46c;
   stroke-width: 2;
+}
+.wires .wire-hit {
+  stroke: transparent;
+  stroke-width: 16;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+.wires .wire-hit:hover + .wire {
+  stroke: #e3f7c4;
+  stroke-width: 3;
+}
+.wires .wire.selected {
+  stroke: #ff8f7a;
+  stroke-width: 3;
+  stroke-dasharray: 7 5;
+}
+.wire-delete {
+  position: absolute;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border: 2px solid #ff8f7a;
+  border-radius: 50%;
+  background: #2a1714;
+  color: #ffb4a6;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.wire-delete:hover {
+  background: #ff8f7a;
+  color: #101216;
 }
 .ports {
   display: flex;

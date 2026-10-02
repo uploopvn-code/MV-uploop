@@ -7,7 +7,15 @@ import {
   logoutOrbit,
   validateBinding,
   executeOrbit,
+  sessionUser,
 } from './orbit-client.mjs';
+import {
+  catalog as seedvisCatalog,
+  createSeedvis,
+  defaultSeedvis,
+  validateSeedvisBinding,
+  videoDuration,
+} from './seedvis-client.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,6 +29,7 @@ const dbFile = path.join(data, 'project.json');
 const tokenFile = path.join(data, 'worker-token.txt');
 if (!fs.existsSync(tokenFile)) fs.writeFileSync(tokenFile, crypto.randomBytes(32).toString('hex'));
 const workerToken = fs.readFileSync(tokenFile, 'utf8').trim();
+const seedvis = createSeedvis(data);
 const suffix =
   ', clean footage, no text, no subtitles, no lyrics on screen, no watermarks, cinematic 35mm.';
 function initial() {
@@ -123,6 +132,28 @@ function prompts(n) {
   let video = `Pace: ${pace} Prompt Video: ${movement}. Preserve the approved keyframe, identity, clothing and lighting. Subtle emotional performance.${n.lyric ? ' mouth articulates: ' + JSON.stringify(n.lyric) + '.' : ''}${suffix}`;
   return { image: n.prompt || generated, video: n.videoPrompt || video };
 }
+// Seedvis is the default generator; a node keeps Orbit when it already has an Orbit
+// binding or was explicitly switched to Orbit (seedvis[kind] === false).
+function seedvisBinding(n, kind) {
+  const s = n.seedvis?.[kind];
+  if (s === false) return null;
+  if (s) return s;
+  return n.orbit?.[kind] ? null : defaultSeedvis[kind];
+}
+function providers(n) {
+  const out = {};
+  for (const kind of ['image', 'video']) {
+    const s = seedvisBinding(n, kind);
+    out[kind] = s
+      ? {
+          type: 'seedvis',
+          ...validateSeedvisBinding(kind, s),
+          ...(kind === 'video' ? { duration: videoDuration(s.model, n.duration) } : {}),
+        }
+      : { type: 'orbit' };
+  }
+  return out;
+}
 const assetRefs = n =>
   deps(n.id)
     .map(id => ({ role: id, asset: getNode(id).image }))
@@ -131,7 +162,15 @@ function publicState() {
   return {
     ...db,
     worker: db.worker ? { ...db.worker, online: Date.now() - db.worker.lastSeen < 20000 } : null,
-    nodes: db.nodes.map(n => ({ ...n, resolvedPrompts: prompts(n), references: assetRefs(n) })),
+    seedvisConfigured: seedvis.configured(),
+    seedvisCatalog,
+    seedvisDefaults: defaultSeedvis,
+    nodes: db.nodes.map(n => ({
+      ...n,
+      resolvedPrompts: prompts(n),
+      references: assetRefs(n),
+      providers: providers(n),
+    })),
   };
 }
 function json(res, status, obj) {
@@ -189,13 +228,19 @@ async function createJob(req, b) {
   const n = getNode(b.nodeId);
   if (!n) throw new Error('Node không tồn tại');
   const kind = b.kind === 'video' ? 'video' : 'image';
-  const binding = n.orbit?.[kind];
-  if (!binding) throw new Error('Mở Cài đặt Orbit của node để chọn kịch bản và nick.');
-  const verifiedBinding = await validateBinding(req, binding);
-  if (verifiedBinding.owner !== binding.owner)
-    throw new Error(
-      'Cấu hình thuộc tài khoản khác. Chọn và lưu lại nick/kịch bản bằng tài khoản hiện tại.',
-    );
+  const sv = seedvisBinding(n, kind);
+  let verifiedBinding = null;
+  if (sv) {
+    if (!seedvis.configured()) throw new Error('Nhập API key Seedvis trong Kết nối web.');
+  } else {
+    const binding = n.orbit?.[kind];
+    if (!binding) throw new Error('Mở Cài đặt Orbit của node để chọn kịch bản và nick.');
+    verifiedBinding = await validateBinding(req, binding);
+    if (verifiedBinding.owner !== binding.owner)
+      throw new Error(
+        'Cấu hình thuộc tài khoản khác. Chọn và lưu lại nick/kịch bản bằng tài khoản hiện tại.',
+      );
+  }
   const prior = db.jobs.find(
     j => j.nodeId === n.id && j.kind === kind && ['queued', 'running'].includes(j.status),
   );
@@ -207,6 +252,32 @@ async function createJob(req, b) {
     throw new Error('Ảnh cần cập nhật sau thay đổi đầu vào. Hãy tạo lại hoặc tải ảnh đã duyệt.');
   const references = kind === 'video' ? [{ role: 'keyframe', asset: n.image }] : assetRefs(n);
   const jobId = crypto.randomUUID();
+  if (sv) {
+    const binding = validateSeedvisBinding(kind, sv);
+    const j = {
+      id: jobId,
+      nodeId: n.id,
+      kind,
+      status: 'queued',
+      createdAt: new Date().toISOString(),
+      payload: {
+        seedvis: binding,
+        kind,
+        prompt: prompts(n)[kind],
+        website: 'Seedvis · ' + binding.modelName,
+        aspectRatio: binding.aspectRatio,
+        references,
+        audio: db.audio,
+        timing: { start: n.start || 0, duration: n.duration || 8 },
+        nodeId: n.id,
+        projectRevision: db.revision,
+      },
+      error: null,
+    };
+    db.jobs.push(j);
+    save();
+    return j;
+  }
   const output = outputFor(db.outputDirectory, n.outputNaming, n.id, kind, jobId);
   const payload = {
     output,
@@ -236,7 +307,9 @@ async function createJob(req, b) {
 }
 
 async function collectJob(j) {
-  const content = await readOutput(j, Number(process.env.MV_OUTPUT_WAIT_MS || 60000));
+  storeResult(j, await readOutput(j, Number(process.env.MV_OUTPUT_WAIT_MS || 60000)));
+}
+function storeResult(j, content) {
   const a = storeAsset(content);
   const n = getNode(j.nodeId);
   j.result = a;
@@ -258,19 +331,38 @@ function requireIdle() {
   )
     throw new Error('Đợi tác vụ hoàn tất hoặc dừng chuỗi trước khi sửa workflow.');
 }
-let orbitBusy = false;
-async function pumpOrbit(req, owner) {
+function seedvisImages(j) {
+  return j.payload.references.map(ref => {
+    if (!/^[a-f0-9-]+\.(png|jpg|webp)$/.test(ref.asset.id))
+      throw new Error('Ảnh tham chiếu không hợp lệ.');
+    return {
+      data: fs.readFileSync(path.join(data, 'media', ref.asset.id)).toString('base64'),
+      file_name: ref.role + '-' + ref.asset.id,
+    };
+  });
+}
+let runnerBusy = false;
+// Runs one job at a time: Seedvis jobs always, Orbit jobs only for the Orbit user of `req`.
+async function pump(req) {
   if (
     process.env.MV_RUNNER_DISABLED === '1' ||
-    orbitBusy ||
+    runnerBusy ||
     db.jobs.some(j => j.status === 'running')
   )
     return;
-  orbitBusy = true;
+  const owner = sessionUser(req)?.email || null;
+  const runnable = j =>
+    j.status === 'queued' &&
+    (j.payload.seedvis || (owner && j.payload.orbit && j.payload.orbit.owner === owner));
+  runnerBusy = true;
   try {
     for (;;) {
-      let j = db.jobs.find(j => j.status === 'queued' && j.payload.orbit?.owner === owner);
-      if (!j && db.autoRun?.status === 'running' && db.autoRun.owner === owner) {
+      let j = db.jobs.find(runnable);
+      if (
+        !j &&
+        db.autoRun?.status === 'running' &&
+        (!db.autoRun.owner || db.autoRun.owner === owner)
+      ) {
         const run = db.autoRun;
         while (run.index < run.order.length) {
           const node = getNode(run.order[run.index]);
@@ -297,33 +389,43 @@ async function pumpOrbit(req, owner) {
           break;
         }
       }
-      if (!j) break;
+      if (!j || !runnable(j)) break;
       j.status = 'running';
-      j.executor = 'orbit-direct';
+      j.executor = j.payload.seedvis ? 'seedvis' : 'orbit-direct';
       j.startedAt = new Date().toISOString();
       j.heartbeat = Date.now();
-      j.progress = 'Đang kiểm tra Orbit';
+      j.progress = j.payload.seedvis ? 'Đang chuẩn bị gửi Seedvis' : 'Đang kiểm tra Orbit';
       save();
       const heartbeat = setInterval(() => {
         j.heartbeat = Date.now();
         save();
       }, 10000);
+      const onProgress = message => {
+        j.progress = message;
+        j.heartbeat = Date.now();
+        save();
+      };
       try {
-        await prepareInputs(j, path.join(data, 'media'));
-        save();
-        await executeOrbit(req, j, message => {
-          j.progress = message;
-          j.heartbeat = Date.now();
+        if (j.payload.seedvis) {
+          storeResult(j, await seedvis.run(j, seedvisImages(j), onProgress, save));
+        } else {
+          await prepareInputs(j, path.join(data, 'media'));
           save();
-        });
-        j.progress = 'Đang chờ file đầu ra';
-        save();
-        await collectJob(j);
+          await executeOrbit(req, j, onProgress);
+          j.progress = 'Đang chờ file đầu ra';
+          save();
+          await collectJob(j);
+        }
         if (j.autoRunId && db.autoRun?.id === j.autoRunId) db.autoRun.index++;
       } catch (e) {
-        j.status = 'needs_review';
+        // `definite`: Seedvis rejected or failed the job, so nothing is pending remotely.
+        j.status = e.definite ? 'failed' : 'needs_review';
         j.error = e.message;
-        j.progress = 'Cần kiểm tra Orbit trước khi chạy lại';
+        j.progress = j.payload.seedvis
+          ? e.definite
+            ? 'Seedvis không tạo được; sửa rồi tạo lại'
+            : 'Cần kiểm tra lại trạng thái Seedvis, không tạo mới'
+          : 'Cần kiểm tra Orbit trước khi chạy lại';
         if (j.autoRunId && db.autoRun?.id === j.autoRunId) {
           db.autoRun.status = 'blocked';
           db.autoRun.message = e.message;
@@ -334,7 +436,34 @@ async function pumpOrbit(req, owner) {
       }
     }
   } finally {
-    orbitBusy = false;
+    runnerBusy = false;
+  }
+}
+// Re-reads a Seedvis job that was interrupted (timeout, restart). Never resubmits.
+async function resumeSeedvis(j) {
+  j.status = 'running';
+  j.heartbeat = Date.now();
+  j.error = null;
+  save();
+  const heartbeat = setInterval(() => {
+    j.heartbeat = Date.now();
+    save();
+  }, 10000);
+  try {
+    storeResult(
+      j,
+      await seedvis.resume(j, message => {
+        j.progress = message;
+        j.heartbeat = Date.now();
+        save();
+      }),
+    );
+  } catch (e) {
+    j.status = e.definite ? 'failed' : 'needs_review';
+    j.error = e.message;
+  } finally {
+    clearInterval(heartbeat);
+    save();
   }
 }
 const server = http.createServer(async (req, res) => {
@@ -346,14 +475,24 @@ const server = http.createServer(async (req, res) => {
       p = u.pathname;
     if (p === '/api/orbit' && req.method === 'GET') {
       const info = await inspectOrbit(req);
-      if (info.authenticated) pumpOrbit(req, info.user.email);
+      if (info.authenticated) pump(req);
       return json(res, 200, info);
     }
     if (p === '/api/orbit/login' && req.method === 'POST')
       return json(res, 200, await loginOrbit(req, res, await body(req)));
     if (p === '/api/orbit/logout' && req.method === 'POST')
       return json(res, 200, await logoutOrbit(req, res));
-    if (p === '/api/state' && req.method === 'GET') return json(res, 200, publicState());
+    if (p === '/api/state' && req.method === 'GET') {
+      pump(req);
+      return json(res, 200, publicState());
+    }
+    if (p === '/api/seedvis' && req.method === 'GET') return json(res, 200, await seedvis.status());
+    if (p === '/api/seedvis/key' && req.method === 'POST') {
+      const b = await body(req);
+      if (b.key) seedvis.saveKey(b.key);
+      else seedvis.removeKey();
+      return json(res, 200, await seedvis.status());
+    }
     if (p === '/api/project' && req.method === 'PATCH') {
       requireIdle();
       const b = await body(req);
@@ -399,6 +538,17 @@ const server = http.createServer(async (req, res) => {
           if (kind in b.orbit)
             next.orbit[kind] =
               b.orbit[kind] === null ? null : await validateBinding(req, b.orbit[kind]);
+      }
+      if (b.seedvis) {
+        next.seedvis = { ...n.seedvis };
+        for (const kind of ['image', 'video'])
+          if (kind in b.seedvis)
+            next.seedvis[kind] =
+              b.seedvis[kind] === false
+                ? false
+                : b.seedvis[kind] === null
+                  ? null
+                  : validateSeedvisBinding(kind, b.seedvis[kind]);
       }
       for (const k of ['prompt', 'videoPrompt', 'lyric'])
         if (k in b) next[k] = String(b[k]).slice(0, 20000);
@@ -446,7 +596,7 @@ const server = http.createServer(async (req, res) => {
       if (db.autoRun?.status === 'running')
         throw new Error('Đang chạy tự động. Dừng chuỗi trước khi chạy riêng.');
       const j = await createJob(req, await body(req));
-      pumpOrbit(req, j.payload.orbit.owner);
+      pump(req);
       return json(res, 201, { job: j });
     }
 
@@ -500,35 +650,43 @@ const server = http.createServer(async (req, res) => {
         const n = getNode(id);
         if (!n.image || n.stale || deps(id).some(id => rerun.has(id))) rerun.add(id);
       }
-      const info = await inspectOrbit(req);
-      if (!info.authenticated) throw new Error(info.message);
+      const needOrbit = [...rerun].some(id => !seedvisBinding(getNode(id), 'image'));
+      const info = needOrbit ? await inspectOrbit(req) : null;
+      if (info && !info.authenticated) throw new Error(info.message);
       for (const id of rerun) {
         const n = getNode(id);
         const ambiguous = [...db.jobs].reverse().find(j => j.nodeId === id && j.kind === 'image');
         if (ambiguous?.status === 'needs_review')
           throw new Error(n.name + ': dùng Nhận file hoặc chạy riêng để xử lý tác vụ trước.');
+        if (seedvisBinding(n, 'image')) {
+          if (!seedvis.configured()) throw new Error('Nhập API key Seedvis trong Kết nối web.');
+          continue;
+        }
         const binding = await validateBinding(req, n.orbit?.image);
         if (binding.owner !== n.orbit.image.owner)
           throw new Error('Chọn lại tài khoản chạy node ' + n.name);
       }
-      fs.mkdirSync(db.outputDirectory, { recursive: true });
-      fs.accessSync(db.outputDirectory, fs.constants.W_OK);
+      if (needOrbit) {
+        fs.mkdirSync(db.outputDirectory, { recursive: true });
+        fs.accessSync(db.outputDirectory, fs.constants.W_OK);
+      }
       db.autoRun = {
         id: crypto.randomUUID(),
-        owner: info.user.email,
+        owner: info?.user.email || null,
         status: 'running',
         order,
         index: 0,
         message: 'Chạy lần lượt; dùng lại ảnh còn hợp lệ',
       };
       save();
-      pumpOrbit(req, info.user.email);
+      pump(req);
       return json(res, 200, publicState());
     }
     if (p === '/api/auto/stop' && req.method === 'POST') {
       if (db.autoRun?.status === 'running') {
         db.autoRun.status = 'stopped';
-        db.autoRun.message = 'Dừng sau node hiện tại; không hủy kịch bản trên Orbit';
+        db.autoRun.message =
+          'Dừng sau node hiện tại; không hủy tác vụ đang chạy trên Orbit/Seedvis';
         save();
       }
       return json(res, 200, publicState());
@@ -536,10 +694,15 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/jobs/collect' && req.method === 'POST') {
       const b = await body(req),
         j = db.jobs.find(j => j.id === b.id);
-      if (!j || !['needs_review', 'script_completed'].includes(j.status) || !j.payload.output)
+      if (
+        !j ||
+        !['needs_review', 'script_completed'].includes(j.status) ||
+        !(j.payload.output || j.payload.seedvis)
+      )
         throw new Error('Tác vụ chưa thể nhận file');
       requireIdle();
-      await collectJob(j);
+      if (j.payload.seedvis) resumeSeedvis(j);
+      else await collectJob(j);
       return json(res, 200, publicState());
     }
     if (p === '/api/jobs/cancel' && req.method === 'POST') {
@@ -556,7 +719,7 @@ const server = http.createServer(async (req, res) => {
       db.worker = { name: String(b.name || 'Web worker').slice(0, 100), lastSeen: Date.now() };
       const j = db.jobs.some(j => j.status === 'running')
         ? null
-        : db.jobs.find(j => j.status === 'queued' && !j.payload.orbit);
+        : db.jobs.find(j => j.status === 'queued' && !j.payload.orbit && !j.payload.seedvis);
       if (j) {
         j.status = 'running';
         j.startedAt = new Date().toISOString();

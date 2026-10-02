@@ -8,6 +8,8 @@ let gesture = null,
   suppressNodeClick = false;
 let connectSource = null;
 let orbitStatus = null;
+let seedvisStatus = null;
+let selectedEdge = null;
 let state,
   selected = null,
   currentView = 'studio',
@@ -40,10 +42,10 @@ function status(n) {
   if (j && ['queued', 'running', 'failed', 'needs_review'].includes(j.status))
     return {
       text: {
-        queued: 'Đang chờ Orbit',
-        running: 'Đang chạy trên web',
+        queued: 'Đang chờ chạy',
+        running: j.payload.seedvis ? 'Đang tạo trên Seedvis' : 'Đang chạy trên web',
         failed: 'Cần xử lý lỗi',
-        needs_review: 'Cần kiểm tra website',
+        needs_review: j.payload.seedvis ? 'Cần kiểm tra Seedvis' : 'Cần kiểm tra website',
       }[j.status],
       class: 'warn',
     };
@@ -104,10 +106,10 @@ function renderJobs() {
         .reverse()
         .map(
           j =>
-            `<div class="job-row"><div><strong>${esc(state.nodes.find(n => n.id === j.nodeId)?.name)} · ${j.kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</strong><p>${esc(j.payload.website)} · ${new Date(j.createdAt).toLocaleString('vi-VN')}</p>${j.progress ? `<p>${esc(j.progress)}</p>` : ''}${j.error ? `<p>${esc(j.error)}</p>` : ''}${j.resultStale ? '<p>Đầu vào đã thay đổi trong khi chạy: cần duyệt lại kết quả.</p>' : ''}</div><span class="badge">${esc({ queued: 'Chờ worker', running: 'Đang chạy', script_completed: 'Kịch bản đã xong', completed: 'Hoàn tất', failed: 'Lỗi', needs_review: 'Cần kiểm tra', cancelled: 'Đã hủy' }[j.status])}</span>${j.status === 'queued' ? `<button class="button" data-cancel="${j.id}">Hủy chờ</button>` : ['needs_review', 'script_completed'].includes(j.status) && j.payload.output ? `<button class="button" data-collect="${j.id}">Nhận file</button>` : j.result ? `<a class="button" href="${esc(j.result.url)}" download>Tải kết quả</a>` : '<span></span>'}</div>`,
+            `<div class="job-row"><div><strong>${esc(state.nodes.find(n => n.id === j.nodeId)?.name)} · ${j.kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</strong><p>${esc(j.payload.website)} · ${new Date(j.createdAt).toLocaleString('vi-VN')}</p>${j.progress ? `<p>${esc(j.progress)}</p>` : ''}${j.error ? `<p>${esc(j.error)}</p>` : ''}${j.warning ? `<p>${esc(j.warning)}</p>` : ''}${j.resultStale ? '<p>Đầu vào đã thay đổi trong khi chạy: cần duyệt lại kết quả.</p>' : ''}</div><span class="badge">${esc({ queued: 'Đang chờ', running: 'Đang chạy', script_completed: 'Kịch bản đã xong', completed: 'Hoàn tất', failed: 'Lỗi', needs_review: 'Cần kiểm tra', cancelled: 'Đã hủy' }[j.status])}</span>${j.status === 'queued' ? `<button class="button" data-cancel="${j.id}">Hủy chờ</button>` : ['needs_review', 'script_completed'].includes(j.status) && (j.payload.output || j.payload.seedvis) ? `<button class="button" data-collect="${j.id}">${j.payload.seedvis ? 'Kiểm tra lại' : 'Nhận file'}</button>` : j.result ? `<a class="button" href="${esc(j.result.url)}" download>Tải kết quả</a>` : '<span></span>'}</div>`,
         )
         .join('')
-    : '<div class="empty">Chưa có tác vụ. Chọn một node và nhấn “Tạo ảnh qua Orbit”.</div>';
+    : '<div class="empty">Chưa có tác vụ. Chọn một node và nhấn “Tạo ảnh”.</div>';
   document.querySelectorAll('[data-collect]').forEach(
     e =>
       (e.onclick = async () => {
@@ -115,7 +117,11 @@ function renderJobs() {
         try {
           await api('/api/jobs/collect', { method: 'POST', body: { id: e.dataset.collect } });
           await refresh();
-          toast('Đã nhận file');
+          toast(
+            state.jobs.find(j => j.id === e.dataset.collect)?.payload.seedvis
+              ? 'Đang đọc lại trạng thái Seedvis'
+              : 'Đã nhận file',
+          );
         } catch (err) {
           toast(err.message, true);
         } finally {
@@ -158,7 +164,7 @@ function inspect(id) {
   $('#inspector').hidden = false;
   $('#overlay').hidden = false;
   $('#inspector').innerHTML =
-    `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div><div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Ảnh ${esc(n.name)}">` : 'Ảnh của node sẽ xuất hiện ở đây'}</div>${n.stale ? '<div class="note">Đầu vào đã đổi. Tạo lại ảnh hoặc tải ảnh đã duyệt trước khi làm video.</div>' : ''}<label>Tên node<input id="nodeName" value="${esc(n.name)}"></label><div class="reference-chips">${n.references.map((r, i) => `<span>✓ ${esc(state.nodes.find(n => n.id === r.role)?.name || r.role)} <code>{{mv_input_${i + 1}_path}}</code></span>`).join('')}</div><label>Prompt ảnh <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo ảnh">{{prompt}}</code><textarea id="imagePrompt" rows="5">${esc(n.resolvedPrompts.image)}</textarea></label><p class="field-hint">Orbit nhận nội dung này qua <code>{{prompt}}</code> hoặc <code>{{mv_prompt}}</code> khi tạo ảnh. Khi tạo video, hai biến này chứa prompt video.</p><div class="prompt-tools"><button id="copyImage">Sao chép prompt</button><button id="resetPrompt">Dùng prompt kế thừa</button></div><div class="actions"><label class="button">↑ Tải ảnh<input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" hidden></label><button class="button primary" id="generateImage">Tạo ảnh qua Orbit</button></div><p class="queue-hint">${state.worker?.online ? 'Orbit worker đang sẵn sàng nhận job.' : 'Tác vụ sẽ mở nick và chạy kịch bản bằng phiên Orbit đã đăng nhập.'}</p>${shot ? `<section class="inspector-section"><h3>Video của shot</h3><div class="two"><label>Bắt đầu (giây) <code class="variable-tag">{{mv_start}}</code><input id="start" type="number" min="0" value="${n.start}"></label><label>Thời lượng (giây) <code class="variable-tag">{{mv_duration}}</code><input id="duration" type="number" min="1" value="${n.duration}"></label></div><label>Lời hát đúng đoạn này <span class="field-hint">Nhúng trong prompt video, không có biến riêng</span><textarea id="lyric" rows="2" placeholder="Để trống nếu chưa căn lời">${esc(n.lyric)}</textarea></label><details><summary>Prompt chuyển động <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo video">{{prompt}}</code></summary><label>Prompt video <code class="variable-tag">{{prompt}}</code><textarea id="videoPrompt" rows="5">${esc(n.resolvedPrompts.video)}</textarea></label><button id="copyVideo" class="button">Sao chép</button></details>${n.video ? `<video controls src="${esc(n.video.url)}" style="width:100%;margin-top:15px"></video>` : ''}<div class="actions"><label class="button">↑ Tải video<input type="file" id="videoUpload" accept="video/mp4,video/webm" hidden></label><button class="button primary" id="generateVideo" ${!n.image ? 'disabled' : ''}>Tạo video qua Orbit</button></div><p class="muted">Ảnh đã duyệt được truyền làm keyframe. Khẩu hình cần kịch bản hỗ trợ audio/lip-sync.</p></section>` : ''}${outputSettings(n, shot)}${orbitSettings(n, shot)}<section class="inspector-section"><button class="button wide" id="saveNode">Lưu chỉnh sửa</button></section>`;
+    `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div><div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Ảnh ${esc(n.name)}">` : 'Ảnh của node sẽ xuất hiện ở đây'}</div>${n.stale ? '<div class="note">Đầu vào đã đổi. Tạo lại ảnh hoặc tải ảnh đã duyệt trước khi làm video.</div>' : ''}<label>Tên node<input id="nodeName" value="${esc(n.name)}"></label><div class="reference-chips">${n.references.map((r, i) => `<span>✓ ${esc(state.nodes.find(n => n.id === r.role)?.name || r.role)} <code>{{mv_input_${i + 1}_path}}</code></span>`).join('')}</div><label>Prompt ảnh <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo ảnh">{{prompt}}</code><textarea id="imagePrompt" rows="5">${esc(n.resolvedPrompts.image)}</textarea></label><p class="field-hint">Orbit nhận nội dung này qua <code>{{prompt}}</code> hoặc <code>{{mv_prompt}}</code> khi tạo ảnh. Khi tạo video, hai biến này chứa prompt video.</p><div class="prompt-tools"><button id="copyImage">Sao chép prompt</button><button id="resetPrompt">Dùng prompt kế thừa</button></div><div class="actions"><label class="button">↑ Tải ảnh<input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" hidden></label><button class="button primary" id="generateImage">${generateLabel(n, 'image')}</button></div><p class="queue-hint">${n.providers.image.type === 'seedvis' ? 'Gửi prompt và ' + n.references.length + ' ảnh đầu vào tới Seedvis · ' + esc(n.providers.image.modelName) + '.' : 'Tác vụ sẽ mở nick và chạy kịch bản bằng phiên Orbit đã đăng nhập.'}</p>${shot ? `<section class="inspector-section"><h3>Video của shot</h3><div class="two"><label>Bắt đầu (giây) <code class="variable-tag">{{mv_start}}</code><input id="start" type="number" min="0" value="${n.start}"></label><label>Thời lượng (giây) <code class="variable-tag">{{mv_duration}}</code><input id="duration" type="number" min="1" value="${n.duration}"></label></div><label>Lời hát đúng đoạn này <span class="field-hint">Nhúng trong prompt video, không có biến riêng</span><textarea id="lyric" rows="2" placeholder="Để trống nếu chưa căn lời">${esc(n.lyric)}</textarea></label><details><summary>Prompt chuyển động <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo video">{{prompt}}</code></summary><label>Prompt video <code class="variable-tag">{{prompt}}</code><textarea id="videoPrompt" rows="5">${esc(n.resolvedPrompts.video)}</textarea></label><button id="copyVideo" class="button">Sao chép</button></details>${n.video ? `<video controls src="${esc(n.video.url)}" style="width:100%;margin-top:15px"></video>` : ''}<div class="actions"><label class="button">↑ Tải video<input type="file" id="videoUpload" accept="video/mp4,video/webm" hidden></label><button class="button primary" id="generateVideo" ${!n.image ? 'disabled' : ''}>${generateLabel(n, 'video')}</button></div><p class="muted">Ảnh đã duyệt được truyền làm keyframe. Khẩu hình cần model hỗ trợ audio/lip-sync.</p></section>` : ''}${providerSettings(n, shot)}${usesOrbit(n, shot) ? outputSettings(n, shot) + orbitSettings(n, shot) : '<details class="inspector-section"><summary>Cài đặt Orbit (chỉ cần khi chọn nguồn Orbit)</summary>' + outputSettings(n, shot) + orbitSettings(n, shot) + '</details>'}<section class="inspector-section"><button class="button wide" id="saveNode">Lưu chỉnh sửa</button></section>`;
   $('.close').onclick = closeInspector;
   $('#nodeName').oninput = () => (dirty = true);
   document.querySelectorAll('[data-output-pattern]').forEach(
@@ -171,6 +177,7 @@ function inspect(id) {
   document
     .querySelectorAll('[data-orbit-select]')
     .forEach(e => (e.onchange = () => (dirty = true)));
+  bindProviderSettings(n);
   $('#imagePrompt').oninput = () => (dirty = true);
   if (shot) {
     $('#lyric').oninput = () => (dirty = true);
@@ -238,6 +245,8 @@ async function saveNode() {
       }
     }
   }
+  const seedvis = readProviderSettings(n);
+  if (Object.keys(seedvis).length) b.seedvis = seedvis;
   if ($('#imagePrompt').value !== n.resolvedPrompts.image) b.prompt = $('#imagePrompt').value;
   if ($('#lyric')) {
     b.lyric = $('#lyric').value;
@@ -255,7 +264,7 @@ async function generate(id, kind) {
     await saveNode();
     await api('/api/jobs', { method: 'POST', body: { nodeId: id, kind } });
     await refresh();
-    toast('Đã xếp vào hàng đợi Orbit');
+    toast('Đã xếp vào hàng đợi');
     closeInspector();
     view('queue');
   } catch (e) {
@@ -342,6 +351,163 @@ $('#export').onclick = async () => {
     toast(e.message, true);
   }
 };
+const kindsFor = shot => (shot ? ['image', 'video'] : ['image']);
+const usesOrbit = (n, shot) => kindsFor(shot).some(kind => n.providers[kind].type === 'orbit');
+function generateLabel(n, kind) {
+  return (
+    (kind === 'image' ? 'Tạo ảnh' : 'Tạo video') +
+    (n.providers[kind].type === 'seedvis' ? ' · Seedvis' : ' qua Orbit')
+  );
+}
+const nearest = (list, v) => list.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
+function seedvisFields(n, kind, cur) {
+  const models = state.seedvisCatalog[kind],
+    m = models.find(x => x.id === cur.model) || models[0],
+    available = seedvisStatus?.available;
+  const options = (list, value, label = v => v) =>
+    list
+      .map(
+        v => `<option value="${esc(v)}" ${v === value ? 'selected' : ''}>${esc(label(v))}</option>`,
+      )
+      .join('');
+  const hint =
+    kind === 'image'
+      ? n.references.length
+        ? `Ảnh → ảnh: gửi ${n.references.length} ảnh đầu vào (tối đa ${m.maxImages}).`
+        : 'Chữ → ảnh: node chưa có ảnh đầu vào.'
+      : `Ảnh → video từ ảnh của shot. Thời lượng gửi: ${m.durations ? nearest(m.durations, n.duration) + ' giây' : 'model tự quyết'} (shot ${n.duration} giây).`;
+  return (
+    `<label>Model<select data-sv-model="${kind}">${models
+      .map(
+        x =>
+          `<option value="${esc(x.id)}" ${x.id === m.id ? 'selected' : ''}>${esc(x.name)}${available && !available.includes(x.id) ? ' (tài khoản chưa dùng được)' : ''}</option>`,
+      )
+      .join('')}</select></label>` +
+    `<div class="two"><label>Tỉ lệ khung<select data-sv-aspect="${kind}">${options(m.aspect, cur.aspectRatio)}</select></label>` +
+    (m.upscale.length
+      ? `<label>Upscale<select data-sv-upscale="${kind}">${options(m.upscale, cur.upscale, v => (v === 'none' ? 'Không' : v))}</select></label>`
+      : '') +
+    `</div><p class="field-hint">${esc(hint)}</p>` +
+    (m.note ? `<p class="note">${esc(m.note)}</p>` : '')
+  );
+}
+function providerSettings(n, shot) {
+  return (
+    '<section class="inspector-section"><h3>Nguồn tạo</h3>' +
+    (state.seedvisConfigured
+      ? ''
+      : '<p class="note">Chưa có API key Seedvis. Nhập key trong Kết nối web.</p>') +
+    kindsFor(shot)
+      .map(kind => {
+        const cur = n.providers[kind],
+          sv = cur.type === 'seedvis' ? cur : { ...state.seedvisDefaults[kind] };
+        return `<h4>${kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</h4><label>Dùng<select data-provider="${kind}"><option value="seedvis" ${cur.type === 'seedvis' ? 'selected' : ''}>Seedvis API</option><option value="orbit" ${cur.type === 'orbit' ? 'selected' : ''}>Orbit (kịch bản web)</option></select></label><div data-seedvis-fields="${kind}" ${cur.type === 'seedvis' ? '' : 'hidden'}>${seedvisFields(n, kind, sv)}</div>`;
+      })
+      .join('') +
+    '</section>'
+  );
+}
+function bindProviderSettings(n) {
+  const bindFields = kind => {
+    const box = document.querySelector(`[data-seedvis-fields="${kind}"]`);
+    box.querySelectorAll('select').forEach(e => (e.onchange = () => (dirty = true)));
+    box.querySelector('[data-sv-model]').onchange = e => {
+      dirty = true;
+      const aspect = box.querySelector('[data-sv-aspect]')?.value,
+        upscale = box.querySelector('[data-sv-upscale]')?.value;
+      box.innerHTML = seedvisFields(n, kind, {
+        model: e.target.value,
+        aspectRatio: aspect,
+        upscale,
+      });
+      bindFields(kind);
+    };
+  };
+  document.querySelectorAll('[data-provider]').forEach(select => {
+    const kind = select.dataset.provider;
+    select.onchange = () => {
+      dirty = true;
+      document.querySelector(`[data-seedvis-fields="${kind}"]`).hidden = select.value !== 'seedvis';
+    };
+    bindFields(kind);
+  });
+}
+// Only the kinds whose provider or Seedvis options changed are sent.
+function readProviderSettings(n) {
+  const out = {};
+  document.querySelectorAll('[data-provider]').forEach(select => {
+    const kind = select.dataset.provider,
+      cur = n.providers[kind];
+    if (select.value === 'orbit') {
+      if (cur.type !== 'orbit') out[kind] = false;
+      return;
+    }
+    const next = {
+      model: document.querySelector(`[data-sv-model="${kind}"]`).value,
+      aspectRatio: document.querySelector(`[data-sv-aspect="${kind}"]`).value,
+      upscale: document.querySelector(`[data-sv-upscale="${kind}"]`)?.value || null,
+    };
+    if (
+      cur.type !== 'seedvis' ||
+      cur.model !== next.model ||
+      cur.aspectRatio !== next.aspectRatio ||
+      (cur.upscale || null) !== next.upscale
+    )
+      out[kind] = next;
+  });
+  return out;
+}
+function showSeedvis(o) {
+  seedvisStatus = o;
+  $('#seedvisStatus').textContent = o.configured
+    ? [
+        o.message,
+        'key ' + o.keyHint,
+        o.account?.plan ? 'gói ' + o.account.plan : '',
+        o.account?.balance != null ? 'số dư ' + o.account.balance : '',
+        o.source === 'env' ? 'lấy từ biến môi trường SEEDVIS_API_KEY' : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : o.message;
+  $('#seedvisKey').placeholder = o.configured ? 'Dán key mới để thay' : 'Dán API key Seedvis';
+  $('#removeSeedvis').hidden = !o.configured || o.source === 'env';
+}
+async function refreshSeedvis() {
+  showSeedvis(await api('/api/seedvis'));
+}
+$('#testSeedvis').onclick = () => refreshSeedvis().catch(e => toast(e.message, true));
+$('#seedvisKeyForm').onsubmit = async e => {
+  e.preventDefault();
+  const button = e.target.querySelector('button');
+  button.disabled = true;
+  try {
+    showSeedvis(
+      await api('/api/seedvis/key', { method: 'POST', body: { key: $('#seedvisKey').value } }),
+    );
+    await refresh();
+    toast(
+      seedvisStatus.error ? seedvisStatus.message : 'Đã lưu API key Seedvis',
+      seedvisStatus.error,
+    );
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    $('#seedvisKey').value = '';
+    button.disabled = false;
+  }
+};
+$('#removeSeedvis').onclick = async () => {
+  if (!confirm('Xóa API key Seedvis khỏi máy này?')) return;
+  try {
+    showSeedvis(await api('/api/seedvis/key', { method: 'POST', body: { key: null } }));
+    await refresh();
+    toast('Đã xóa API key Seedvis');
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
+refreshSeedvis().catch(() => {});
 async function refresh() {
   state = await api('/api/state');
   render();
@@ -560,31 +726,9 @@ function renderGraph() {
   }
   const w = Math.max(900, ...Object.values(positions).map(p => p.x + 280)),
     h = Math.max(360, ...Object.values(positions).map(p => p.y + 265));
-  const lines = state.edges
-    .map(e => {
-      const a = positions[e.source],
-        b = positions[e.target];
-      return (
-        '<path d="M ' +
-        (a.x + 235) +
-        ' ' +
-        (a.y + 110) +
-        ' C ' +
-        (a.x + 270) +
-        ' ' +
-        (a.y + 120) +
-        ', ' +
-        (b.x - 35) +
-        ' ' +
-        (b.y + 110) +
-        ', ' +
-        b.x +
-        ' ' +
-        (b.y + 120) +
-        '"/>'
-      );
-    })
-    .join('');
+  if (selectedEdge && !state.edges.some(e => e.source + '>' + e.target === selectedEdge))
+    selectedEdge = null;
+  const lines = wiresMarkup(positions);
   $('#graphCanvas').style.width = w + 'px';
   $('#graphCanvas').style.height = h + 'px';
   $('#graphCanvas').innerHTML =
@@ -595,6 +739,7 @@ function renderGraph() {
     '" class="wires">' +
     lines +
     '</svg>' +
+    wireDeleteButton(positions) +
     state.nodes
       .map(n => {
         const p = positions[n.id];
@@ -686,6 +831,9 @@ function renderGraph() {
         }
       }),
   );
+  document
+    .querySelectorAll('[data-delete-edge]')
+    .forEach(e => (e.onclick = () => deleteEdge(e.dataset.deleteEdge)));
   document.querySelectorAll('[data-remove-edge]').forEach(
     e =>
       (e.onclick = async () => {
@@ -701,6 +849,26 @@ function renderGraph() {
       }),
   );
 }
+async function deleteEdge(key) {
+  try {
+    state = await api('/api/edges', {
+      method: 'PUT',
+      body: { edges: state.edges.filter(e => e.source + '>' + e.target !== key) },
+    });
+    selectedEdge = null;
+    render();
+    toast('Đã xóa dây nối');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+document.addEventListener('keydown', e => {
+  if (!selectedEdge || !['Delete', 'Backspace'].includes(e.key)) return;
+  if (e.target.closest?.('input, textarea, select, [contenteditable]') || !$('#inspector').hidden)
+    return;
+  e.preventDefault();
+  deleteEdge(selectedEdge);
+});
 $('#addNode').onclick = async () => {
   try {
     state = await api('/api/nodes', {
@@ -778,18 +946,57 @@ function edgePath(a, b) {
     b.y
   );
 }
-function repaintWires(pointer) {
-  const svg = $('#graphCanvas .wires');
-  if (!svg) return;
-  svg.innerHTML = state.edges
+function wireEnds(e, pos) {
+  const a = pos[e.source],
+    b = pos[e.target];
+  return [
+    { x: a.x + 235, y: a.y + 110 },
+    { x: b.x, y: b.y + 110 },
+  ];
+}
+// Each wire has a wide transparent twin so it is easy to click.
+function wiresMarkup(pos) {
+  return state.edges
     .map(e => {
-      const a = savedPositions[e.source],
-        b = savedPositions[e.target];
+      const key = e.source + '>' + e.target,
+        d = edgePath(...wireEnds(e, pos));
       return (
-        '<path d="' + edgePath({ x: a.x + 235, y: a.y + 110 }, { x: b.x, y: b.y + 110 }) + '"/>'
+        '<path class="wire-hit" data-edge="' +
+        key +
+        '" d="' +
+        d +
+        '"><title>Bấm để chọn dây, rồi bấm × hoặc Delete để xóa</title></path><path class="wire' +
+        (selectedEdge === key ? ' selected' : '') +
+        '" d="' +
+        d +
+        '"/>'
       );
     })
     .join('');
+}
+function wireDeleteButton(pos) {
+  const e = state.edges.find(e => e.source + '>' + e.target === selectedEdge);
+  if (!e) return '';
+  const [a, b] = wireEnds(e, pos),
+    bend = Math.max(65, Math.abs(b.x - a.x) * 0.5);
+  // Midpoint of the cubic Bézier drawn by edgePath.
+  const x = (a.x + 3 * (a.x + bend) + 3 * (b.x - bend) + b.x) / 8,
+    y = (a.y + b.y) / 2;
+  return (
+    '<button class="wire-delete" data-delete-edge="' +
+    selectedEdge +
+    '" style="left:' +
+    x +
+    'px;top:' +
+    y +
+    'px" title="Xóa dây nối" aria-label="Xóa dây nối">×</button>'
+  );
+}
+function repaintWires(pointer) {
+  const svg = $('#graphCanvas .wires');
+  if (!svg) return;
+  document.querySelectorAll('.wire-delete').forEach(el => el.remove());
+  svg.innerHTML = wiresMarkup(savedPositions);
   if (gesture?.type === 'wire' && pointer) {
     const p = savedPositions[gesture.id];
     const a = gesture.direction === 'out' ? { x: p.x + 235, y: p.y + 110 } : pointer,
@@ -844,6 +1051,8 @@ viewport.addEventListener('pointerdown', e => {
   if (e.button !== 0 && e.button !== 1) return;
   const port = e.target.closest('[data-port-in],[data-port-out]'),
     node = e.target.closest('.graph-node');
+  if (!port && e.target.closest('.wire-delete')) return;
+  const wire = !port && !node ? e.target.closest('[data-edge]') : null;
   if (port) {
     gesture = {
       type: 'wire',
@@ -854,7 +1063,11 @@ viewport.addEventListener('pointerdown', e => {
     const id = node.dataset.graphId;
     gesture = { type: 'node', id, start: { ...savedPositions[id] } };
   } else if (!node || e.button === 1) {
-    gesture = { type: 'pan', start: { x: graphView.x, y: graphView.y } };
+    gesture = {
+      type: 'pan',
+      start: { x: graphView.x, y: graphView.y },
+      wire: wire?.dataset.edge || null,
+    };
   } else return;
   Object.assign(gesture, { pointer: e.pointerId, x: e.clientX, y: e.clientY, moved: false });
   viewport.setPointerCapture(e.pointerId);
@@ -898,6 +1111,8 @@ async function endGesture(e, cancel = false) {
   document.querySelectorAll('.hover-target').forEach(el => el.classList.remove('hover-target'));
   if (cancel && g.type === 'node') savedPositions[g.id] = g.start;
   if (cancel && g.type === 'pan') Object.assign(graphView, g.start);
+  // A click (no drag) on a wire selects it; a click on empty canvas clears the selection.
+  if (!cancel && !g.moved && g.type === 'pan') selectedEdge = g.wire || null;
   if (!cancel && g.moved && g.type === 'wire') {
     const hit = document
       .elementFromPoint(e.clientX, e.clientY)

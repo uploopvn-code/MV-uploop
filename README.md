@@ -6,7 +6,7 @@ Mở http://127.0.0.1:7788 hoặc chạy Start-MV-Director.ps1.
 Yêu cầu Node.js 22 trở lên. Không cần `npm install` (không có thư viện phụ thuộc).
 
     npm start            # chạy server tại http://127.0.0.1:7788
-    npm test             # chạy toàn bộ 5 bộ kiểm thử
+    npm test             # chạy toàn bộ 6 bộ kiểm thử (gồm Seedvis giả lập)
     npm run format       # định dạng lại code bằng Prettier
 
 Biến môi trường: `MV_PORT` (cổng, mặc định 7788), `MV_DATA_DIR` (thư mục dữ liệu,
@@ -17,6 +17,27 @@ Bấm một thẻ để sửa prompt, upload ảnh/video hoặc xếp tác vụ.
 trang phục, nhạc cụ, ánh sáng được kế thừa từ Chỉnh mô tả chung.
 Ảnh ở các node trước được đính kèm vào dữ liệu job của node sau.
 Đây là bản thử giao diện 3 shot, chưa phải hệ thống sản xuất MV hàng loạt.
+
+## Tạo ảnh / video bằng Seedvis API
+1. Kết nối web → Seedvis API → dán API key → Lưu key → Kiểm tra kết nối.
+   Key lưu ở `data/seedvis-key.txt` (hoặc biến môi trường `SEEDVIS_API_KEY`),
+   không gửi về trình duyệt, không ghi vào project.json.
+2. Mở node → Nguồn tạo: chọn Seedvis hoặc Orbit riêng cho ảnh và video, chọn model,
+   tỉ lệ khung, upscale. Node chưa có cấu hình Orbit mặc định dùng Seedvis.
+   - Ảnh: Nano Banana Pro / 2 / Lite, GPT Image 2. Có ảnh đầu vào → ảnh → ảnh.
+   - Video: Veo 3.1, Seedance 2.5 / 2.0 Fast, Omni Flash. Ảnh của shot là keyframe;
+     thời lượng shot được làm tròn về giá trị model hỗ trợ (Veo 4/6/8 giây, Seedance 5/10/…).
+3. Bấm Tạo ảnh · Seedvis / Tạo video · Seedvis, hoặc ▶ Tự động tạo ảnh cho cả chuỗi.
+   Kết quả được tải về và gắn vào node.
+
+An toàn chi phí: mỗi tác vụ gửi `Idempotency-Key` = mã job nên gửi lại khi lỗi mạng không
+tạo lượt mới. Không bao giờ tự gửi lại sau khi Seedvis đã nhận. Quá thời gian hoặc khởi động lại
+khi đang chạy → job ở Cần kiểm tra; bấm Kiểm tra lại trong Hàng đợi để đọc tiếp đúng job đó.
+Seedvis từ chối (lỗi 4xx hoặc failed) → job Lỗi, sửa prompt/ảnh rồi tạo lại.
+
+## Dây nối
+Bấm vào một dây để chọn (dây chuyển đỏ nét đứt), rồi bấm nút × ở giữa dây hoặc phím Delete.
+Vẫn có danh sách dây kèm nút × dưới canvas. Không sửa dây khi đang có job chờ/chạy.
 
 ## Trạng thái Orbit
 Hub: http://192.168.100.5:8080
