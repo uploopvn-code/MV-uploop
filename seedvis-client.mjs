@@ -362,6 +362,9 @@ export function createSeedvis(dataDir) {
     }
     if (state.status === 'failed') {
       const e = state.error || {};
+      // A job we asked to stop (or that Seedvis reports as cancelled) is not a real failure.
+      if (job.aborted || e.code === 'cancelled')
+        throw Object.assign(new Error('Đã dừng theo yêu cầu.'), { aborted: true, definite: true });
       throw Object.assign(
         new Error('Seedvis báo lỗi: ' + (e.message || e.code || 'không rõ lý do')),
         { definite: true },
@@ -435,5 +438,28 @@ export function createSeedvis(dataDir) {
     return poll(job, { is_final: false, next: { after_seconds: 1 } }, onProgress);
   }
 
-  return { status, saveKey, removeKey, run, resume, configured: () => !!key() };
+  // Asks Seedvis to cancel a job. A still-queued job is stopped and refunded in full;
+  // a job already at the provider replies 409 not_cancellable (nothing to refund).
+  // Idempotent and best-effort: returns an outcome, never throws.
+  async function cancel(job) {
+    const id = job.remote?.id;
+    if (!id) return { ok: false, outcome: 'no_id' };
+    const url =
+      job.kind === 'image'
+        ? '/google/v1beta/operations/' + encodeURIComponent(id) + ':cancel'
+        : '/developer/generations/' + encodeURIComponent(id) + '/cancel';
+    try {
+      const data = await call(url, { method: 'POST', timeout: 15000 });
+      return { ok: true, outcome: data?.cancellation?.outcome || 'cancelled', data };
+    } catch (e) {
+      // 409 = already running/finished (cannot refund); anything else = transient/unknown.
+      return {
+        ok: false,
+        outcome: e.status === 409 ? 'not_cancellable' : 'error',
+        error: e.message,
+      };
+    }
+  }
+
+  return { status, saveKey, removeKey, run, resume, cancel, configured: () => !!key() };
 }

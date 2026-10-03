@@ -15,6 +15,7 @@ const KEY = 'sv-test-key-1234';
 const API = 'http://127.0.0.1:17794/api/v1';
 let submits = [],
   polls = 0,
+  cancels = [],
   mode = 'ok',
   inFlight = 0,
   maxInFlight = 0;
@@ -57,6 +58,23 @@ const mock = http.createServer(async (req, res) => {
   if (req.url === '/api/v1/account/info') return send(200, { data: { balance: 42, plan: 'Pro' } });
   if (req.url === '/api/v1/models')
     return send(200, { data: [{ id: 'GEM_PIX_2' }, { id: 'Veo-3.1' }] });
+  const cancel = req.url.match(
+    /^\/api\/v1\/(?:developer\/generations\/([\w-]+)\/cancel|google\/v1beta\/operations\/([\w-]+):cancel)$/,
+  );
+  if (cancel && req.method === 'POST') {
+    const id = cancel[1] || cancel[2];
+    cancels.push(id);
+    const j = jobs.get(id);
+    if (j && j.status === 'queued') {
+      j.status = 'failed';
+      j.cancelled = true;
+      inFlight--;
+    }
+    return send(200, {
+      success: true,
+      data: { id, cancellation: { outcome: 'cancelled', cancelled_outputs: 1 } },
+    });
+  }
   const poll = req.url.match(/^\/api\/v1\/developer\/generations\/([\w-]+)\?wait=0$/);
   if (poll && req.method === 'GET') {
     polls++;
@@ -406,6 +424,9 @@ try {
     await new Promise(res => setTimeout(res, 30));
   }
   assert.equal(stuck.status, 'cancelled', 'stop cancels the running job');
+  // Stop also asked Seedvis to cancel the upstream job (refunds it if still queued).
+  for (let i = 0; i < 50 && !cancels.length; i++) await new Promise(res => setTimeout(res, 20));
+  assert.ok(cancels.length >= 1, 'server called the Seedvis cancel endpoint');
   mode = 'ok';
 
   // Output nodes are terminal: cannot generate from them, and can be deleted.

@@ -546,8 +546,10 @@ function failedVideoNodeIds() {
 }
 // Stops jobs the user asked to halt: queued ones are cancelled outright; running ones
 // are flagged aborted so their poll ends and the result is discarded. Aborted jobs no
-// longer count as busy, so the workflow unlocks immediately.
+// longer count as busy, so the workflow unlocks immediately. Seedvis jobs already sent
+// upstream are also asked to cancel there — a still-queued one is refunded in full.
 function haltJobs(match) {
+  const toCancel = [];
   for (const j of db.jobs) {
     if (!match(j)) continue;
     if (j.status === 'queued') {
@@ -556,8 +558,21 @@ function haltJobs(match) {
     } else if (j.status === 'running') {
       j.aborted = true;
       j.progress = 'Đang dừng…';
+      if (j.payload.seedvis && j.remote?.id) toCancel.push(j);
     }
   }
+  // Best-effort remote cancel, off the response path (refunds a still-queued Seedvis job).
+  for (const j of toCancel)
+    seedvis
+      .cancel(j)
+      .then(r => {
+        j.progress =
+          r.outcome === 'not_cancellable'
+            ? 'Đã dừng (Seedvis đã bắt đầu, không hoàn lượt)'
+            : 'Đã dừng; Seedvis hoàn lượt nếu còn trong hàng chờ';
+        save();
+      })
+      .catch(() => {});
 }
 function requireIdle() {
   if (
