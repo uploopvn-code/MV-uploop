@@ -230,6 +230,25 @@ try {
   assert.equal(submits.at(-1).body.mode, 'multi-image-to-video');
   assert.equal(submits.at(-1).body.referenceImages.length, 2);
 
+  // Once a refs-mode shot has composed its own image, video uses that exact keyframe
+  // (one image, keyframe-prefixed), not the connected parent images.
+  await api('/api/node', 'PATCH', {
+    id: clip,
+    seedvis: { image: { model: 'GEM_PIX_2', aspectRatio: '16:9' } },
+  });
+  r = await api('/api/jobs', 'POST', { nodeId: clip, kind: 'image' });
+  ({ s, j } = await settle(r.data.job.id));
+  assert.equal(j.status, 'completed', j.error);
+  assert.ok(s.nodes.find(n => n.id === clip).image, 'shot now has its own image');
+  r = await api('/api/jobs', 'POST', { nodeId: clip, kind: 'video' });
+  ({ j } = await settle(r.data.job.id));
+  assert.equal(j.status, 'completed', j.error);
+  assert.equal(submits.at(-1).body.mode, 'image-to-video');
+  assert.ok(
+    submits.at(-1).body.image.file_name.startsWith('keyframe-'),
+    'uses the shot own keyframe, not the parent refs',
+  );
+
   // A rejected request is a definite failure; a failed job too. Neither is resent.
   mode = 'reject';
   await api('/api/node', 'PATCH', { id: 'scene', prompt: 'p2' });

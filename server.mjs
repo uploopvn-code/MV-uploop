@@ -369,8 +369,9 @@ async function createJob(req, b) {
   );
   if (prior) return prior;
   // Video can run from the node's own approved image (keyframe), or from the images
-  // of the connected parent nodes (videoInput === 'refs').
-  const videoFromRefs = kind === 'video' && n.videoInput === 'refs';
+  // of the connected parent nodes (videoInput === 'refs'). Once the node has composed
+  // its own image, that exact keyframe drives the video — refs only seed it beforehand.
+  const videoFromRefs = kind === 'video' && n.videoInput === 'refs' && !n.image;
   if (kind === 'video' && !videoFromRefs && !n.image)
     throw new Error(
       'Cần ảnh của node này trước khi tạo video, hoặc chuyển sang dùng ảnh node nối vào.',
@@ -1092,7 +1093,8 @@ const server = http.createServer(async (req, res) => {
         if (n.terminal || isSetting(n) || ['singer', 'stage', 'scene'].includes(n.id)) return false;
         if (b.target && n.id !== b.target) return false;
         if (providers(n).video.type !== 'seedvis') return false;
-        if (n.videoInput === 'refs') {
+        // A shot with its own composed image uses that keyframe; refs only seed it before then.
+        if (n.videoInput === 'refs' && !n.image) {
           const refs = assetRefs(n);
           return refs.length > 0 && !refs.some(r => getNode(r.role).stale);
         }

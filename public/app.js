@@ -640,17 +640,23 @@ function generateLabel(n, kind) {
 }
 const nearest = (list, v) => list.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
 const videoUsesRefs = n => n.videoInput === 'refs';
+// Once the node has composed its own image, that exact keyframe drives the video —
+// the connected refs only seed it beforehand. Mirrors the server.
+const videoFromRefs = n => videoUsesRefs(n) && !n.image;
 // Video can run if its own image exists (keyframe) or, in refs mode, a connected
 // parent node already has an image.
-const videoReady = n => (videoUsesRefs(n) ? n.references.length > 0 : !!n.image);
+const videoReady = n => (videoFromRefs(n) ? n.references.length > 0 : !!n.image);
 function videoInputHint(n) {
-  return videoUsesRefs(n)
-    ? n.references.length
-      ? `Dùng ${n.references.length} ảnh của node nối vào làm input; không cần tạo ảnh của node này.`
-      : 'Chưa có node nào đã có ảnh nối vào. Nối một node đã có ảnh, hoặc tải ảnh lên node đó.'
-    : n.image
+  if (!videoUsesRefs(n))
+    return n.image
       ? 'Dùng ảnh đã duyệt của node này làm keyframe.'
       : 'Node này chưa có ảnh. Tạo hoặc tải ảnh trước, hoặc chuyển sang dùng ảnh node nối vào.';
+  // refs mode
+  if (n.image)
+    return 'Node đã có ảnh — video dùng đúng ảnh này (keyframe), không gửi lại ảnh node nối vào.';
+  return n.references.length
+    ? `Chưa có ảnh của node — dùng ${n.references.length} ảnh của node nối vào làm input. Tạo ảnh của node này để video bám đúng ảnh đó.`
+    : 'Chưa có node nào đã có ảnh nối vào. Nối một node đã có ảnh, hoặc tải ảnh lên node đó.';
 }
 function seedvisFields(n, kind, cur) {
   const models = state.seedvisCatalog[kind],
@@ -667,7 +673,7 @@ function seedvisFields(n, kind, cur) {
       ? n.references.length
         ? `Ảnh → ảnh: gửi ${n.references.length} ảnh đầu vào (tối đa ${m.maxImages}).`
         : 'Chữ → ảnh: node chưa có ảnh đầu vào.'
-      : `${videoUsesRefs(n) ? `Ảnh → video từ ${n.references.length} ảnh node nối vào` + (m.maxImages ? ` (model này tối đa ${m.maxImages})` : '') : 'Ảnh → video từ keyframe của node này'}. Thời lượng gửi: ${m.durations ? nearest(m.durations, n.duration) + ' giây' : 'model tự quyết'} (shot ${n.duration} giây).`;
+      : `${videoFromRefs(n) ? `Ảnh → video từ ${n.references.length} ảnh node nối vào` + (m.maxImages ? ` (model này tối đa ${m.maxImages})` : '') : 'Ảnh → video từ keyframe (ảnh của chính node này)'}. Thời lượng gửi: ${m.durations ? nearest(m.durations, n.duration) + ' giây' : 'model tự quyết'} (shot ${n.duration} giây).`;
   return (
     `<label>Model<select data-sv-model="${kind}">${models
       .map(
