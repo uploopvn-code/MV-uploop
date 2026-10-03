@@ -17,6 +17,8 @@ import {
   videoDuration,
 } from './seedvis-client.mjs';
 import { projectTemplate, themes, themeLabel } from './templates.mjs';
+import { MASTER_PROMPT, buildGraph } from './director.mjs';
+import { createDirectorLLM } from './director-llm.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -31,6 +33,7 @@ fs.mkdirSync(data, { recursive: true });
 if (!fs.existsSync(tokenFile)) fs.writeFileSync(tokenFile, crypto.randomBytes(32).toString('hex'));
 const workerToken = fs.readFileSync(tokenFile, 'utf8').trim();
 const seedvis = createSeedvis(data);
+const directorLLM = createDirectorLLM(data);
 const suffix =
   ', clean footage, no text, no subtitles, no lyrics on screen, no watermarks, cinematic 35mm.';
 
@@ -310,6 +313,18 @@ function mutate() {
   renumberSeq(db);
   db.revision++;
   save();
+}
+// Replaces the active project's graph with a built one (keeps audio/fields/output).
+function applyGraph(graph) {
+  db.nodes = graph.nodes;
+  db.edges = graph.edges;
+  if (graph.name) db.name = graph.name;
+  if (graph.theme && themes.some(t => t.id === graph.theme)) db.theme = graph.theme;
+  db.autoRun = null;
+  db.autoVideoRun = null;
+  db.jobs = [];
+  normalize(db);
+  mutate();
 }
 function checkLease(j, b) {
   if (!j || j.status !== 'running' || j.lease !== b.lease)
@@ -804,6 +819,31 @@ const server = http.createServer(async (req, res) => {
       if (ws.active === b.id) ws.active = ws.order[0];
       writeWorkspace(ws);
       loadProject(ws.active);
+      return json(res, 200, publicState());
+    }
+    if (p === '/api/director' && req.method === 'GET')
+      return json(res, 200, { masterPrompt: MASTER_PROMPT, llm: directorLLM.status() });
+    if (p === '/api/director/llm' && req.method === 'POST')
+      return json(res, 200, { llm: directorLLM.save(await body(req)) });
+    if (p === '/api/director/build' && req.method === 'POST') {
+      requireIdle();
+      const b = await body(req);
+      applyGraph(buildGraph(b.blueprint));
+      return json(res, 200, publicState());
+    }
+    if (p === '/api/director/auto' && req.method === 'POST') {
+      requireIdle();
+      const b = await body(req);
+      if (!directorLLM.configured()) throw new Error('Chưa cấu hình API key LLM cho Đạo diễn.');
+      const song = String(b.song || '').slice(0, 20000);
+      if (!song.trim()) throw new Error('Nhập tên bài hát / lời / link để chạy.');
+      const text = await directorLLM.complete(
+        MASTER_PROMPT,
+        'BẮT ĐẦU: ' +
+          song +
+          '\n\nChỉ trả về đúng khối JSON blueprint theo schema đã mô tả, không thêm chữ nào ngoài khối JSON.',
+      );
+      applyGraph(buildGraph(text));
       return json(res, 200, publicState());
     }
     if (p === '/api/node' && req.method === 'PATCH') {

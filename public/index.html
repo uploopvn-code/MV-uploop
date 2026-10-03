@@ -12,6 +12,7 @@
       <button class="nav active" data-view="studio">▦<span>Studio</span></button
       ><button class="nav" data-view="queue">◷<span>Hàng đợi</span><i id="jobCount">0</i></button
       ><button class="nav" data-view="gallery">🎬<span>Video</span><i id="videoCount">0</i></button
+      ><button class="nav" data-view="director">✦<span>Đạo diễn</span></button
       ><button class="nav" data-view="connect">↗<span>Kết nối web</span></button>
       <div class="rail-bottom"><span class="dot"></span> Chạy trên máy bạn</div>
     </aside>
@@ -114,6 +115,67 @@
           ><button id="galleryDelete" class="button danger">🗑 Xóa đã chọn</button>
         </div>
         <div id="galleryBody"></div>
+      </section>
+      <section id="director" class="view" hidden>
+        <div class="section-heading">
+          <h2>Đạo diễn · dựng sơ đồ tự động</h2>
+          <p>
+            Master prompt sinh ra toàn bộ asset (ca sĩ, nhạc công, sân khấu), style, cỡ máy và
+            storyboard; công cụ tự tạo node và nối dây. Bạn chỉ việc chạy ảnh/video hoặc sửa prompt.
+          </p>
+        </div>
+        <div class="settings-panel">
+          <h3>1. Master prompt</h3>
+          <p class="muted">
+            Chép và dán vào ChatGPT/Claude kèm bài hát (hoặc dùng mục 3 để tự động). Model phải trả
+            về khối JSON blueprint theo mẫu ở cuối prompt.
+          </p>
+          <textarea id="masterPrompt" rows="8" readonly></textarea>
+          <div class="actions">
+            <button id="copyMaster" class="button">📋 Chép master prompt</button>
+          </div>
+        </div>
+        <div class="settings-panel">
+          <h3>2. Dán blueprint (JSON) rồi dựng</h3>
+          <p class="muted">
+            Dán khối JSON kết quả vào đây.
+            <strong>Dựng sơ đồ sẽ thay toàn bộ node của project đang mở</strong> — nên tạo một
+            Project mới cho mỗi bài hát.
+          </p>
+          <textarea
+            id="blueprintInput"
+            rows="8"
+            placeholder='{ "assets": [...], "cameras": [...], "shots": [...] }'
+          ></textarea>
+          <div class="actions">
+            <button id="buildGraph" class="button primary">✦ Dựng sơ đồ</button>
+          </div>
+        </div>
+        <div class="settings-panel">
+          <h3>3. Tự động qua API (tuỳ chọn)</h3>
+          <p class="muted">
+            Nhập API key một endpoint tương thích OpenAI (OpenAI, hoặc gateway của bạn). Bấm chạy là
+            công cụ tự gọi master prompt rồi dựng sơ đồ. Thử nghiệm — nếu lỗi, dùng cách dán tay ở
+            mục 2.
+          </p>
+          <p id="directorLLMStatus" class="muted"></p>
+          <div class="two">
+            <label>Base URL<input id="llmBaseUrl" placeholder="https://api.openai.com/v1" /></label>
+            <label>Model<input id="llmModel" placeholder="gpt-4o-mini" /></label>
+          </div>
+          <label>API key<input id="llmKey" type="password" placeholder="Dán API key LLM" /></label>
+          <div class="actions"><button id="saveLLM" class="button">Lưu cấu hình</button></div>
+          <label
+            >Bài hát / lời / link<textarea
+              id="directorSong"
+              rows="3"
+              placeholder="BẮT ĐẦU: Tên bài hát hoặc dán lời…"
+            ></textarea>
+          </label>
+          <div class="actions">
+            <button id="runAuto" class="button primary">⚡ Chạy tự động &amp; dựng</button>
+          </div>
+        </div>
       </section>
       <section id="connect" class="view" hidden>
         <div class="section-heading">

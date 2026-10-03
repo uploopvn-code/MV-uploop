@@ -360,6 +360,7 @@ function view(id) {
   document
     .querySelectorAll('[data-view]')
     .forEach(b => b.classList.toggle('active', b.dataset.view === id));
+  if (id === 'director' && !directorLoaded) loadDirector();
 }
 document.querySelectorAll('[data-view]').forEach(b => (b.onclick = () => view(b.dataset.view)));
 function closeInspector() {
@@ -1237,6 +1238,86 @@ async function addSetting(settingType) {
 }
 $('#addStyle').onclick = () => addSetting('style');
 $('#addCamera').onclick = () => addSetting('camera');
+// --- Đạo diễn: master prompt + build graph from blueprint + LLM auto ---
+let directorLoaded = false;
+async function loadDirector() {
+  try {
+    const d = await api('/api/director');
+    $('#masterPrompt').value = d.masterPrompt;
+    showDirectorLLM(d.llm);
+    directorLoaded = true;
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+function showDirectorLLM(llm) {
+  $('#directorLLMStatus').textContent = llm.configured
+    ? 'Đã cấu hình · ' + llm.model + ' · key ' + llm.keyHint + ' · ' + llm.baseUrl
+    : 'Chưa cấu hình API key.';
+  if (!$('#llmBaseUrl').value) $('#llmBaseUrl').value = llm.baseUrl || '';
+  if (!$('#llmModel').value) $('#llmModel').value = llm.model || '';
+}
+$('#copyMaster').onclick = () => copy($('#masterPrompt').value);
+$('#buildGraph').onclick = async () => {
+  const bp = $('#blueprintInput').value.trim();
+  if (!bp) return toast('Dán blueprint JSON trước', true);
+  if (!confirm('Dựng sơ đồ sẽ THAY TOÀN BỘ node của project đang mở. Tiếp tục?')) return;
+  const btn = $('#buildGraph');
+  btn.disabled = true;
+  try {
+    state = await api('/api/director/build', { method: 'POST', body: { blueprint: bp } });
+    gallerySel.clear();
+    view('studio');
+    render();
+    $('#arrangeZones').onclick();
+    toast('Đã dựng sơ đồ từ blueprint');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+};
+$('#saveLLM').onclick = async () => {
+  try {
+    const r = await api('/api/director/llm', {
+      method: 'POST',
+      body: {
+        baseUrl: $('#llmBaseUrl').value,
+        model: $('#llmModel').value,
+        key: $('#llmKey').value,
+      },
+    });
+    $('#llmKey').value = '';
+    showDirectorLLM(r.llm);
+    toast('Đã lưu cấu hình LLM');
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
+$('#runAuto').onclick = async () => {
+  const song = $('#directorSong').value.trim();
+  if (!song) return toast('Nhập bài hát / lời để chạy', true);
+  if (
+    !confirm('Chạy LLM rồi dựng sơ đồ (thay toàn bộ node project đang mở)? Có thể mất 30–120 giây.')
+  )
+    return;
+  const btn = $('#runAuto');
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang chạy LLM…';
+  try {
+    state = await api('/api/director/auto', { method: 'POST', body: { song } });
+    gallerySel.clear();
+    view('studio');
+    render();
+    $('#arrangeZones').onclick();
+    toast('Đã dựng sơ đồ tự động');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Chạy tự động & dựng';
+  }
+};
 $('#fullscreenToggle').onclick = () => {
   const full = $('#graphArea').classList.toggle('full');
   $('#fullscreenToggle').textContent = full ? '⤢ Thu nhỏ' : '⛶ Toàn màn hình';

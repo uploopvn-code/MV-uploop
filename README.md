@@ -6,7 +6,7 @@ Mở http://127.0.0.1:7788 hoặc chạy Start-MV-Director.ps1.
 Yêu cầu Node.js 22 trở lên. Không cần `npm install` (không có thư viện phụ thuộc).
 
     npm start            # chạy server tại http://127.0.0.1:7788
-    npm test             # chạy toàn bộ 7 bộ kiểm thử
+    npm test             # chạy toàn bộ 8 bộ kiểm thử
     npm run format       # định dạng lại code bằng Prettier
 
 Biến môi trường: `MV_PORT` (cổng, mặc định 7788), `MV_DATA_DIR` (thư mục dữ liệu,
@@ -17,6 +17,23 @@ Bấm một thẻ để sửa prompt, upload ảnh/video hoặc xếp tác vụ.
 trang phục, nhạc cụ, ánh sáng được kế thừa từ Chỉnh mô tả chung.
 Ảnh ở các node trước được đính kèm vào dữ liệu job của node sau.
 Đây là bản thử giao diện 3 shot, chưa phải hệ thống sản xuất MV hàng loạt.
+
+## Đạo diễn — dựng sơ đồ tự động từ master prompt
+Mục **✦ Đạo diễn** biến một master prompt (đạo diễn MV) thành cả sơ đồ node và tự nối dây:
+asset (ca sĩ, từng nhạc công, sân khấu) + node Style + node cỡ máy (Wide/Medium/Close) ở khu
+Tạo hình, và các node storyboard ở khu Sản xuất — mỗi shot **tự nối** tới đúng asset nó dùng,
+cỡ máy và style. Dựng xong bạn chỉ việc bấm Tạo ảnh / Tạo video, hoặc sửa prompt.
+
+Hai cách chạy:
+1. **Dán blueprint:** chép master prompt (nút trong mục Đạo diễn) → chạy ở ChatGPT/Claude kèm bài
+   hát → model trả về khối JSON blueprint → dán vào ô, bấm **✦ Dựng sơ đồ**.
+2. **Tự động qua API:** nhập API key một endpoint tương thích OpenAI (base URL + model + key) →
+   gõ tên bài hát → **⚡ Chạy tự động & dựng** (công cụ tự gọi master prompt rồi dựng).
+
+Blueprint là JSON: `{ project, style, assets[{key,name,prompt}], cameras[{key,name,config}],
+shots[{name,start,duration,uses[],camera,lyric,videoPrompt}] }`. `uses` là các `key` asset shot
+dùng; `camera` là 1 `key` trong `cameras`. **Dựng sơ đồ thay toàn bộ node của project đang mở** —
+nên tạo Project mới cho mỗi bài hát. Key LLM dùng chung mọi project (lưu ở gốc `data/`).
 
 ## Nhiều project & chủ đề
 - Thanh trên cùng có ô chọn **project** và nút **＋ Project**. Mỗi project lưu riêng
