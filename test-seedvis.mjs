@@ -332,6 +332,13 @@ try {
   s = (await api('/api/state')).data;
   assert.equal(branchesOf(s).length, 3, 'rerun adds a version');
 
+  // Auto-video is scoped to the production zone: a character/scene node with its own
+  // image is never auto-filmed, even when targeted directly.
+  const charNode = await mkNode('Nhân vật có ảnh');
+  await api('/api/node', 'PATCH', { id: charNode, zone: 'character' });
+  r = await api('/api/auto/video/start', 'POST', { target: charNode, versions: 1 });
+  assert.equal(r.status, 400, 'character-zone node is not eligible for auto video');
+
   // Output nodes are terminal: cannot generate from them, and can be deleted.
   const term = branchesOf(s)[0].id;
   r = await api('/api/jobs', 'POST', { nodeId: term, kind: 'video' });

@@ -1088,9 +1088,11 @@ const server = http.createServer(async (req, res) => {
       if (!seedvis.configured()) throw new Error('Nhập API key Seedvis trong Kết nối web.');
       const b = await body(req);
       const versions = Math.max(1, Math.min(8, Math.floor(Number(b.versions) || 1)));
-      // Eligible: video-capable Seedvis nodes whose video input is already ready.
+      // Eligible: production-zone (Sản xuất video) Seedvis nodes whose video input is
+      // already ready. Character/scene asset nodes are never auto-filmed, even with an image.
       const eligible = db.nodes.filter(n => {
-        if (n.terminal || isSetting(n) || ['singer', 'stage', 'scene'].includes(n.id)) return false;
+        if (n.terminal || isSetting(n)) return false;
+        if (nodeZone(n) !== 'production') return false;
         if (b.target && n.id !== b.target) return false;
         if (providers(n).video.type !== 'seedvis') return false;
         // A shot with its own composed image uses that keyframe; refs only seed it before then.
