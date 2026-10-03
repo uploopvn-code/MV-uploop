@@ -1,8 +1,13 @@
 # MV Director — bản thử nghiệm local
 
-Mở http://127.0.0.1:7788 hoặc chạy Start-MV-Director.ps1.
+Mở http://127.0.0.1:7788 hoặc dùng file khởi động nhanh.
 
-## Cài đặt & chạy
+## Khởi động nhanh (Windows)
+Nhấp đúp **`start.cmd`** (hoặc chuột phải **`Start-MV-Director.ps1`** → Run with PowerShell).
+File sẽ tự: tắt server cũ ở cổng 7788 → `git pull` cập nhật code → chạy server → mở trình duyệt.
+Để dừng: đóng cửa sổ đó hoặc nhấn Ctrl+C.
+
+## Cài đặt & chạy (thủ công)
 Yêu cầu Node.js 22 trở lên. Không cần `npm install` (không có thư viện phụ thuộc).
 
     npm start            # chạy server tại http://127.0.0.1:7788
