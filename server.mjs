@@ -21,11 +21,34 @@ import { MASTER_PROMPT, buildGraph } from './director.mjs';
 import { createDirectorLLM } from './director-llm.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 const root = path.dirname(fileURLToPath(import.meta.url));
-const data = process.env.MV_DATA_DIR || path.join(root, 'data');
+// Projects are saved in a stable folder in the user's home directory, NOT inside the app
+// folder — so updating, re-cloning or moving the app never wipes them. An existing
+// repo-local data/ is migrated there once. Override with MV_DATA_DIR.
+function resolveDataDir() {
+  if (process.env.MV_DATA_DIR) return process.env.MV_DATA_DIR;
+  const home = path.join(os.homedir(), 'MV-Director-data');
+  const legacy = path.join(root, 'data');
+  const hasData = d =>
+    fs.existsSync(path.join(d, 'workspace.json')) ||
+    fs.existsSync(path.join(d, 'projects')) ||
+    fs.existsSync(path.join(d, 'project.json'));
+  try {
+    if (legacy !== home && !hasData(home) && hasData(legacy)) {
+      fs.mkdirSync(home, { recursive: true });
+      fs.cpSync(legacy, home, { recursive: true });
+      fs.writeFileSync(path.join(legacy, 'MOVED-to-home.txt'), 'Dữ liệu đã chuyển sang ' + home);
+    }
+  } catch (e) {
+    console.error('Không di chuyển được dữ liệu cũ:', e.message);
+  }
+  return home;
+}
+const data = resolveDataDir();
 const port = Number(process.env.MV_PORT || 7788);
 // Worker token and Seedvis key stay at the data root, shared by every project.
 const tokenFile = path.join(data, 'worker-token.txt');
@@ -265,6 +288,7 @@ function publicState() {
     seedvisDefaults: defaultSeedvis,
     activeProjectId: activeId,
     projects: projectList(),
+    dataDir: data,
     themes,
     nodes: db.nodes.map(n => ({
       ...n,
@@ -892,6 +916,47 @@ const server = http.createServer(async (req, res) => {
       if (ws.active === b.id) ws.active = ws.order[0];
       writeWorkspace(ws);
       loadProject(ws.active);
+      return json(res, 200, publicState());
+    }
+    // Backup: download one project (graph + its media) as a single .mvproj.json file.
+    if (p === '/api/projects/export' && req.method === 'GET') {
+      const id = u.searchParams.get('id') || activeId;
+      if (!ws.order.includes(id)) throw new Error('Project không tồn tại.');
+      const project = JSON.parse(fs.readFileSync(projectDbFile(id), 'utf8'));
+      const mdir = path.join(projectDir(id), 'media');
+      const media = {};
+      if (fs.existsSync(mdir))
+        for (const f of fs.readdirSync(mdir))
+          media[f] = fs.readFileSync(path.join(mdir, f)).toString('base64');
+      const bundle = { type: 'mv-director-project', version: 1, project, media };
+      const fname =
+        (String(project.name || 'project').replace(/[^\w.\- ]+/g, '_') || 'project') +
+        '.mvproj.json';
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(fname)}`,
+      });
+      return res.end(JSON.stringify(bundle));
+    }
+    // Restore: import a .mvproj.json bundle as a new project (keeps existing ones).
+    if (p === '/api/projects/import' && req.method === 'POST') {
+      requireIdle();
+      const bundle = await body(req);
+      if (!bundle || bundle.type !== 'mv-director-project' || !bundle.project?.nodes)
+        throw new Error('File không hợp lệ. Hãy chọn đúng file .mvproj.json đã xuất từ công cụ.');
+      const id = crypto.randomUUID();
+      const mdir = path.join(projectDir(id), 'media');
+      fs.mkdirSync(mdir, { recursive: true });
+      for (const [fname, b64] of Object.entries(bundle.media || {}))
+        if (/^[a-f0-9-]+\.(png|jpg|webp|mp4|webm|mp3|wav|m4a|ogg)$/.test(fname))
+          fs.writeFileSync(path.join(mdir, fname), Buffer.from(String(b64), 'base64'));
+      const d = bundle.project;
+      d.name = String(d.name || 'Project nhập').slice(0, 100);
+      writeProject(id, d);
+      ws.order.push(id);
+      ws.active = id;
+      writeWorkspace(ws);
+      loadProject(id);
       return json(res, 200, publicState());
     }
     if (p === '/api/director' && req.method === 'GET')

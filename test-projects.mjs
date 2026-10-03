@@ -110,8 +110,24 @@ try {
   r = await api('/api/projects/delete', 'POST', { id: musicId });
   assert.equal(r.status, 400);
 
+  // Backup (export) then restore (import) → a separate copy with a new id.
+  const exp = await api('/api/projects/export?id=' + musicId);
+  assert.equal(exp.status, 200);
+  assert.equal(exp.data.type, 'mv-director-project');
+  assert.ok(exp.data.project.nodes.length, 'bundle carries the graph');
+  r = await api('/api/projects/import', 'POST', exp.data);
+  assert.equal(r.status, 200);
+  s = r.data;
+  assert.equal(s.projects.length, 2, 'import adds a project, keeps the original');
+  const importedId = s.activeProjectId;
+  assert.notEqual(importedId, musicId, 'imported copy has its own id');
+  assert.equal(node(s, 'singer').name, 'CA SĨ A', 'imported copy keeps the edited node');
+  assert.ok(fs.existsSync(path.join(dir, 'projects', importedId, 'media')));
+  // A bad bundle is rejected.
+  assert.equal((await api('/api/projects/import', 'POST', { foo: 1 })).status, 400);
+
   console.log(
-    'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, zones, per-zone numbering + reorder, create/switch/delete projects, isolation, per-project media',
+    'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, zones, per-zone numbering + reorder, create/switch/delete projects, isolation, per-project media, export/import backup',
   );
 } finally {
   proc.kill();

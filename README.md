@@ -14,8 +14,19 @@ Yêu cầu Node.js 22 trở lên. Không cần `npm install` (không có thư vi
     npm test             # chạy toàn bộ 8 bộ kiểm thử
     npm run format       # định dạng lại code bằng Prettier
 
-Biến môi trường: `MV_PORT` (cổng, mặc định 7788), `MV_DATA_DIR` (thư mục dữ liệu,
-mặc định `data/`). Thư mục `data/` chứa project, media và token worker; không đưa lên git.
+## Nơi lưu project (quan trọng)
+Project được lưu ở thư mục **`MV-Director-data`** trong thư mục home của bạn
+(ví dụ Windows: `C:\Users\<Tên>\MV-Director-data`), **nằm NGOÀI thư mục ứng dụng** —
+nên cập nhật code, `git pull`, hay chép lại thư mục app sẽ **không làm mất project**.
+Dữ liệu cũ trong `data/` của app (nếu có) được tự chuyển sang đây một lần.
+Đường dẫn lưu hiện ra ngay dưới tên project trên giao diện.
+
+Sao lưu / khôi phục: nút **💾 Backup** tải project hiện tại ra một file `.mvproj.json`
+(kèm cả ảnh/video); nút **📂 Nhập** đưa file đó trở lại thành một project mới. Muốn
+sao lưu toàn bộ thì chép cả thư mục `MV-Director-data`.
+
+Biến môi trường: `MV_PORT` (cổng, mặc định 7788), `MV_DATA_DIR` (đổi thư mục dữ liệu;
+mặc định `~/MV-Director-data`). Thư mục này chứa project, media và token worker.
 
 Luồng cố định: Ca sĩ + Sân khấu → Ghép cảnh → Toàn / Trung / Cận → Video.
 Bấm một thẻ để sửa prompt, upload ảnh/video hoặc xếp tác vụ. Mô tả nhân vật,

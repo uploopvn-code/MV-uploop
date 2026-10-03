@@ -21,10 +21,23 @@
         <div>
           <div class="eyebrow">WORKSPACE / LIVE CONCERT</div>
           <h1 id="projectName">Live Concert đầu tiên</h1>
+          <p id="saveLocation" class="save-location" title="Thư mục lưu project trên máy bạn"></p>
         </div>
         <div class="header-actions">
           <select id="projectSelect" class="button" aria-label="Chọn project"></select
           ><button class="button" id="newProject">＋ Project</button
+          ><button
+            class="button"
+            id="backupProject"
+            title="Lưu project này ra file .mvproj.json để sao lưu"
+          >
+            💾 Backup</button
+          ><label class="button" title="Nhập project từ file backup .mvproj.json"
+            >📂 Nhập<input
+              type="file"
+              id="importProject"
+              accept=".json,.mvproj.json,application/json"
+              hidden /></label
           ><span id="workerBadge" class="badge">Chưa nối web worker</span
           ><button class="button" id="projectSettings">⚙ Project</button
           ><button class="button" id="export">↓ Xuất prompt</button>

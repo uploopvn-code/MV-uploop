@@ -318,6 +318,7 @@ function renderProjects() {
     .join('');
   document.querySelector('.eyebrow').textContent =
     'WORKSPACE / ' + themeLabel(state.theme).toUpperCase();
+  if (state.dataDir) $('#saveLocation').textContent = '💾 Lưu tại: ' + state.dataDir;
 }
 $('#projectSelect').onchange = async e => {
   try {
@@ -356,6 +357,28 @@ $('#newProject').onclick = () => {
       toast(e.message, true);
     }
   };
+};
+// Backup: download the active project (graph + media) as one .mvproj.json file.
+$('#backupProject').onclick = () => {
+  const name = (state.name || 'project').replace(/[^\w.\- ]+/g, '_') + '.mvproj.json';
+  triggerDownload('/api/projects/export?id=' + encodeURIComponent(state.activeProjectId), name);
+  toast('Đang tải file backup…');
+};
+// Restore: import a .mvproj.json file as a new project.
+$('#importProject').onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const bundle = JSON.parse(await file.text());
+    state = await api('/api/projects/import', { method: 'POST', body: bundle });
+    gallerySel.clear();
+    closeInspector();
+    render();
+    toast('Đã nhập project từ file backup');
+  } catch (err) {
+    toast('Nhập thất bại: ' + err.message, true);
+  }
 };
 function renderJobs() {
   $('#jobs').innerHTML = state.jobs.length
