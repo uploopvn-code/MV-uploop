@@ -606,6 +606,28 @@ function failedVideoNodeIds() {
     ...new Set(db.jobs.filter(j => j.kind === 'video' && j.status === 'failed').map(j => j.nodeId)),
   ];
 }
+// Has this production node already produced a video (its own, or at least one output branch)?
+const hasVideoOutput = n =>
+  !!n.video || db.nodes.some(t => t.terminal && t.source === n.id && t.video);
+// Eligible production nodes still missing a video and NOT currently failed (those use retry).
+function missingVideoNodes() {
+  const failed = new Set(failedVideoNodeIds());
+  return db.nodes.filter(n => autoVideoEligible(n) && !hasVideoOutput(n) && !failed.has(n.id));
+}
+// Starts an auto-video run over the given node ids.
+function startAutoVideoRun(req, ids, versions, message) {
+  db.autoVideoRun = {
+    id: crypto.randomUUID(),
+    status: 'running',
+    versions,
+    pending: ids,
+    total: ids.length,
+    errors: [],
+    message,
+  };
+  save();
+  pump(req);
+}
 // Stops jobs the user asked to halt. A locally-queued job (not yet sent) is cancelled
 // outright. A running Seedvis job is flagged cancelRequested — it no longer counts as
 // busy (the workflow unlocks at once) and we ask Seedvis to cancel it: if it was still
@@ -1291,17 +1313,12 @@ const server = http.createServer(async (req, res) => {
         n => autoVideoEligible(n) && (!b.target || n.id === b.target),
       );
       if (!eligible.length) throw new Error('Không có node nào sẵn ảnh để tạo video bằng Seedvis.');
-      db.autoVideoRun = {
-        id: crypto.randomUUID(),
-        status: 'running',
+      startAutoVideoRun(
+        req,
+        eligible.map(n => n.id),
         versions,
-        pending: eligible.map(n => n.id),
-        total: eligible.length,
-        errors: [],
-        message: 'Đang tạo video song song cho ' + eligible.length + ' node',
-      };
-      save();
-      pump(req);
+        'Đang tạo video song song cho ' + eligible.length + ' node',
+      );
       return json(res, 200, publicState());
     }
     if (p === '/api/auto/video/stop' && req.method === 'POST') {
@@ -1329,17 +1346,28 @@ const server = http.createServer(async (req, res) => {
       db.jobs = db.jobs.filter(
         j => !(j.kind === 'video' && j.status === 'failed' && retryIds.has(j.nodeId)),
       );
-      db.autoVideoRun = {
-        id: crypto.randomUUID(),
-        status: 'running',
+      startAutoVideoRun(
+        req,
+        eligible.map(n => n.id),
         versions,
-        pending: eligible.map(n => n.id),
-        total: eligible.length,
-        errors: [],
-        message: 'Chạy lại video cho ' + eligible.length + ' node lỗi',
-      };
-      save();
-      pump(req);
+        'Chạy lại video cho ' + eligible.length + ' node lỗi',
+      );
+      return json(res, 200, publicState());
+    }
+    // Fill in the gaps: production nodes that are ready but still have no video (not failed).
+    if (p === '/api/auto/video/missing' && req.method === 'POST') {
+      requireIdle();
+      if (!seedvis.configured()) throw new Error('Nhập API key Seedvis trong Kết nối web.');
+      const b = await body(req);
+      const versions = Math.max(1, Math.min(8, Math.floor(Number(b.versions) || 1)));
+      const eligible = missingVideoNodes();
+      if (!eligible.length) throw new Error('Mọi node đã có video. Không có gì còn thiếu.');
+      startAutoVideoRun(
+        req,
+        eligible.map(n => n.id),
+        versions,
+        'Tạo video còn thiếu cho ' + eligible.length + ' node',
+      );
       return json(res, 200, publicState());
     }
     if (p === '/api/jobs/collect' && req.method === 'POST') {

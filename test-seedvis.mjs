@@ -484,6 +484,17 @@ try {
   cancellable = true;
   mode = 'ok';
 
+  // "Tạo video còn thiếu": films ready production nodes that have no video yet (not failed).
+  const M2 = await mkNode('Shot chưa có video');
+  r = await api('/api/auto/video/missing', 'POST', { versions: 1 });
+  assert.equal(r.status, 200);
+  await settleAuto();
+  s = (await api('/api/state')).data;
+  assert.ok(
+    s.nodes.some(n => n.terminal && n.source === M2 && n.video),
+    'missing filled the node with no video',
+  );
+
   // Output nodes are terminal: cannot generate from them, and can be deleted.
   const term = branchesOf(s)[0].id;
   r = await api('/api/jobs', 'POST', { nodeId: term, kind: 'video' });

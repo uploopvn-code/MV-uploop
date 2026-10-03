@@ -1278,9 +1278,33 @@ function renderGraph() {
   // Offer a one-click retry whenever some video jobs failed.
   const failedVideos = state.jobs.filter(j => j.kind === 'video' && j.status === 'failed').length;
   const retryBtn = $('#autoVideoRetry');
-  retryBtn.hidden = failedVideos === 0;
-  retryBtn.textContent = '↻ Chạy lại ' + failedVideos + ' video lỗi';
-  retryBtn.disabled = workflowBusy();
+  if (retryBtn) {
+    retryBtn.hidden = failedVideos === 0;
+    retryBtn.textContent = '↻ Chạy lại ' + failedVideos + ' video lỗi';
+    retryBtn.disabled = workflowBusy();
+  }
+  // Offer "create missing videos" for ready production nodes that have no video yet (not failed).
+  const failedVideoIds = new Set(
+    state.jobs.filter(j => j.kind === 'video' && j.status === 'failed').map(j => j.nodeId),
+  );
+  const hasVideoFor = n =>
+    n.video || state.nodes.some(t => t.terminal && t.source === n.id && t.video);
+  const missing = state.nodes.filter(
+    n =>
+      !n.terminal &&
+      n.kind !== 'setting' &&
+      n.zone === 'production' &&
+      n.providers?.video?.type === 'seedvis' &&
+      videoReady(n) &&
+      !hasVideoFor(n) &&
+      !failedVideoIds.has(n.id),
+  ).length;
+  const missBtn = $('#autoVideoMissing');
+  if (missBtn) {
+    missBtn.hidden = missing === 0;
+    missBtn.textContent = '✚ Tạo ' + missing + ' video còn thiếu';
+    missBtn.disabled = workflowBusy();
+  }
   applyGraphView();
   document.querySelectorAll('.graph-node').forEach(el => {
     const id = el.dataset.graphId;
@@ -1529,6 +1553,20 @@ $('#autoVideoRetry').onclick = async () => {
     toast(e.message, true);
   }
 };
+const missingBtn = $('#autoVideoMissing');
+if (missingBtn)
+  missingBtn.onclick = async () => {
+    try {
+      state = await api('/api/auto/video/missing', {
+        method: 'POST',
+        body: { versions: Number($('#videoVersions').value) },
+      });
+      render();
+      toast('Đang tạo các video còn thiếu');
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
 
 function persistCanvas() {
   try {
