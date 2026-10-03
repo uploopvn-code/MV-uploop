@@ -1429,6 +1429,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && ['/', '/app.js', '/style.css'].includes(p)) {
       const file = p === '/' ? 'index.html' : p.slice(1);
+      const full = path.join(root, 'public', file);
       res.writeHead(200, {
         'Content-Type': file.endsWith('.html')
           ? 'text/html; charset=utf-8'
@@ -1437,7 +1438,22 @@ const server = http.createServer(async (req, res) => {
             : 'text/css; charset=utf-8',
         'Cache-Control': 'no-store',
       });
-      return fs.createReadStream(path.join(root, 'public', file)).pipe(res);
+      // Stamp the page's asset URLs with a version (newest mtime of app.js/style.css) so a
+      // browser can never run a stale app.js against a new index.html after an update.
+      if (file === 'index.html') {
+        let v = 0;
+        for (const f of ['app.js', 'style.css'])
+          try {
+            v = Math.max(v, fs.statSync(path.join(root, 'public', f)).mtimeMs);
+          } catch {}
+        const ver = Math.floor(v).toString(36);
+        const html = fs
+          .readFileSync(full, 'utf8')
+          .replace('/app.js"', '/app.js?v=' + ver + '"')
+          .replace('/style.css"', '/style.css?v=' + ver + '"');
+        return res.end(html);
+      }
+      return fs.createReadStream(full).pipe(res);
     }
     return json(res, 404, { error: 'Not found' });
   } catch (e) {
