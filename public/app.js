@@ -164,7 +164,7 @@ function inspect(id) {
   $('#inspector').hidden = false;
   $('#overlay').hidden = false;
   $('#inspector').innerHTML =
-    `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div><div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Ảnh ${esc(n.name)}">` : 'Ảnh của node sẽ xuất hiện ở đây'}</div>${n.stale ? '<div class="note">Đầu vào đã đổi. Tạo lại ảnh hoặc tải ảnh đã duyệt trước khi làm video.</div>' : ''}<label>Tên node<input id="nodeName" value="${esc(n.name)}"></label><div class="reference-chips">${n.references.map((r, i) => `<span>✓ ${esc(state.nodes.find(n => n.id === r.role)?.name || r.role)} <code>{{mv_input_${i + 1}_path}}</code></span>`).join('')}</div><label>Prompt ảnh <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo ảnh">{{prompt}}</code><textarea id="imagePrompt" rows="5">${esc(n.resolvedPrompts.image)}</textarea></label><p class="field-hint">Orbit nhận nội dung này qua <code>{{prompt}}</code> hoặc <code>{{mv_prompt}}</code> khi tạo ảnh. Khi tạo video, hai biến này chứa prompt video.</p><div class="prompt-tools"><button id="copyImage">Sao chép prompt</button><button id="resetPrompt">Dùng prompt kế thừa</button></div><div class="actions"><label class="button">↑ Tải ảnh<input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" hidden></label><button class="button primary" id="generateImage">${generateLabel(n, 'image')}</button></div><p class="queue-hint">${n.providers.image.type === 'seedvis' ? 'Gửi prompt và ' + n.references.length + ' ảnh đầu vào tới Seedvis · ' + esc(n.providers.image.modelName) + '.' : 'Tác vụ sẽ mở nick và chạy kịch bản bằng phiên Orbit đã đăng nhập.'}</p>${shot ? `<section class="inspector-section"><h3>Video của shot</h3><div class="two"><label>Bắt đầu (giây) <code class="variable-tag">{{mv_start}}</code><input id="start" type="number" min="0" value="${n.start}"></label><label>Thời lượng (giây) <code class="variable-tag">{{mv_duration}}</code><input id="duration" type="number" min="1" value="${n.duration}"></label></div><label>Lời hát đúng đoạn này <span class="field-hint">Nhúng trong prompt video, không có biến riêng</span><textarea id="lyric" rows="2" placeholder="Để trống nếu chưa căn lời">${esc(n.lyric)}</textarea></label><details><summary>Prompt chuyển động <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo video">{{prompt}}</code></summary><label>Prompt video <code class="variable-tag">{{prompt}}</code><textarea id="videoPrompt" rows="5">${esc(n.resolvedPrompts.video)}</textarea></label><button id="copyVideo" class="button">Sao chép</button></details>${n.video ? `<video controls src="${esc(n.video.url)}" style="width:100%;margin-top:15px"></video>` : ''}<div class="actions"><label class="button">↑ Tải video<input type="file" id="videoUpload" accept="video/mp4,video/webm" hidden></label><button class="button primary" id="generateVideo" ${!n.image ? 'disabled' : ''}>${generateLabel(n, 'video')}</button></div><p class="muted">Ảnh đã duyệt được truyền làm keyframe. Khẩu hình cần model hỗ trợ audio/lip-sync.</p></section>` : ''}${providerSettings(n, shot)}${usesOrbit(n, shot) ? outputSettings(n, shot) + orbitSettings(n, shot) : '<details class="inspector-section"><summary>Cài đặt Orbit (chỉ cần khi chọn nguồn Orbit)</summary>' + outputSettings(n, shot) + orbitSettings(n, shot) + '</details>'}<section class="inspector-section"><button class="button wide" id="saveNode">Lưu chỉnh sửa</button></section>`;
+    `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div><div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Ảnh ${esc(n.name)}">` : 'Ảnh của node sẽ xuất hiện ở đây'}</div>${n.stale ? '<div class="note">Đầu vào đã đổi. Tạo lại ảnh hoặc tải ảnh đã duyệt trước khi làm video.</div>' : ''}<label>Tên node<input id="nodeName" value="${esc(n.name)}"></label><div class="reference-chips">${n.references.map((r, i) => `<span>✓ ${esc(state.nodes.find(n => n.id === r.role)?.name || r.role)} <code>{{mv_input_${i + 1}_path}}</code></span>`).join('')}</div><label>Prompt ảnh <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo ảnh">{{prompt}}</code><textarea id="imagePrompt" rows="5">${esc(n.resolvedPrompts.image)}</textarea></label><p class="field-hint">Orbit nhận nội dung này qua <code>{{prompt}}</code> hoặc <code>{{mv_prompt}}</code> khi tạo ảnh. Khi tạo video, hai biến này chứa prompt video.</p><div class="prompt-tools"><button id="copyImage">Sao chép prompt</button><button id="resetPrompt">Dùng prompt kế thừa</button></div><div class="actions"><label class="button">↑ Tải ảnh<input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" hidden></label><button class="button primary" id="generateImage">${generateLabel(n, 'image')}</button></div><p class="queue-hint">${n.providers.image.type === 'seedvis' ? 'Gửi prompt và ' + n.references.length + ' ảnh đầu vào tới Seedvis · ' + esc(n.providers.image.modelName) + '.' : 'Tác vụ sẽ mở nick và chạy kịch bản bằng phiên Orbit đã đăng nhập.'}</p>${shot ? `<section class="inspector-section"><h3>Video của shot</h3><label>Ảnh đầu vào cho video<select id="videoInput"><option value="self" ${!videoUsesRefs(n) ? 'selected' : ''}>Ảnh của node này (keyframe)</option><option value="refs" ${videoUsesRefs(n) ? 'selected' : ''}>Ảnh từ node nối vào (${n.references.length} ảnh)</option></select></label><p class="field-hint" id="videoInputHint">${esc(videoInputHint(n))}</p><div class="two"><label>Bắt đầu (giây) <code class="variable-tag">{{mv_start}}</code><input id="start" type="number" min="0" value="${n.start}"></label><label>Thời lượng (giây) <code class="variable-tag">{{mv_duration}}</code><input id="duration" type="number" min="1" value="${n.duration}"></label></div><label>Lời hát đúng đoạn này <span class="field-hint">Nhúng trong prompt video, không có biến riêng</span><textarea id="lyric" rows="2" placeholder="Để trống nếu chưa căn lời">${esc(n.lyric)}</textarea></label><details><summary>Prompt chuyển động <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo video">{{prompt}}</code></summary><label>Prompt video <code class="variable-tag">{{prompt}}</code><textarea id="videoPrompt" rows="5">${esc(n.resolvedPrompts.video)}</textarea></label><button id="copyVideo" class="button">Sao chép</button></details>${n.video ? `<video controls src="${esc(n.video.url)}" style="width:100%;margin-top:15px"></video>` : ''}<div class="actions"><label class="button">↑ Tải video<input type="file" id="videoUpload" accept="video/mp4,video/webm" hidden></label><button class="button primary" id="generateVideo" ${videoReady(n) ? '' : 'disabled'}>${generateLabel(n, 'video')}</button></div><p class="muted">Keyframe: dùng chính ảnh của node. Node nối vào: dùng ảnh ban nhạc/bối cảnh đã nối. Khẩu hình cần model hỗ trợ audio/lip-sync.</p></section>` : ''}${providerSettings(n, shot)}${usesOrbit(n, shot) ? outputSettings(n, shot) + orbitSettings(n, shot) : '<details class="inspector-section"><summary>Cài đặt Orbit (chỉ cần khi chọn nguồn Orbit)</summary>' + outputSettings(n, shot) + orbitSettings(n, shot) + '</details>'}<section class="inspector-section"><button class="button wide" id="saveNode">Lưu chỉnh sửa</button></section>`;
   $('.close').onclick = closeInspector;
   $('#nodeName').oninput = () => (dirty = true);
   document.querySelectorAll('[data-output-pattern]').forEach(
@@ -184,6 +184,12 @@ function inspect(id) {
     $('#start').oninput = () => (dirty = true);
     $('#duration').oninput = () => (dirty = true);
     $('#videoPrompt').oninput = () => (dirty = true);
+    $('#videoInput').onchange = () => {
+      dirty = true;
+      const preview = { ...n, videoInput: $('#videoInput').value };
+      $('#videoInputHint').textContent = videoInputHint(preview);
+      $('#generateVideo').disabled = !videoReady(preview);
+    };
     $('#videoUpload').onchange = e => upload(e.target.files[0], id, 'video');
     $('#copyVideo').onclick = () => copy($('#videoPrompt').value);
     $('#generateVideo').onclick = () => generate(id, 'video');
@@ -252,6 +258,7 @@ async function saveNode() {
     b.lyric = $('#lyric').value;
     b.start = Number($('#start').value);
     b.duration = Number($('#duration').value);
+    if ($('#videoInput').value !== n.videoInput) b.videoInput = $('#videoInput').value;
     if ($('#videoPrompt').value !== n.resolvedPrompts.video)
       b.videoPrompt = $('#videoPrompt').value;
   }
@@ -360,6 +367,19 @@ function generateLabel(n, kind) {
   );
 }
 const nearest = (list, v) => list.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
+const videoUsesRefs = n => n.videoInput === 'refs';
+// Video can run if its own image exists (keyframe) or, in refs mode, a connected
+// parent node already has an image.
+const videoReady = n => (videoUsesRefs(n) ? n.references.length > 0 : !!n.image);
+function videoInputHint(n) {
+  return videoUsesRefs(n)
+    ? n.references.length
+      ? `Dùng ${n.references.length} ảnh của node nối vào làm input; không cần tạo ảnh của node này.`
+      : 'Chưa có node nào đã có ảnh nối vào. Nối một node đã có ảnh, hoặc tải ảnh lên node đó.'
+    : n.image
+      ? 'Dùng ảnh đã duyệt của node này làm keyframe.'
+      : 'Node này chưa có ảnh. Tạo hoặc tải ảnh trước, hoặc chuyển sang dùng ảnh node nối vào.';
+}
 function seedvisFields(n, kind, cur) {
   const models = state.seedvisCatalog[kind],
     m = models.find(x => x.id === cur.model) || models[0],
@@ -375,7 +395,7 @@ function seedvisFields(n, kind, cur) {
       ? n.references.length
         ? `Ảnh → ảnh: gửi ${n.references.length} ảnh đầu vào (tối đa ${m.maxImages}).`
         : 'Chữ → ảnh: node chưa có ảnh đầu vào.'
-      : `Ảnh → video từ ảnh của shot. Thời lượng gửi: ${m.durations ? nearest(m.durations, n.duration) + ' giây' : 'model tự quyết'} (shot ${n.duration} giây).`;
+      : `${videoUsesRefs(n) ? `Ảnh → video từ ${n.references.length} ảnh node nối vào` + (m.maxImages ? ` (model này tối đa ${m.maxImages})` : '') : 'Ảnh → video từ keyframe của node này'}. Thời lượng gửi: ${m.durations ? nearest(m.durations, n.duration) + ' giây' : 'model tự quyết'} (shot ${n.duration} giây).`;
   return (
     `<label>Model<select data-sv-model="${kind}">${models
       .map(

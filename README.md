@@ -25,9 +25,16 @@ trang phục, nhạc cụ, ánh sáng được kế thừa từ Chỉnh mô tả
 2. Mở node → Nguồn tạo: chọn Seedvis hoặc Orbit riêng cho ảnh và video, chọn model,
    tỉ lệ khung, upscale. Node chưa có cấu hình Orbit mặc định dùng Seedvis.
    - Ảnh: Nano Banana Pro / 2 / Lite, GPT Image 2. Có ảnh đầu vào → ảnh → ảnh.
-   - Video: Veo 3.1, Seedance 2.5 / 2.0 Fast, Omni Flash. Ảnh của shot là keyframe;
-     thời lượng shot được làm tròn về giá trị model hỗ trợ (Veo 4/6/8 giây, Seedance 5/10/…).
-3. Bấm Tạo ảnh · Seedvis / Tạo video · Seedvis, hoặc ▶ Tự động tạo ảnh cho cả chuỗi.
+   - Video: Veo 3.1, Seedance 2.5 / 2.0 Fast, Omni Flash.
+     Thời lượng shot được làm tròn về giá trị model hỗ trợ (Veo 4/6/8 giây, Seedance 5/10/…).
+3. Node → Video của shot → Ảnh đầu vào cho video, chọn một trong hai:
+   - **Ảnh của node này (keyframe):** dùng chính ảnh đã tạo/duyệt của node. Mỗi node
+     tạo ảnh trước rồi tạo video từ ảnh đó.
+   - **Ảnh từ node nối vào:** dùng thẳng ảnh của các node nối vào (ví dụ dùng lại ảnh
+     ban nhạc để tạo video), không cần tạo ảnh riêng cho node này. Số ảnh gửi đi theo
+     giới hạn model: Veo / Omni 1 ảnh (image-to-video) hoặc 2–3 ảnh (multi-image-to-video),
+     Seedance tới 10 ảnh.
+4. Bấm Tạo ảnh · Seedvis / Tạo video · Seedvis, hoặc ▶ Tự động tạo ảnh cho cả chuỗi.
    Kết quả được tải về và gắn vào node.
 
 An toàn chi phí: mỗi tác vụ gửi `Idempotency-Key` = mã job nên gửi lại khi lỗi mạng không

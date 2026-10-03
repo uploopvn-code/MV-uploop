@@ -167,6 +167,7 @@ function publicState() {
     seedvisDefaults: defaultSeedvis,
     nodes: db.nodes.map(n => ({
       ...n,
+      videoInput: n.videoInput === 'refs' ? 'refs' : 'self',
       resolvedPrompts: prompts(n),
       references: assetRefs(n),
       providers: providers(n),
@@ -245,12 +246,33 @@ async function createJob(req, b) {
     j => j.nodeId === n.id && j.kind === kind && ['queued', 'running'].includes(j.status),
   );
   if (prior) return prior;
-  if (kind === 'video' && !n.image) throw new Error('Cần ảnh của shot trước khi tạo video.');
-  if (kind === 'image' && deps(n.id).some(id => !getNode(id).image || getNode(id).stale))
-    throw new Error('Hãy tạo hoặc tải ảnh các bước phía trước trước.');
-  if (n.stale && kind === 'video')
+  // Video can run from the node's own approved image (keyframe), or from the images
+  // of the connected parent nodes (videoInput === 'refs').
+  const videoFromRefs = kind === 'video' && n.videoInput === 'refs';
+  if (kind === 'video' && !videoFromRefs && !n.image)
+    throw new Error(
+      'Cần ảnh của node này trước khi tạo video, hoặc chuyển sang dùng ảnh node nối vào.',
+    );
+  if ((kind === 'image' || videoFromRefs) && deps(n.id).some(id => !getNode(id).image))
+    throw new Error('Hãy tạo hoặc tải ảnh các node nối vào trước.');
+  if (kind === 'image' && deps(n.id).some(id => getNode(id).stale))
+    throw new Error('Ảnh node nối vào đã thay đổi. Hãy tạo lại trước.');
+  if (kind === 'video' && !videoFromRefs && n.stale)
     throw new Error('Ảnh cần cập nhật sau thay đổi đầu vào. Hãy tạo lại hoặc tải ảnh đã duyệt.');
-  const references = kind === 'video' ? [{ role: 'keyframe', asset: n.image }] : assetRefs(n);
+  const references = videoFromRefs
+    ? assetRefs(n)
+    : kind === 'video'
+      ? [{ role: 'keyframe', asset: n.image }]
+      : assetRefs(n);
+  if (videoFromRefs) {
+    if (!references.length)
+      throw new Error('Nối ít nhất một node đã có ảnh vào node này để tạo video.');
+    const staleParent = references.find(r => getNode(r.role).stale);
+    if (staleParent)
+      throw new Error(
+        'Ảnh node "' + getNode(staleParent.role).name + '" cần cập nhật trước khi tạo video.',
+      );
+  }
   const jobId = crypto.randomUUID();
   if (sv) {
     const binding = validateSeedvisBinding(kind, sv);
@@ -550,6 +572,7 @@ const server = http.createServer(async (req, res) => {
                   ? null
                   : validateSeedvisBinding(kind, b.seedvis[kind]);
       }
+      if ('videoInput' in b) next.videoInput = b.videoInput === 'refs' ? 'refs' : 'self';
       for (const k of ['prompt', 'videoPrompt', 'lyric'])
         if (k in b) next[k] = String(b[k]).slice(0, 20000);
       for (const k of ['start', 'duration'])

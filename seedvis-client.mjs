@@ -35,8 +35,11 @@ export const catalog = {
     {
       id: 'Veo-3.1',
       name: 'Google Veo 3.1',
+      // 1 image → image-to-video; 2–3 → multi-image-to-video.
       imageField: 'image',
       single: true,
+      multi: { mode: 'multi-image-to-video', field: 'referenceImages' },
+      maxImages: 3,
       aspect: ['16:9', '9:16'],
       durations: [4, 6, 8],
       durationSuffix: 's',
@@ -67,6 +70,8 @@ export const catalog = {
       name: 'Omni Flash',
       imageField: 'image',
       single: true,
+      multi: { mode: 'multi-image-to-video', field: 'images' },
+      maxImages: 3,
       aspect: ['16:9', '9:16'],
       upscale: [],
     },
@@ -142,12 +147,16 @@ export function buildRequest(kind, binding, prompt, images, durationSeconds) {
   }
   const body = { model: m.id, prompt, aspect_ratio: binding.aspectRatio, count: 1 };
   if (images.length) {
-    if (m.single && images.length !== 1)
-      throw new Error(m.name + ' cần đúng 1 ảnh keyframe để tạo video.');
-    if (!m.single && images.length > m.maxImages)
-      throw new Error(m.name + ' nhận tối đa ' + m.maxImages + ' ảnh tham chiếu.');
-    body.mode = 'image-to-video';
-    body[m.imageField] = m.single ? images[0] : images;
+    const max = m.maxImages || 1;
+    if (images.length > max) throw new Error(m.name + ' nhận tối đa ' + max + ' ảnh cho video.');
+    if (m.multi && images.length > 1) {
+      // Several images: use the model's multi-image-to-video mode.
+      body.mode = m.multi.mode;
+      body[m.multi.field] = images;
+    } else {
+      body.mode = 'image-to-video';
+      body[m.imageField] = m.single ? images[0] : images;
+    }
   } else body.mode = 'text-to-video';
   if (m.durations) {
     const d = videoDuration(m.id, durationSeconds);

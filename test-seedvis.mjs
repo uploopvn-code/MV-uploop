@@ -178,6 +178,34 @@ try {
   assert.equal(submits.at(-1).body.duration, 10);
   assert.equal(submits.at(-1).body.reference_images.length, 1);
 
+  // Video from a connected node's image (refs mode): no own image needed; the image
+  // sent is the parent's (file_name prefixed with the parent id), not this node's keyframe.
+  let g = (await api('/api/nodes', 'POST', { name: 'Clip ban nhạc' })).data;
+  const clip = g.nodes.at(-1).id;
+  await api('/api/edges', 'PUT', { edges: [...g.edges, { source: 'scene', target: clip }] });
+  r = await api('/api/jobs', 'POST', { nodeId: clip, kind: 'video' });
+  assert.equal(r.status, 400, 'self mode without own image is rejected');
+  await api('/api/node', 'PATCH', {
+    id: clip,
+    videoInput: 'refs',
+    seedvis: { video: { model: 'Veo-3.1', aspectRatio: '16:9' } },
+  });
+  r = await api('/api/jobs', 'POST', { nodeId: clip, kind: 'video' });
+  ({ s, j } = await settle(r.data.job.id));
+  assert.equal(j.status, 'completed', j.error);
+  assert.equal(submits.at(-1).body.mode, 'image-to-video');
+  assert.ok(submits.at(-1).body.image.file_name.startsWith('scene-'), 'uses the parent image');
+  assert.ok(s.nodes.find(n => n.id === clip).video);
+
+  // Two connected images → Veo multi-image-to-video (referenceImages).
+  g = (await api('/api/state')).data;
+  await api('/api/edges', 'PUT', { edges: [...g.edges, { source: 'wide', target: clip }] });
+  r = await api('/api/jobs', 'POST', { nodeId: clip, kind: 'video' });
+  ({ j } = await settle(r.data.job.id));
+  assert.equal(j.status, 'completed', j.error);
+  assert.equal(submits.at(-1).body.mode, 'multi-image-to-video');
+  assert.equal(submits.at(-1).body.referenceImages.length, 2);
+
   // A rejected request is a definite failure; a failed job too. Neither is resent.
   mode = 'reject';
   await api('/api/node', 'PATCH', { id: 'scene', prompt: 'p2' });
@@ -215,7 +243,7 @@ try {
   assert.ok(!JSON.stringify((await api('/api/state')).data).includes(KEY));
   assert.ok(!fs.readFileSync(path.join(dir, 'project.json'), 'utf8').includes(KEY));
   console.log(
-    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, timeout resume without resubmit, provider switch, key not exposed',
+    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, key not exposed',
   );
 } finally {
   proc.kill();
