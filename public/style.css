@@ -1183,6 +1183,32 @@ h4 {
   height: calc(100vh - 150px);
   min-height: 420px;
   margin-top: 6px;
+  position: relative;
+}
+/* While the queue runs the canvas is read-only: dim it and show a lock banner. */
+.graph-lock {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: 90%;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: #b45309;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+.graph-area.busy .graph-scroll {
+  opacity: 0.6;
+  filter: saturate(0.6);
+}
+.busy-note {
+  background: #7c2d12;
+  color: #fde68a;
 }
 .graph-side {
   width: 208px;

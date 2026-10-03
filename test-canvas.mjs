@@ -30,6 +30,7 @@ const context = {
   localStorage: { setItem: (k, v) => (store[k] = v) },
   toast() {},
   render() {},
+  workflowBusy: () => false,
   setTimeout: f => f(),
   graphView: { x: 0, y: 0, z: 2 },
   savedPositions: { a: { x: 30, y: 40 }, b: { x: 300, y: 40 } },

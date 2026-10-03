@@ -11,6 +11,17 @@ let orbitStatus = null;
 let seedvisStatus = null;
 let selectedEdge = null;
 const gallerySel = new Set();
+// The workflow is read-only while any job is queued/running or an auto-run is active —
+// the server rejects edits then, so the UI mirrors that lock instead of letting the user
+// make changes that would only error or silently not persist.
+const workflowBusy = () =>
+  !!(
+    typeof state !== 'undefined' &&
+    state &&
+    (state.autoRun?.status === 'running' ||
+      state.autoVideoRun?.status === 'running' ||
+      state.jobs?.some(j => ['queued', 'running'].includes(j.status)))
+  );
 // Workflow zones (process stages) shown as columns on the canvas.
 const ZONES = [
   { id: 'character', label: '① Nhân vật' },
@@ -134,6 +145,12 @@ function card(n, shot = false) {
 }
 function render() {
   const online = state.worker?.online;
+  const busy = workflowBusy();
+  $('#graphArea').classList.toggle('busy', busy);
+  $('#graphLock').hidden = !busy;
+  // Lock the canvas edit buttons while running; auto start/stop are managed separately.
+  for (const id of ['addNode', 'addStyle', 'addCamera', 'arrangeZones'])
+    $('#' + id).disabled = busy;
   $('#projectName').textContent = state.name;
   renderProjects();
   $('#workerBadge').textContent = online ? '● Orbit worker đã nối' : '○ Chưa nối Orbit';
@@ -372,6 +389,25 @@ function closeInspector() {
   $('#overlay').hidden = true;
 }
 $('#overlay').onclick = closeInspector;
+// While the queue runs, the inspector becomes view-only: every editing control and action
+// button is disabled (close/copy/download stay), with a note explaining why.
+function lockInspectorIfBusy() {
+  if (!workflowBusy()) return;
+  const insp = $('#inspector');
+  const keep = new Set(['copyImage', 'copyVideo']);
+  insp.querySelectorAll('input, textarea, select, button').forEach(el => {
+    if (el.classList.contains('close') || keep.has(el.id)) return;
+    el.disabled = true;
+  });
+  const head = insp.querySelector('.inspector-head');
+  if (head && !insp.querySelector('.busy-note')) {
+    const note = document.createElement('div');
+    note.className = 'note busy-note';
+    note.textContent =
+      '🔒 Hàng đợi đang chạy — node ở chế độ chỉ xem. Đợi xong hoặc bấm Dừng để sửa.';
+    head.after(note);
+  }
+}
 function inspect(id) {
   selected = id;
   dirty = false;
@@ -413,6 +449,7 @@ function inspect(id) {
       }
     };
     if ($('#deleteNode')) $('#deleteNode').onclick = () => deleteNode(id);
+    lockInspectorIfBusy();
     return;
   }
   if (n.terminal) {
@@ -426,6 +463,7 @@ function inspect(id) {
       `<section class="inspector-section"><button class="button wide danger" id="deleteNode">Xóa phiên bản này</button></section>`;
     $('.close').onclick = closeInspector;
     $('#deleteNode').onclick = () => deleteNode(id);
+    lockInspectorIfBusy();
     return;
   }
   $('#inspector').innerHTML =
@@ -486,6 +524,7 @@ function inspect(id) {
   };
   if ($('#deleteNode')) $('#deleteNode').onclick = () => deleteNode(id);
   $('#generateImage').onclick = () => generate(id, 'image');
+  lockInspectorIfBusy();
 }
 async function saveNode() {
   if (!selected || !dirty) return;
@@ -1204,6 +1243,7 @@ async function deleteNode(id) {
   }
 }
 async function deleteEdge(key) {
+  if (workflowBusy()) return toast('Đợi hàng đợi chạy xong trước khi sửa dây nối.', true);
   try {
     state = await api('/api/edges', {
       method: 'PUT',
@@ -1539,7 +1579,15 @@ viewport.addEventListener('pointerdown', e => {
     node = e.target.closest('.graph-node');
   if (!port && e.target.closest('.wire-delete')) return;
   const wire = !port && !node ? e.target.closest('[data-edge]') : null;
-  if (port) {
+  if (workflowBusy()) {
+    // Read-only while running: allow pan/zoom and node click (to view), block wiring + drag.
+    if (port || (node && e.target.closest('.node-top'))) return;
+    gesture = {
+      type: 'pan',
+      start: { x: graphView.x, y: graphView.y },
+      wire: wire?.dataset.edge || null,
+    };
+  } else if (port) {
     gesture = {
       type: 'wire',
       id: port.dataset.portOut || port.dataset.portIn,
