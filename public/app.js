@@ -1180,6 +1180,12 @@ function renderGraph() {
     : 'Tự động tạo video cho mọi node đã sẵn ảnh, chạy song song. Mỗi phiên bản thành một node video riêng.';
   $('#autoVideoStart').disabled = run?.status === 'running' || vr?.status === 'running';
   $('#autoVideoStop').disabled = vr?.status !== 'running';
+  // Offer a one-click retry whenever some video jobs failed.
+  const failedVideos = state.jobs.filter(j => j.kind === 'video' && j.status === 'failed').length;
+  const retryBtn = $('#autoVideoRetry');
+  retryBtn.hidden = failedVideos === 0;
+  retryBtn.textContent = '↻ Chạy lại ' + failedVideos + ' video lỗi';
+  retryBtn.disabled = workflowBusy();
   applyGraphView();
   document.querySelectorAll('.graph-node').forEach(el => {
     const id = el.dataset.graphId;
@@ -1412,6 +1418,18 @@ $('#autoVideoStop').onclick = async () => {
   try {
     state = await api('/api/auto/video/stop', { method: 'POST', body: {} });
     render();
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
+$('#autoVideoRetry').onclick = async () => {
+  try {
+    state = await api('/api/auto/video/retry', {
+      method: 'POST',
+      body: { versions: Number($('#videoVersions').value) },
+    });
+    render();
+    toast('Đang chạy lại các video lỗi');
   } catch (e) {
     toast(e.message, true);
   }

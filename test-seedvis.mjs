@@ -339,6 +339,35 @@ try {
   r = await api('/api/auto/video/start', 'POST', { target: charNode, versions: 1 });
   assert.equal(r.status, 400, 'character-zone node is not eligible for auto video');
 
+  // Failed video jobs can be re-run in one command (auto-video retry).
+  const F = await mkNode('Shot lỗi');
+  mode = 'fail';
+  r = await api('/api/auto/video/start', 'POST', { target: F, versions: 1 });
+  assert.equal(r.status, 200);
+  await settleAuto();
+  s = (await api('/api/state')).data;
+  assert.ok(
+    s.jobs.some(j => j.nodeId === F && j.kind === 'video' && j.status === 'failed'),
+    'the video job failed',
+  );
+  // Retry now succeeds: produces an output branch and clears the failed job.
+  mode = 'ok';
+  r = await api('/api/auto/video/retry', 'POST', { versions: 1 });
+  assert.equal(r.status, 200);
+  const retryRun = await settleAuto();
+  assert.equal(retryRun.status, 'completed', JSON.stringify(retryRun.errors));
+  s = (await api('/api/state')).data;
+  assert.ok(
+    s.nodes.some(n => n.terminal && n.source === F && n.video),
+    'retry produced a video',
+  );
+  assert.ok(
+    !s.jobs.some(j => j.nodeId === F && j.kind === 'video' && j.status === 'failed'),
+    'failed job cleared after retry',
+  );
+  // Nothing left to retry.
+  assert.equal((await api('/api/auto/video/retry', 'POST', {})).status, 400);
+
   // Output nodes are terminal: cannot generate from them, and can be deleted.
   const term = branchesOf(s)[0].id;
   r = await api('/api/jobs', 'POST', { nodeId: term, kind: 'video' });
@@ -359,7 +388,7 @@ try {
     .join('');
   assert.ok(!projJson.includes(KEY));
   console.log(
-    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency, auto-video versions+branch+rerun+delete, key not exposed',
+    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency, auto-video versions+branch+rerun+delete, retry failed videos, key not exposed',
   );
 } finally {
   proc.kill();

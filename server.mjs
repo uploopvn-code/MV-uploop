@@ -526,6 +526,24 @@ function storeSeedvisResults(j, results) {
   }
   save();
 }
+// A node is eligible for auto-video (and retry) when it sits in the production zone and
+// its video input is ready (own composed image, or connected reference images in refs mode).
+function autoVideoEligible(n) {
+  if (n.terminal || isSetting(n)) return false;
+  if (nodeZone(n) !== 'production') return false;
+  if (providers(n).video.type !== 'seedvis') return false;
+  if (n.videoInput === 'refs' && !n.image) {
+    const refs = assetRefs(n);
+    return refs.length > 0 && !refs.some(r => getNode(r.role).stale);
+  }
+  return !!n.image && !n.stale;
+}
+// Production nodes whose most recent video job failed (so they produced no output branch).
+function failedVideoNodeIds() {
+  return [
+    ...new Set(db.jobs.filter(j => j.kind === 'video' && j.status === 'failed').map(j => j.nodeId)),
+  ];
+}
 function requireIdle() {
   if (
     db.autoRun?.status === 'running' ||
@@ -1090,18 +1108,9 @@ const server = http.createServer(async (req, res) => {
       const versions = Math.max(1, Math.min(8, Math.floor(Number(b.versions) || 1)));
       // Eligible: production-zone (Sản xuất video) Seedvis nodes whose video input is
       // already ready. Character/scene asset nodes are never auto-filmed, even with an image.
-      const eligible = db.nodes.filter(n => {
-        if (n.terminal || isSetting(n)) return false;
-        if (nodeZone(n) !== 'production') return false;
-        if (b.target && n.id !== b.target) return false;
-        if (providers(n).video.type !== 'seedvis') return false;
-        // A shot with its own composed image uses that keyframe; refs only seed it before then.
-        if (n.videoInput === 'refs' && !n.image) {
-          const refs = assetRefs(n);
-          return refs.length > 0 && !refs.some(r => getNode(r.role).stale);
-        }
-        return !!n.image && !n.stale;
-      });
+      const eligible = db.nodes.filter(
+        n => autoVideoEligible(n) && (!b.target || n.id === b.target),
+      );
       if (!eligible.length) throw new Error('Không có node nào sẵn ảnh để tạo video bằng Seedvis.');
       db.autoVideoRun = {
         id: crypto.randomUUID(),
@@ -1124,6 +1133,33 @@ const server = http.createServer(async (req, res) => {
         db.autoVideoRun.message = 'Dừng; không hủy tác vụ đã gửi Seedvis';
         save();
       }
+      return json(res, 200, publicState());
+    }
+    if (p === '/api/auto/video/retry' && req.method === 'POST') {
+      requireIdle();
+      if (!seedvis.configured()) throw new Error('Nhập API key Seedvis trong Kết nối web.');
+      const b = await body(req);
+      const versions = Math.max(1, Math.min(8, Math.floor(Number(b.versions) || 1)));
+      // Only the production nodes whose last video job failed and are still ready to film.
+      const failed = new Set(failedVideoNodeIds());
+      const eligible = db.nodes.filter(n => failed.has(n.id) && autoVideoEligible(n));
+      if (!eligible.length) throw new Error('Không có video lỗi để chạy lại.');
+      // Clear the failed video jobs we are retrying so the queue is clean for the new run.
+      const retryIds = new Set(eligible.map(n => n.id));
+      db.jobs = db.jobs.filter(
+        j => !(j.kind === 'video' && j.status === 'failed' && retryIds.has(j.nodeId)),
+      );
+      db.autoVideoRun = {
+        id: crypto.randomUUID(),
+        status: 'running',
+        versions,
+        pending: eligible.map(n => n.id),
+        total: eligible.length,
+        errors: [],
+        message: 'Chạy lại video cho ' + eligible.length + ' node lỗi',
+      };
+      save();
+      pump(req);
       return json(res, 200, publicState());
     }
     if (p === '/api/jobs/collect' && req.method === 'POST') {
