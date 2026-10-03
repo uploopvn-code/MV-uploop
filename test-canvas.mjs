@@ -20,6 +20,7 @@ const els = {
   '#zoomIn': {},
   '#zoomOut': {},
   '#fitCanvas': {},
+  '#arrangeZones': {},
 };
 let connected;
 const context = {

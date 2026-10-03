@@ -37,6 +37,14 @@ try {
   // Setting nodes are not image inputs (scene's references exclude them).
   assert.ok(!node(s, 'scene').references.some(r => r.role === 'style'));
 
+  // Zones: image/setting nodes in design, shots in production.
+  assert.equal(node(s, 'singer').zone, 'design');
+  assert.equal(node(s, 'style').zone, 'design');
+  assert.equal(node(s, 'wide').zone, 'production');
+  s = (await api('/api/node', 'PATCH', { id: 'wide', zone: 'design' })).data;
+  assert.equal(node(s, 'wide').zone, 'design', 'zone change persists');
+  await api('/api/node', 'PATCH', { id: 'wide', zone: 'production' });
+
   // Editing a setting node changes downstream prompts.
   await api('/api/node', 'PATCH', { id: 'style', config: 'NEON CYBERPUNK LOOK' });
   s = (await api('/api/state')).data;
@@ -82,7 +90,7 @@ try {
   assert.equal(r.status, 400);
 
   console.log(
-    'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, create/switch/delete projects, isolation, per-project media',
+    'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, zones, create/switch/delete projects, isolation, per-project media',
   );
 } finally {
   proc.kill();

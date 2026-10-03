@@ -11,6 +11,33 @@ let orbitStatus = null;
 let seedvisStatus = null;
 let selectedEdge = null;
 const gallerySel = new Set();
+// Workflow zones (process stages) shown as columns on the canvas.
+const ZONES = [
+  { id: 'design', label: '① Tạo hình' },
+  { id: 'production', label: '② Sản xuất video' },
+  { id: 'output', label: '③ Video' },
+];
+const ZONE_W = 360;
+const zoneIndex = id =>
+  Math.max(
+    0,
+    ZONES.findIndex(z => z.id === id),
+  );
+// Order within a zone: production follows seq; output follows its source's seq then version.
+const zoneOrder = n =>
+  n.zone === 'output' ? (n.sourceSeq || 999) * 100 + (n.version || 0) : n.seq || 999;
+// Lays every node out into its zone column, stacked in order (the arrange button).
+function zoneLayout() {
+  const rows = {},
+    pos = {};
+  for (const n of [...state.nodes].sort((a, b) => zoneOrder(a) - zoneOrder(b))) {
+    const zi = zoneIndex(n.zone),
+      row = rows[zi] || 0;
+    rows[zi] = row + 1;
+    pos[n.id] = { x: 24 + zi * ZONE_W, y: 54 + row * 285 };
+  }
+  return pos;
+}
 let state,
   selected = null,
   currentView = 'studio',
@@ -222,6 +249,15 @@ $('#galleryDelete').onclick = async () => {
   }
 };
 const themeLabel = id => (state.themes || []).find(t => t.id === id)?.label || id;
+// Zone picker (design/production) for a non-output node.
+const zoneSelect = n =>
+  '<label>Khu vực<select id="nodeZone">' +
+  ZONES.filter(z => z.id !== 'output')
+    .map(
+      z => `<option value="${z.id}" ${n.zone === z.id ? 'selected' : ''}>${esc(z.label)}</option>`,
+    )
+    .join('') +
+  '</select></label>';
 function renderProjects() {
   const sel = $('#projectSelect');
   sel.innerHTML = (state.projects || [])
@@ -345,6 +381,7 @@ function inspect(id) {
       `<p class="field-hint">Node ${n.settingType === 'camera' ? 'máy quay' : 'style'}: nội dung dưới đây được chèn vào prompt của mọi node bạn nối ra. Nối cổng Ra của node này vào node cần áp.</p>` +
       `<label>Tên<input id="settingName" value="${esc(n.name)}"></label>` +
       `<label>Nội dung ${n.settingType === 'camera' ? '(mô tả máy quay, góc, ống kính…)' : '(mô tả phong cách, màu, chất liệu…)'}<textarea id="settingConfig" rows="5">${esc(n.config || '')}</textarea></label>` +
+      zoneSelect(n) +
       `<p class="field-hint">Đang áp cho: ${targets.length ? esc(targets.join(', ')) : 'chưa nối node nào'}</p>` +
       `<section class="inspector-section"><button class="button wide primary" id="saveSetting">Lưu</button>${id.startsWith('node-') ? '<button class="button wide danger" id="deleteNode">Xóa node này</button>' : ''}</section>`;
     $('.close').onclick = closeInspector;
@@ -352,7 +389,12 @@ function inspect(id) {
       try {
         state = await api('/api/node', {
           method: 'PATCH',
-          body: { id, name: $('#settingName').value, config: $('#settingConfig').value },
+          body: {
+            id,
+            name: $('#settingName').value,
+            config: $('#settingConfig').value,
+            zone: $('#nodeZone').value,
+          },
         });
         render();
         inspect(id);
@@ -378,7 +420,7 @@ function inspect(id) {
     return;
   }
   $('#inspector').innerHTML =
-    `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div><div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Ảnh ${esc(n.name)}">` : 'Ảnh của node sẽ xuất hiện ở đây'}</div>${n.stale ? '<div class="note">Đầu vào đã đổi. Tạo lại ảnh hoặc tải ảnh đã duyệt trước khi làm video.</div>' : ''}<div class="two"><label>Số thứ tự<input id="nodeSeq" type="number" min="1" value="${n.seq || ''}"></label><label>Tên node<input id="nodeName" value="${esc(n.name)}"></label></div><p class="field-hint">File tải về của node này: <code>${esc(downloadName({ ...n, terminal: false }, n.video ? 'video' : 'image'))}</code></p><div class="reference-chips">${n.references.map((r, i) => `<span>✓ ${esc(state.nodes.find(n => n.id === r.role)?.name || r.role)} <code>{{mv_input_${i + 1}_path}}</code></span>`).join('')}</div><label>Prompt ảnh <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo ảnh">{{prompt}}</code><textarea id="imagePrompt" rows="5">${esc(n.resolvedPrompts.image)}</textarea></label><p class="field-hint">Orbit nhận nội dung này qua <code>{{prompt}}</code> hoặc <code>{{mv_prompt}}</code> khi tạo ảnh. Khi tạo video, hai biến này chứa prompt video.</p><div class="prompt-tools"><button id="copyImage">Sao chép prompt</button><button id="resetPrompt">Dùng prompt kế thừa</button></div><div class="actions"><label class="button">↑ Tải ảnh<input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" hidden></label><button class="button primary" id="generateImage">${generateLabel(n, 'image')}</button></div><p class="queue-hint">${n.providers.image.type === 'seedvis' ? 'Gửi prompt và ' + n.references.length + ' ảnh đầu vào tới Seedvis · ' + esc(n.providers.image.modelName) + '.' : 'Tác vụ sẽ mở nick và chạy kịch bản bằng phiên Orbit đã đăng nhập.'}</p>${shot ? `<section class="inspector-section"><h3>Video của shot</h3><label>Ảnh đầu vào cho video<select id="videoInput"><option value="self" ${!videoUsesRefs(n) ? 'selected' : ''}>Ảnh của node này (keyframe)</option><option value="refs" ${videoUsesRefs(n) ? 'selected' : ''}>Ảnh từ node nối vào (${n.references.length} ảnh)</option></select></label><p class="field-hint" id="videoInputHint">${esc(videoInputHint(n))}</p><div class="two"><label>Bắt đầu (giây) <code class="variable-tag">{{mv_start}}</code><input id="start" type="number" min="0" value="${n.start}"></label><label>Thời lượng (giây) <code class="variable-tag">{{mv_duration}}</code><input id="duration" type="number" min="1" value="${n.duration}"></label></div><label>Lời hát đúng đoạn này <span class="field-hint">Nhúng trong prompt video, không có biến riêng</span><textarea id="lyric" rows="2" placeholder="Để trống nếu chưa căn lời">${esc(n.lyric)}</textarea></label><details><summary>Prompt chuyển động <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo video">{{prompt}}</code></summary><label>Prompt video <code class="variable-tag">{{prompt}}</code><textarea id="videoPrompt" rows="5">${esc(n.resolvedPrompts.video)}</textarea></label><button id="copyVideo" class="button">Sao chép</button></details>${n.video ? `<video controls src="${esc(n.video.url)}" style="width:100%;margin-top:15px"></video>` : ''}${n.providers.video.type === 'seedvis' ? `<label>Số phiên bản<select id="videoCount"><option value="1">1 bản</option><option value="2">2 bản (tách node)</option><option value="3">3 bản (tách node)</option><option value="4">4 bản (tách node)</option></select></label><p class="field-hint">Từ 2 bản trở lên, mỗi bản thành một node video riêng.</p>` : ''}<div class="actions"><label class="button">↑ Tải video<input type="file" id="videoUpload" accept="video/mp4,video/webm" hidden></label><button class="button primary" id="generateVideo" ${videoReady(n) ? '' : 'disabled'}>${generateLabel(n, 'video')}</button></div><p class="muted">Keyframe: dùng chính ảnh của node. Node nối vào: dùng ảnh ban nhạc/bối cảnh đã nối. Khẩu hình cần model hỗ trợ audio/lip-sync.</p></section>` : ''}${providerSettings(n, shot)}${usesOrbit(n, shot) ? outputSettings(n, shot) + orbitSettings(n, shot) : '<details class="inspector-section"><summary>Cài đặt Orbit (chỉ cần khi chọn nguồn Orbit)</summary>' + outputSettings(n, shot) + orbitSettings(n, shot) + '</details>'}<section class="inspector-section"><button class="button wide" id="saveNode">Lưu chỉnh sửa</button>${id.startsWith('node-') ? '<button class="button wide danger" id="deleteNode">Xóa node này</button>' : ''}</section>`;
+    `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div><div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Ảnh ${esc(n.name)}">` : 'Ảnh của node sẽ xuất hiện ở đây'}</div>${n.stale ? '<div class="note">Đầu vào đã đổi. Tạo lại ảnh hoặc tải ảnh đã duyệt trước khi làm video.</div>' : ''}<div class="two"><label>Số thứ tự<input id="nodeSeq" type="number" min="1" value="${n.seq || ''}"></label><label>Tên node<input id="nodeName" value="${esc(n.name)}"></label></div><p class="field-hint">File tải về của node này: <code>${esc(downloadName({ ...n, terminal: false }, n.video ? 'video' : 'image'))}</code></p>${zoneSelect(n)}<div class="reference-chips">${n.references.map((r, i) => `<span>✓ ${esc(state.nodes.find(n => n.id === r.role)?.name || r.role)} <code>{{mv_input_${i + 1}_path}}</code></span>`).join('')}</div><label>Prompt ảnh <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo ảnh">{{prompt}}</code><textarea id="imagePrompt" rows="5">${esc(n.resolvedPrompts.image)}</textarea></label><p class="field-hint">Orbit nhận nội dung này qua <code>{{prompt}}</code> hoặc <code>{{mv_prompt}}</code> khi tạo ảnh. Khi tạo video, hai biến này chứa prompt video.</p><div class="prompt-tools"><button id="copyImage">Sao chép prompt</button><button id="resetPrompt">Dùng prompt kế thừa</button></div><div class="actions"><label class="button">↑ Tải ảnh<input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" hidden></label><button class="button primary" id="generateImage">${generateLabel(n, 'image')}</button></div><p class="queue-hint">${n.providers.image.type === 'seedvis' ? 'Gửi prompt và ' + n.references.length + ' ảnh đầu vào tới Seedvis · ' + esc(n.providers.image.modelName) + '.' : 'Tác vụ sẽ mở nick và chạy kịch bản bằng phiên Orbit đã đăng nhập.'}</p>${shot ? `<section class="inspector-section"><h3>Video của shot</h3><label>Ảnh đầu vào cho video<select id="videoInput"><option value="self" ${!videoUsesRefs(n) ? 'selected' : ''}>Ảnh của node này (keyframe)</option><option value="refs" ${videoUsesRefs(n) ? 'selected' : ''}>Ảnh từ node nối vào (${n.references.length} ảnh)</option></select></label><p class="field-hint" id="videoInputHint">${esc(videoInputHint(n))}</p><div class="two"><label>Bắt đầu (giây) <code class="variable-tag">{{mv_start}}</code><input id="start" type="number" min="0" value="${n.start}"></label><label>Thời lượng (giây) <code class="variable-tag">{{mv_duration}}</code><input id="duration" type="number" min="1" value="${n.duration}"></label></div><label>Lời hát đúng đoạn này <span class="field-hint">Nhúng trong prompt video, không có biến riêng</span><textarea id="lyric" rows="2" placeholder="Để trống nếu chưa căn lời">${esc(n.lyric)}</textarea></label><details><summary>Prompt chuyển động <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo video">{{prompt}}</code></summary><label>Prompt video <code class="variable-tag">{{prompt}}</code><textarea id="videoPrompt" rows="5">${esc(n.resolvedPrompts.video)}</textarea></label><button id="copyVideo" class="button">Sao chép</button></details>${n.video ? `<video controls src="${esc(n.video.url)}" style="width:100%;margin-top:15px"></video>` : ''}${n.providers.video.type === 'seedvis' ? `<label>Số phiên bản<select id="videoCount"><option value="1">1 bản</option><option value="2">2 bản (tách node)</option><option value="3">3 bản (tách node)</option><option value="4">4 bản (tách node)</option></select></label><p class="field-hint">Từ 2 bản trở lên, mỗi bản thành một node video riêng.</p>` : ''}<div class="actions"><label class="button">↑ Tải video<input type="file" id="videoUpload" accept="video/mp4,video/webm" hidden></label><button class="button primary" id="generateVideo" ${videoReady(n) ? '' : 'disabled'}>${generateLabel(n, 'video')}</button></div><p class="muted">Keyframe: dùng chính ảnh của node. Node nối vào: dùng ảnh ban nhạc/bối cảnh đã nối. Khẩu hình cần model hỗ trợ audio/lip-sync.</p></section>` : ''}${providerSettings(n, shot)}${usesOrbit(n, shot) ? outputSettings(n, shot) + orbitSettings(n, shot) : '<details class="inspector-section"><summary>Cài đặt Orbit (chỉ cần khi chọn nguồn Orbit)</summary>' + outputSettings(n, shot) + orbitSettings(n, shot) + '</details>'}<section class="inspector-section"><button class="button wide" id="saveNode">Lưu chỉnh sửa</button>${id.startsWith('node-') ? '<button class="button wide danger" id="deleteNode">Xóa node này</button>' : ''}</section>`;
   $('.close').onclick = closeInspector;
   $('#nodeName').oninput = () => (dirty = true);
   document.querySelectorAll('[data-output-pattern]').forEach(
@@ -393,6 +435,7 @@ function inspect(id) {
     .forEach(e => (e.onchange = () => (dirty = true)));
   bindProviderSettings(n);
   if ($('#nodeSeq')) $('#nodeSeq').oninput = () => (dirty = true);
+  if ($('#nodeZone')) $('#nodeZone').onchange = () => (dirty = true);
   $('#imagePrompt').oninput = () => (dirty = true);
   if (shot) {
     $('#lyric').oninput = () => (dirty = true);
@@ -442,6 +485,7 @@ async function saveNode() {
   b.name = $('#nodeName').value;
   if ($('#nodeSeq') && Number($('#nodeSeq').value) && Number($('#nodeSeq').value) !== n.seq)
     b.seq = Number($('#nodeSeq').value);
+  if ($('#nodeZone') && $('#nodeZone').value !== n.zone) b.zone = $('#nodeZone').value;
   b.outputNaming = {};
   document
     .querySelectorAll('[data-output-pattern]')
@@ -978,30 +1022,30 @@ $('#projectSettings').onclick = () => {
 
 function renderGraph() {
   if (gesture) return;
-  const positions = {},
-    levels = new Map();
-  function level(id) {
-    if (levels.has(id)) return levels.get(id);
-    const parents = state.edges.filter(e => e.target === id).map(e => e.source);
-    const v = parents.length ? 1 + Math.max(...parents.map(level)) : 0;
-    levels.set(id, v);
-    return v;
-  }
-  const counts = {};
-  for (const n of state.nodes) {
-    const l = level(n.id),
-      row = counts[l] || 0;
-    counts[l] = row + 1;
-    positions[n.id] = savedPositions[n.id] || { x: 30 + l * 330, y: 30 + row * 285 };
-  }
-  const w = Math.max(900, ...Object.values(positions).map(p => p.x + 280)),
-    h = Math.max(360, ...Object.values(positions).map(p => p.y + 265));
+  const positions = {};
+  const defaults = zoneLayout();
+  for (const n of state.nodes) positions[n.id] = savedPositions[n.id] || defaults[n.id];
+  const w = Math.max(3 * ZONE_W + 40, ...Object.values(positions).map(p => p.x + 280)),
+    h = Math.max(520, ...Object.values(positions).map(p => p.y + 265));
   if (selectedEdge && !state.edges.some(e => e.source + '>' + e.target === selectedEdge))
     selectedEdge = null;
   const lines = wiresMarkup(positions);
+  const bands = ZONES.map(
+    (z, i) =>
+      '<div class="zone-band" style="left:' +
+      i * ZONE_W +
+      'px;width:' +
+      ZONE_W +
+      'px;height:' +
+      h +
+      'px"><span class="zone-label">' +
+      esc(z.label) +
+      '</span></div>',
+  ).join('');
   $('#graphCanvas').style.width = w + 'px';
   $('#graphCanvas').style.height = h + 'px';
   $('#graphCanvas').innerHTML =
+    bands +
     '<svg width="' +
     w +
     '" height="' +
@@ -1345,8 +1389,19 @@ function centerZoom(factor) {
 }
 $('#zoomIn').onclick = () => centerZoom(1.2);
 $('#zoomOut').onclick = () => centerZoom(1 / 1.2);
+$('#arrangeZones').onclick = () => {
+  const layout = zoneLayout();
+  for (const id of Object.keys(savedPositions)) delete savedPositions[id];
+  Object.assign(savedPositions, layout);
+  persistCanvas();
+  render();
+  $('#fitCanvas').onclick();
+  toast('Đã xếp node vào 3 khu vực theo thứ tự');
+};
 $('#fitCanvas').onclick = () => {
-  const ps = Object.values(savedPositions);
+  const ps = Object.keys(savedPositions).length
+    ? Object.values(savedPositions)
+    : Object.values(zoneLayout());
   if (!ps.length) return;
   const minX = Math.min(...ps.map(p => p.x)),
     minY = Math.min(...ps.map(p => p.y)),
@@ -1454,6 +1509,23 @@ async function endGesture(e, cancel = false) {
         toast('Đã nối node');
       } catch (err) {
         toast(err.message, true);
+      }
+    }
+  }
+  // Dropping a node into a different zone band reassigns its zone.
+  if (!cancel && g.moved && g.type === 'node') {
+    const node = state.nodes?.find(n => n.id === g.id);
+    const pos = savedPositions[g.id];
+    if (node && pos && !node.terminal) {
+      const zi = Math.max(0, Math.min(ZONES.length - 1, Math.floor((pos.x + 117) / ZONE_W)));
+      const newZone = ZONES[zi].id;
+      if (newZone !== 'output' && newZone !== node.zone) {
+        try {
+          state = await api('/api/node', { method: 'PATCH', body: { id: g.id, zone: newZone } });
+          toast('Chuyển sang ' + ZONES[zi].label);
+        } catch (err) {
+          toast(err.message, true);
+        }
       }
     }
   }

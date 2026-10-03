@@ -1139,3 +1139,39 @@ h4 {
 #projectSelect {
   max-width: 230px;
 }
+
+/* Khu vực quy trình trên canvas */
+.zone-band {
+  position: absolute;
+  top: 0;
+  z-index: 0;
+  border-right: 1px dashed #343a46;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 180px);
+  pointer-events: none;
+}
+.zone-band:nth-child(1) {
+  background: linear-gradient(180deg, rgba(120, 150, 220, 0.06), transparent 200px);
+}
+.zone-band:nth-child(2) {
+  background: linear-gradient(180deg, rgba(197, 237, 137, 0.06), transparent 200px);
+}
+.zone-band:nth-child(3) {
+  background: linear-gradient(180deg, rgba(106, 160, 224, 0.06), transparent 200px);
+  border-right: none;
+}
+.zone-label {
+  position: absolute;
+  top: 10px;
+  left: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #9aa2b2;
+  background: #15171c;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 4px 12px;
+}
+.graph-node {
+  z-index: 1;
+}

@@ -134,6 +134,10 @@ const projectList = () =>
 loadProject(ws.active);
 const getNode = id => db.nodes.find(n => n.id === id);
 const deps = id => db.edges.filter(e => e.target === id).map(e => e.source);
+// Workflow zones: design (tạo hình) → production (sản xuất) → output (video).
+const ZONES = ['design', 'production', 'output'];
+const defaultZone = n => (n.terminal ? 'output' : 'duration' in n ? 'production' : 'design');
+const nodeZone = n => (ZONES.includes(n.zone) ? n.zone : defaultZone(n));
 // Style / camera config nodes: wired into the graph but carry text, not media.
 const isSetting = n => n?.kind === 'setting';
 const settingLabel = { style: 'Style', camera: 'Camera' };
@@ -238,6 +242,7 @@ function publicState() {
     nodes: db.nodes.map(n => ({
       ...n,
       videoInput: n.videoInput === 'refs' ? 'refs' : 'self',
+      zone: nodeZone(n),
       resolvedPrompts: prompts(n),
       references: assetRefs(n),
       providers: providers(n),
@@ -818,6 +823,9 @@ const server = http.createServer(async (req, res) => {
                   : validateSeedvisBinding(kind, b.seedvis[kind]);
       }
       if ('videoInput' in b) next.videoInput = b.videoInput === 'refs' ? 'refs' : 'self';
+      // Output nodes stay in the output zone; others move between design/production.
+      if ('zone' in b && ZONES.includes(b.zone) && !n.terminal)
+        next.zone = b.zone === 'output' ? 'production' : b.zone;
       if ('seq' in b) {
         const v = Math.floor(Number(b.seq));
         if (!Number.isFinite(v) || v < 1 || v > 9999) throw new Error('Số thứ tự không hợp lệ.');

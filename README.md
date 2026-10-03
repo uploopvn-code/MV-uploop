@@ -26,6 +26,15 @@ trang phục, nhạc cụ, ánh sáng được kế thừa từ Chỉnh mô tả
 - Đổi/xóa project trong **⚙ Project**. Luôn còn ít nhất một project.
 - API key Seedvis và worker token dùng chung cho mọi project (lưu ở gốc `data/`).
 
+## Khu vực quy trình (zones)
+Canvas chia 3 cột theo quy trình: **① Tạo hình** (node ảnh/nhân vật/bối cảnh + Style/Máy quay),
+**② Sản xuất video** (các shot), **③ Video** (các node video đã tạo, xếp theo thứ tự sản xuất).
+- Mỗi node thuộc một khu vực (tự gán theo loại; đổi trong node ở ô **Khu vực**, hoặc **kéo
+  node sang cột khác** để chuyển).
+- Nút **⬓ Xếp khu vực**: tự xếp mọi node vào đúng cột, theo thứ tự (khu Tạo hình/Sản xuất theo
+  số thứ tự #; khu Video theo thứ tự node sản xuất rồi tới phiên bản).
+- Số thứ tự **#N** trên node là mốc sắp xếp trong khu vực — sửa trong node để đổi thứ tự.
+
 ## Node Style & Máy quay
 - Là node trên canvas (nét đứt). Nội dung của chúng được **chèn vào prompt** của mọi
   node mà bạn nối cổng **Ra** của chúng vào.
