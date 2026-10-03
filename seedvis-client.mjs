@@ -266,9 +266,14 @@ export function createSeedvis(dataDir) {
       };
       out.message = 'Đã kết nối Seedvis';
     } catch (e) {
-      out.message =
-        e.status === 401 ? 'API key Seedvis không hợp lệ.' : 'Không đọc được Seedvis: ' + e.message;
-      out.error = true;
+      // Only a 401 means the key itself is bad. /account/info may simply be absent
+      // (404) or unreachable — the key is still saved and generation still works.
+      if (e.status === 401) {
+        out.message = 'API key Seedvis không hợp lệ (401). Kiểm tra lại key.';
+        out.error = true;
+      } else {
+        out.message = 'Đã lưu key Seedvis. Chưa đọc được thông tin tài khoản — vẫn dùng được.';
+      }
     }
     try {
       const j = await call('/models', { timeout: 15000 });
