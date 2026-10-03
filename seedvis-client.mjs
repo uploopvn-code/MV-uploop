@@ -327,6 +327,10 @@ export function createSeedvis(dataDir) {
     const deadline = Date.now() + timeout;
     let failures = 0;
     while (!state.is_final) {
+      // Stopped by the user: end the poll now (the remote generation may still run, but
+      // we stop waiting and discard the result). `definite` so it is not retried.
+      if (job.aborted)
+        throw Object.assign(new Error('Đã dừng theo yêu cầu.'), { aborted: true, definite: true });
       if (Date.now() > deadline)
         throw new Error(
           'Quá thời gian chờ Seedvis. Tác vụ có thể vẫn chạy; bấm Kiểm tra lại, không tạo mới.',

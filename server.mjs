@@ -544,11 +544,26 @@ function failedVideoNodeIds() {
     ...new Set(db.jobs.filter(j => j.kind === 'video' && j.status === 'failed').map(j => j.nodeId)),
   ];
 }
+// Stops jobs the user asked to halt: queued ones are cancelled outright; running ones
+// are flagged aborted so their poll ends and the result is discarded. Aborted jobs no
+// longer count as busy, so the workflow unlocks immediately.
+function haltJobs(match) {
+  for (const j of db.jobs) {
+    if (!match(j)) continue;
+    if (j.status === 'queued') {
+      j.status = 'cancelled';
+      j.progress = 'Đã hủy khi dừng';
+    } else if (j.status === 'running') {
+      j.aborted = true;
+      j.progress = 'Đang dừng…';
+    }
+  }
+}
 function requireIdle() {
   if (
     db.autoRun?.status === 'running' ||
     db.autoVideoRun?.status === 'running' ||
-    db.jobs.some(j => ['queued', 'running'].includes(j.status))
+    db.jobs.some(j => ['queued', 'running'].includes(j.status) && !j.aborted)
   )
     throw new Error('Đợi tác vụ hoàn tất hoặc dừng chuỗi trước khi sửa workflow.');
 }
@@ -601,6 +616,12 @@ async function runJob(req, j) {
     }
     if (j.autoRunId && db.autoRun?.id === j.autoRunId) db.autoRun.index++;
   } catch (e) {
+    // Stopped by the user: mark cancelled and don't count it as a run error.
+    if (e.aborted) {
+      j.status = 'cancelled';
+      j.progress = 'Đã dừng theo yêu cầu';
+      return; // finally clears the heartbeat and saves
+    }
     // `definite`: Seedvis rejected or failed the job, so nothing is pending remotely.
     j.status = e.definite ? 'failed' : 'needs_review';
     j.error = e.message;
@@ -1095,10 +1116,11 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/auto/stop' && req.method === 'POST') {
       if (db.autoRun?.status === 'running') {
         db.autoRun.status = 'stopped';
-        db.autoRun.message =
-          'Dừng sau node hiện tại; không hủy tác vụ đang chạy trên Orbit/Seedvis';
-        save();
+        db.autoRun.message = 'Đã dừng chuỗi tạo ảnh';
       }
+      // Cancel queued image jobs and abort any running one so the workflow unlocks.
+      haltJobs(j => j.kind === 'image' && ['queued', 'running'].includes(j.status));
+      save();
       return json(res, 200, publicState());
     }
     if (p === '/api/auto/video/start' && req.method === 'POST') {
@@ -1127,12 +1149,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/auto/video/stop' && req.method === 'POST') {
       if (db.autoVideoRun?.status === 'running') {
-        // Stop enqueuing more; jobs already sent to Seedvis keep running.
         db.autoVideoRun.pending = [];
         db.autoVideoRun.status = 'stopped';
-        db.autoVideoRun.message = 'Dừng; không hủy tác vụ đã gửi Seedvis';
-        save();
+        db.autoVideoRun.message = 'Đã dừng tạo video';
       }
+      // Cancel queued video jobs and abort any running one so the workflow unlocks.
+      haltJobs(j => j.kind === 'video' && ['queued', 'running'].includes(j.status));
+      save();
       return json(res, 200, publicState());
     }
     if (p === '/api/auto/video/retry' && req.method === 'POST') {

@@ -379,6 +379,35 @@ try {
   // Nothing left to retry.
   assert.equal((await api('/api/auto/video/retry', 'POST', {})).status, 400);
 
+  // "Dừng" actually stops: a running (stuck) job is aborted and the workflow unlocks.
+  mode = 'stuck';
+  const G = await mkNode('Shot kẹt');
+  const stuckId = (await api('/api/jobs', 'POST', { nodeId: G, kind: 'video' })).data.job.id;
+  await new Promise(res => setTimeout(res, 150));
+  assert.equal(
+    (await api('/api/state')).data.jobs.find(j => j.id === stuckId).status,
+    'running',
+    'job is running',
+  );
+  // While running, editing is blocked.
+  assert.equal((await api('/api/node', 'PATCH', { id: G, name: 'x' })).status, 400);
+  // Press stop → editing is allowed again immediately (the job is detached/aborted).
+  await api('/api/auto/video/stop', 'POST', {});
+  assert.equal(
+    (await api('/api/node', 'PATCH', { id: G, name: 'Đã sửa sau khi dừng' })).status,
+    200,
+    'stop unlocks editing',
+  );
+  // The aborted job settles to cancelled.
+  let stuck;
+  for (let i = 0; i < 100; i++) {
+    stuck = (await api('/api/state')).data.jobs.find(j => j.id === stuckId);
+    if (stuck.status === 'cancelled') break;
+    await new Promise(res => setTimeout(res, 30));
+  }
+  assert.equal(stuck.status, 'cancelled', 'stop cancels the running job');
+  mode = 'ok';
+
   // Output nodes are terminal: cannot generate from them, and can be deleted.
   const term = branchesOf(s)[0].id;
   r = await api('/api/jobs', 'POST', { nodeId: term, kind: 'video' });
