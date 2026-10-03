@@ -111,6 +111,17 @@ export function parseBlueprint(input) {
 const str = (v, n = 20000) => String(v ?? '').slice(0, n);
 const nid = () => 'node-' + crypto.randomUUID();
 
+// A blueprint usually bakes "Camera: … Style: …" into each videoPrompt, but the tool
+// injects those from the wired camera + style setting nodes. Strip that trailing clause
+// so they are not duplicated, leaving the composition + staging description that drives
+// both the keyframe image and the video motion.
+function baseShotPrompt(sh) {
+  const vp = str(sh.videoPrompt);
+  const i = vp.search(/\s*Camera\s*:/i);
+  const base = (i >= 0 ? vp.slice(0, i) : vp).trim();
+  return base;
+}
+
 // Builds nodes + edges from a blueprint and returns { nodes, edges, name, theme }.
 // Throws on invalid input. Does not touch audio/fields/output settings.
 export function buildGraph(bp) {
@@ -181,12 +192,16 @@ export function buildGraph(bp) {
   shots.forEach((sh, i) => {
     const id = nid();
     const dur = Number(sh.duration);
+    // Image (keyframe) and video share the composition/staging text; camera + style
+    // come from the wired setting nodes, so they are not baked in here. Falling back to
+    // the blueprint's own prompt only, never the project's default template fields.
+    const base = baseShotPrompt(sh);
     nodes.push({
       id,
       zone: 'production',
       name: str(sh.name || 'Shot ' + (i + 1), 100),
-      prompt: str(sh.prompt),
-      videoPrompt: str(sh.videoPrompt),
+      prompt: str(sh.prompt) || base,
+      videoPrompt: str(sh.videoPrompt) ? base : '',
       lyric: str(sh.lyric, 5000),
       start: Number.isFinite(Number(sh.start)) ? Number(sh.start) : i * 8,
       duration: Number.isFinite(dur) && dur > 0 ? dur : 8,

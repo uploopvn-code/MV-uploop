@@ -64,6 +64,33 @@ assert.ok(parents.includes(byName('Sân khấu').id));
 assert.ok(parents.includes(byName('Wide').id));
 assert.ok(parents.includes(byName('Style').id));
 assert.ok(!parents.includes(byName('Guitarist').id), 'Shot 1 does not use the guitarist');
+// A shot with no "prompt" gets its image prompt from the blueprint's own videoPrompt
+// (composition + staging), never the project's default template fields; and the baked
+// "Camera:/Style:" tail is stripped so the wired setting nodes are the single source.
+const baked = buildGraph({
+  project: { name: 'Baked', theme: 'music' },
+  style: 'Kodak Vision3, teal-orange, no CGI',
+  assets: [{ key: 'singer', role: 'character', name: 'Ca sĩ', prompt: 'ref singer' }],
+  cameras: [{ key: 'close', name: 'Close', config: 'Tight emotional close-up on face.' }],
+  shots: [
+    {
+      name: 'S1',
+      duration: 8,
+      uses: ['singer'],
+      camera: 'close',
+      videoPrompt:
+        'Compose the connected reference images into one coherent shot. Preserve the referenced subjects. @singer center stage. Camera: Tight emotional close-up on face. Style: Kodak Vision3, teal-orange, no CGI, 16:9, no text.',
+    },
+  ],
+});
+const bshot = baked.nodes.find(n => n.name === 'S1');
+assert.ok(
+  /^Compose the connected reference images/.test(bshot.prompt),
+  'image prompt from blueprint',
+);
+assert.ok(!/Camera:/i.test(bshot.prompt), 'baked Camera: stripped from the shot prompt');
+assert.ok(!/Burgundy|wavy hair|polished wooden/i.test(bshot.prompt), 'no default-template leakage');
+
 // parseBlueprint tolerates a ```json fence and surrounding prose.
 const wrapped = 'Đây là kết quả:\n```json\n' + JSON.stringify(bp) + '\n```\ncảm ơn';
 assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
