@@ -37,6 +37,20 @@ trang phục, nhạc cụ, ánh sáng được kế thừa từ Chỉnh mô tả
 4. Bấm Tạo ảnh · Seedvis / Tạo video · Seedvis, hoặc ▶ Tự động tạo ảnh cho cả chuỗi.
    Kết quả được tải về và gắn vào node.
 
+## Tự động tạo video (song song, nhiều phiên bản)
+Thanh công cụ: chọn **Phiên bản** (1–4) rồi bấm **▶ Tự động tạo video**.
+- Mọi node đã sẵn ảnh đầu vào (ảnh của chính node, hoặc ảnh node nối vào tùy chế độ) và
+  dùng Seedvis cho video sẽ **chạy song song qua API** (tối đa `MV_SEEDVIS_CONCURRENCY`
+  node cùng lúc, mặc định 3) — không chạy lần lượt từng node.
+- Mỗi node gửi một request `count = số phiên bản`; mỗi video trả về **tự tách thành một
+  node mới** (node phiên bản, viền xanh, bấm để xem/tải/xóa). Node nguồn không bị ghi đè.
+- Bấm lại để **tạo thêm** phiên bản (không xóa bản cũ). **Dừng tạo video** ngừng xếp thêm;
+  các tác vụ đã gửi Seedvis vẫn chạy.
+- Trong một node, mục Video của shot có **Số phiên bản**: từ 2 bản trở lên, bản tạo thủ công
+  cũng tách thành node riêng; 1 bản thì gắn thẳng vào node như cũ.
+- Giới hạn phiên bản theo model: Veo / Omni 4, Seedance 8. Node phiên bản và node bạn thêm
+  đều có nút xóa.
+
 An toàn chi phí: mỗi tác vụ gửi `Idempotency-Key` = mã job nên gửi lại khi lỗi mạng không
 tạo lượt mới. Không bao giờ tự gửi lại sau khi Seedvis đã nhận. Quá thời gian hoặc khởi động lại
 khi đang chạy → job ở Cần kiểm tra; bấm Kiểm tra lại trong Hàng đợi để đọc tiếp đúng job đó.

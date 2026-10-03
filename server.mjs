@@ -80,6 +80,10 @@ if (db.autoRun?.status === 'running') {
   db.autoRun.status = 'stopped';
   db.autoRun.message = 'Đã khởi động lại. Kiểm tra tác vụ cũ trước khi chạy tiếp.';
 }
+if (db.autoVideoRun?.status === 'running') {
+  db.autoVideoRun.status = 'stopped';
+  db.autoVideoRun.message = 'Đã khởi động lại. Kiểm tra tác vụ cũ trước khi chạy tiếp.';
+}
 function save() {
   fs.writeFileSync(dbFile + '.tmp', JSON.stringify(db, null, 2));
   fs.renameSync(dbFile + '.tmp', dbFile);
@@ -95,13 +99,13 @@ const getNode = id => db.nodes.find(n => n.id === id);
 const deps = id => db.edges.filter(e => e.target === id).map(e => e.source);
 function markChildren(id) {
   for (const n of db.nodes)
-    if (deps(n.id).includes(id)) {
+    if (!n.terminal && deps(n.id).includes(id)) {
       if (n.image || n.video) n.stale = true;
       if (n.id !== id) markChildren(n.id);
     }
 }
 function markAll() {
-  for (const n of db.nodes) if (n.image || n.video) n.stale = true;
+  for (const n of db.nodes) if (!n.terminal && (n.image || n.video)) n.stale = true;
 }
 function prompts(n) {
   const f = db.fields,
@@ -228,8 +232,14 @@ function checkLease(j, b) {
 async function createJob(req, b) {
   const n = getNode(b.nodeId);
   if (!n) throw new Error('Node không tồn tại');
+  if (n.terminal) throw new Error('Node phiên bản chỉ để xem, không tạo tiếp từ nó.');
   const kind = b.kind === 'video' ? 'video' : 'image';
+  const count = kind === 'video' ? Math.max(1, Math.min(8, Math.floor(Number(b.count) || 1))) : 1;
+  // Branch mode: each produced version becomes its own output node.
+  const branch = kind === 'video' && (b.branch === true || count > 1);
   const sv = seedvisBinding(n, kind);
+  if (!sv && (count > 1 || branch))
+    throw new Error('Nhiều phiên bản / tách node chỉ hỗ trợ Seedvis. Node này đang dùng Orbit.');
   let verifiedBinding = null;
   if (sv) {
     if (!seedvis.configured()) throw new Error('Nhập API key Seedvis trong Kết nối web.');
@@ -285,8 +295,10 @@ async function createJob(req, b) {
       payload: {
         seedvis: binding,
         kind,
+        count,
+        branch,
         prompt: prompts(n)[kind],
-        website: 'Seedvis · ' + binding.modelName,
+        website: 'Seedvis · ' + binding.modelName + (count > 1 ? ' · ' + count + ' bản' : ''),
         aspectRatio: binding.aspectRatio,
         references,
         audio: db.audio,
@@ -346,9 +358,57 @@ function storeResult(j, content) {
   j.progress = 'Đã nhận file vào node';
   save();
 }
+// A display-only node holding one produced video, wired from the source node.
+function createBranchNode(sourceId, asset) {
+  const src = getNode(sourceId);
+  const version = db.nodes.filter(x => x.terminal && x.source === sourceId).length + 1;
+  const id = 'node-' + crypto.randomUUID();
+  db.nodes.push({
+    id,
+    name: (src?.name || 'Video') + ' · v' + version,
+    terminal: true,
+    source: sourceId,
+    image: null,
+    video: asset,
+    prompt: '',
+    videoPrompt: '',
+    lyric: '',
+    start: 0,
+    duration: src?.duration || 8,
+    outputNaming: { ...defaultNaming },
+  });
+  db.edges.push({ source: sourceId, target: id });
+  return id;
+}
+// Seedvis returns one result per requested version. Branch jobs turn each into
+// its own output node; a single-version job stores into the source node.
+function storeSeedvisResults(j, results) {
+  const assets = results.map(storeAsset);
+  j.result = assets[0];
+  j.resultCount = assets.length;
+  j.status = 'completed';
+  j.completedAt = new Date().toISOString();
+  j.resultStale = db.revision !== j.payload.projectRevision;
+  if (j.payload.branch) {
+    if (db.nodes.length + assets.length > 300)
+      throw new Error('Quá nhiều node. Xóa bớt phiên bản cũ.');
+    j.branchNodes = assets.map(a => createBranchNode(j.nodeId, a));
+    j.progress = 'Đã tạo ' + assets.length + ' phiên bản video';
+  } else {
+    const n = getNode(j.nodeId);
+    n[j.kind] = assets[0];
+    if (j.kind === 'image') {
+      n.stale = j.resultStale;
+      markChildren(n.id);
+    } else n.videoStale = j.resultStale;
+    j.progress = 'Đã nhận file vào node';
+  }
+  save();
+}
 function requireIdle() {
   if (
     db.autoRun?.status === 'running' ||
+    db.autoVideoRun?.status === 'running' ||
     db.jobs.some(j => ['queued', 'running'].includes(j.status))
   )
     throw new Error('Đợi tác vụ hoàn tất hoặc dừng chuỗi trước khi sửa workflow.');
@@ -363,105 +423,183 @@ function seedvisImages(j) {
     };
   });
 }
-let runnerBusy = false;
-// Runs one job at a time: Seedvis jobs always, Orbit jobs only for the Orbit user of `req`.
-async function pump(req) {
-  if (
-    process.env.MV_RUNNER_DISABLED === '1' ||
-    runnerBusy ||
-    db.jobs.some(j => j.status === 'running')
-  )
-    return;
-  const owner = sessionUser(req)?.email || null;
-  const runnable = j =>
-    j.status === 'queued' &&
-    (j.payload.seedvis || (owner && j.payload.orbit && j.payload.orbit.owner === owner));
-  runnerBusy = true;
+// Seedvis jobs run concurrently (up to this cap); Orbit runs one at a time.
+const SV_CAP = Math.max(1, Number(process.env.MV_SEEDVIS_CONCURRENCY) || 3);
+const svActive = new Set();
+let orbitBusy = false;
+let lastReq = null;
+let pumping = false,
+  pumpAgain = false;
+
+// Executes one queued job to completion (Seedvis or Orbit), storing its result
+// or, for branch jobs, spawning output nodes.
+async function runJob(req, j) {
+  j.status = 'running';
+  j.executor = j.payload.seedvis ? 'seedvis' : 'orbit-direct';
+  j.startedAt = new Date().toISOString();
+  j.heartbeat = Date.now();
+  j.progress = j.payload.seedvis ? 'Đang chuẩn bị gửi Seedvis' : 'Đang kiểm tra Orbit';
+  save();
+  const heartbeat = setInterval(() => {
+    j.heartbeat = Date.now();
+    save();
+  }, 10000);
+  const onProgress = message => {
+    j.progress = message;
+    j.heartbeat = Date.now();
+    save();
+  };
   try {
-    for (;;) {
-      let j = db.jobs.find(runnable);
-      if (
-        !j &&
-        db.autoRun?.status === 'running' &&
-        (!db.autoRun.owner || db.autoRun.owner === owner)
-      ) {
-        const run = db.autoRun;
-        while (run.index < run.order.length) {
-          const node = getNode(run.order[run.index]);
-          if (node.image && !node.stale) {
-            run.index++;
-            continue;
-          }
-          break;
+    if (j.payload.seedvis) {
+      storeSeedvisResults(j, await seedvis.run(j, seedvisImages(j), onProgress, save));
+    } else {
+      await prepareInputs(j, path.join(data, 'media'));
+      save();
+      await executeOrbit(req, j, onProgress);
+      j.progress = 'Đang chờ file đầu ra';
+      save();
+      await collectJob(j);
+    }
+    if (j.autoRunId && db.autoRun?.id === j.autoRunId) db.autoRun.index++;
+  } catch (e) {
+    // `definite`: Seedvis rejected or failed the job, so nothing is pending remotely.
+    j.status = e.definite ? 'failed' : 'needs_review';
+    j.error = e.message;
+    j.progress = j.payload.seedvis
+      ? e.definite
+        ? 'Seedvis không tạo được; sửa rồi tạo lại'
+        : 'Cần kiểm tra lại trạng thái Seedvis, không tạo mới'
+      : 'Cần kiểm tra Orbit trước khi chạy lại';
+    if (j.autoRunId && db.autoRun?.id === j.autoRunId) {
+      db.autoRun.status = 'blocked';
+      db.autoRun.message = e.message;
+    }
+    if (j.autoVideoId && db.autoVideoRun?.id === j.autoVideoId)
+      db.autoVideoRun.errors.push((getNode(j.nodeId)?.name || j.nodeId) + ': ' + e.message);
+  } finally {
+    clearInterval(heartbeat);
+    save();
+  }
+}
+
+// Creates queued jobs from the active auto-runs. Image auto-run stays serial (one
+// job in flight, driven by dependencies); video auto-run enqueues every ready node.
+async function feedAuto() {
+  const owner = sessionUser(lastReq)?.email || null;
+  const run = db.autoRun;
+  if (run?.status === 'running' && (!run.owner || run.owner === owner)) {
+    const inFlight = db.jobs.some(
+      j => j.autoRunId === run.id && ['queued', 'running'].includes(j.status),
+    );
+    if (!inFlight) {
+      while (run.index < run.order.length) {
+        const node = getNode(run.order[run.index]);
+        if (node.image && !node.stale) {
+          run.index++;
+          continue;
         }
-        if (run.index === run.order.length) {
-          run.status = 'completed';
-          run.message = 'Đã nhận đủ ảnh của chuỗi';
-          save();
-          break;
-        }
+        break;
+      }
+      if (run.index === run.order.length) {
+        run.status = 'completed';
+        run.message = 'Đã nhận đủ ảnh của chuỗi';
+        save();
+      } else {
         try {
-          j = await createJob(req, { nodeId: run.order[run.index], kind: 'image' });
+          const j = await createJob(lastReq, { nodeId: run.order[run.index], kind: 'image' });
           j.autoRunId = run.id;
           save();
         } catch (e) {
           run.status = 'blocked';
           run.message = e.message;
           save();
-          break;
         }
       }
-      if (!j || !runnable(j)) break;
-      j.status = 'running';
-      j.executor = j.payload.seedvis ? 'seedvis' : 'orbit-direct';
-      j.startedAt = new Date().toISOString();
-      j.heartbeat = Date.now();
-      j.progress = j.payload.seedvis ? 'Đang chuẩn bị gửi Seedvis' : 'Đang kiểm tra Orbit';
-      save();
-      const heartbeat = setInterval(() => {
-        j.heartbeat = Date.now();
-        save();
-      }, 10000);
-      const onProgress = message => {
-        j.progress = message;
-        j.heartbeat = Date.now();
-        save();
-      };
+    }
+  }
+  const vr = db.autoVideoRun;
+  if (vr?.status === 'running') {
+    for (const id of [...vr.pending]) {
       try {
-        if (j.payload.seedvis) {
-          storeResult(j, await seedvis.run(j, seedvisImages(j), onProgress, save));
-        } else {
-          await prepareInputs(j, path.join(data, 'media'));
-          save();
-          await executeOrbit(req, j, onProgress);
-          j.progress = 'Đang chờ file đầu ra';
-          save();
-          await collectJob(j);
-        }
-        if (j.autoRunId && db.autoRun?.id === j.autoRunId) db.autoRun.index++;
+        const j = await createJob(lastReq, {
+          nodeId: id,
+          kind: 'video',
+          count: vr.versions,
+          branch: true,
+        });
+        j.autoVideoId = vr.id;
+        vr.pending = vr.pending.filter(x => x !== id);
+        save();
       } catch (e) {
-        // `definite`: Seedvis rejected or failed the job, so nothing is pending remotely.
-        j.status = e.definite ? 'failed' : 'needs_review';
-        j.error = e.message;
-        j.progress = j.payload.seedvis
-          ? e.definite
-            ? 'Seedvis không tạo được; sửa rồi tạo lại'
-            : 'Cần kiểm tra lại trạng thái Seedvis, không tạo mới'
-          : 'Cần kiểm tra Orbit trước khi chạy lại';
-        if (j.autoRunId && db.autoRun?.id === j.autoRunId) {
-          db.autoRun.status = 'blocked';
-          db.autoRun.message = e.message;
-        }
-      } finally {
-        clearInterval(heartbeat);
+        vr.pending = vr.pending.filter(x => x !== id);
+        vr.errors.push((getNode(id)?.name || id) + ': ' + e.message);
         save();
       }
     }
-  } finally {
-    runnerBusy = false;
+    const active = db.jobs.some(
+      j => j.autoVideoId === vr.id && ['queued', 'running'].includes(j.status),
+    );
+    if (!vr.pending.length && !active) {
+      vr.status = vr.errors.length ? 'blocked' : 'completed';
+      vr.message = vr.errors.length
+        ? 'Một số node lỗi: ' + vr.errors.join(' · ')
+        : 'Đã tạo xong các phiên bản video';
+      save();
+    }
   }
 }
-// Re-reads a Seedvis job that was interrupted (timeout, restart). Never resubmits.
+
+// Launches queued jobs within the concurrency limits.
+function launch() {
+  while (svActive.size < SV_CAP) {
+    const j = db.jobs.find(j => j.status === 'queued' && j.payload.seedvis && !svActive.has(j.id));
+    if (!j) break;
+    svActive.add(j.id);
+    runJob(lastReq, j).finally(() => {
+      svActive.delete(j.id);
+      pump(lastReq);
+    });
+  }
+  if (!orbitBusy) {
+    const owner = sessionUser(lastReq)?.email || null;
+    const j =
+      owner &&
+      db.jobs.find(
+        j => j.status === 'queued' && j.payload.orbit && j.payload.orbit.owner === owner,
+      );
+    if (j) {
+      orbitBusy = true;
+      runJob(lastReq, j).finally(() => {
+        orbitBusy = false;
+        pump(lastReq);
+      });
+    }
+  }
+}
+
+// Serialized planner: feeds the auto-runs then launches jobs. Re-invoked after each
+// job settles. The lock keeps two invocations from launching the same job.
+async function pump(req) {
+  if (req && sessionUser(req)) lastReq = req;
+  else if (!lastReq) lastReq = req;
+  if (process.env.MV_RUNNER_DISABLED === '1') return;
+  if (pumping) {
+    pumpAgain = true;
+    return;
+  }
+  pumping = true;
+  try {
+    do {
+      pumpAgain = false;
+      await feedAuto();
+      launch();
+    } while (pumpAgain);
+  } finally {
+    pumping = false;
+  }
+}
+
+// Re-reads an interrupted Seedvis job (timeout, restart) without resubmitting.
 async function resumeSeedvis(j) {
   j.status = 'running';
   j.heartbeat = Date.now();
@@ -472,7 +610,7 @@ async function resumeSeedvis(j) {
     save();
   }, 10000);
   try {
-    storeResult(
+    storeSeedvisResults(
       j,
       await seedvis.resume(j, message => {
         j.progress = message;
@@ -616,7 +754,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, publicState());
     }
     if (p === '/api/jobs' && req.method === 'POST') {
-      if (db.autoRun?.status === 'running')
+      if (db.autoRun?.status === 'running' || db.autoVideoRun?.status === 'running')
         throw new Error('Đang chạy tự động. Dừng chuỗi trước khi chạy riêng.');
       const j = await createJob(req, await body(req));
       pump(req);
@@ -643,6 +781,19 @@ const server = http.createServer(async (req, res) => {
       mutate();
       return json(res, 201, publicState());
     }
+    if (p === '/api/nodes/delete' && req.method === 'POST') {
+      requireIdle();
+      const b = await body(req),
+        n = getNode(b.id);
+      if (!n) throw new Error('Node không tồn tại');
+      if (!String(n.id).startsWith('node-'))
+        throw new Error('Chỉ xóa được node bạn thêm hoặc node phiên bản video.');
+      db.nodes = db.nodes.filter(x => x.id !== n.id);
+      db.edges = db.edges.filter(e => e.source !== n.id && e.target !== n.id);
+      for (const x of db.nodes) if (!x.terminal && (x.image || x.video)) markChildren(x.id);
+      mutate();
+      return json(res, 200, publicState());
+    }
     if (p === '/api/edges' && req.method === 'PUT') {
       requireIdle();
       const b = await body(req);
@@ -667,7 +818,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/auto/start' && req.method === 'POST') {
       requireIdle();
       const b = await body(req),
-        order = orderGraph(db.nodes, db.edges, b.target || null),
+        // Output nodes hold a finished video; they are never regenerated.
+        order = orderGraph(db.nodes, db.edges, b.target || null).filter(
+          id => !getNode(id).terminal,
+        ),
         rerun = new Set();
       for (const id of order) {
         const n = getNode(id);
@@ -710,6 +864,46 @@ const server = http.createServer(async (req, res) => {
         db.autoRun.status = 'stopped';
         db.autoRun.message =
           'Dừng sau node hiện tại; không hủy tác vụ đang chạy trên Orbit/Seedvis';
+        save();
+      }
+      return json(res, 200, publicState());
+    }
+    if (p === '/api/auto/video/start' && req.method === 'POST') {
+      requireIdle();
+      if (!seedvis.configured()) throw new Error('Nhập API key Seedvis trong Kết nối web.');
+      const b = await body(req);
+      const versions = Math.max(1, Math.min(8, Math.floor(Number(b.versions) || 1)));
+      // Eligible: video-capable Seedvis nodes whose video input is already ready.
+      const eligible = db.nodes.filter(n => {
+        if (n.terminal || ['singer', 'stage', 'scene'].includes(n.id)) return false;
+        if (b.target && n.id !== b.target) return false;
+        if (providers(n).video.type !== 'seedvis') return false;
+        if (n.videoInput === 'refs') {
+          const refs = assetRefs(n);
+          return refs.length > 0 && !refs.some(r => getNode(r.role).stale);
+        }
+        return !!n.image && !n.stale;
+      });
+      if (!eligible.length) throw new Error('Không có node nào sẵn ảnh để tạo video bằng Seedvis.');
+      db.autoVideoRun = {
+        id: crypto.randomUUID(),
+        status: 'running',
+        versions,
+        pending: eligible.map(n => n.id),
+        total: eligible.length,
+        errors: [],
+        message: 'Đang tạo video song song cho ' + eligible.length + ' node',
+      };
+      save();
+      pump(req);
+      return json(res, 200, publicState());
+    }
+    if (p === '/api/auto/video/stop' && req.method === 'POST') {
+      if (db.autoVideoRun?.status === 'running') {
+        // Stop enqueuing more; jobs already sent to Seedvis keep running.
+        db.autoVideoRun.pending = [];
+        db.autoVideoRun.status = 'stopped';
+        db.autoVideoRun.message = 'Dừng; không hủy tác vụ đã gửi Seedvis';
         save();
       }
       return json(res, 200, publicState());

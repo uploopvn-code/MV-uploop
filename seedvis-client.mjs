@@ -40,6 +40,7 @@ export const catalog = {
       single: true,
       multi: { mode: 'multi-image-to-video', field: 'referenceImages' },
       maxImages: 3,
+      countMax: 4,
       aspect: ['16:9', '9:16'],
       durations: [4, 6, 8],
       durationSuffix: 's',
@@ -51,6 +52,7 @@ export const catalog = {
       note: 'Seedance kiểm duyệt chặt và thường từ chối ảnh có người thật; nên dùng Veo cho ca sĩ.',
       imageField: 'reference_images',
       maxImages: 10,
+      countMax: 8,
       aspect: ['16:9', '9:16', '1:1', '3:4', '4:3', '21:9'],
       durations: [5, 10, 15, 20, 25, 30],
       upscale: [],
@@ -61,6 +63,7 @@ export const catalog = {
       note: 'Seedance kiểm duyệt chặt và thường từ chối ảnh có người thật; nên dùng Veo cho ca sĩ.',
       imageField: 'reference_images',
       maxImages: 10,
+      countMax: 8,
       aspect: ['16:9', '9:16', '1:1', '3:4', '4:3', '21:9'],
       durations: [5, 10, 15],
       upscale: [],
@@ -72,6 +75,7 @@ export const catalog = {
       single: true,
       multi: { mode: 'multi-image-to-video', field: 'images' },
       maxImages: 3,
+      countMax: 4,
       aspect: ['16:9', '9:16'],
       upscale: [],
     },
@@ -82,6 +86,10 @@ export const defaultSeedvis = {
   video: { model: 'Veo-3.1', aspectRatio: '16:9', upscale: 'none' },
 };
 const modelOf = (kind, id) => catalog[kind].find(m => m.id === id);
+// Max video versions (count) a model accepts; 1 for anything else.
+export function videoCountMax(model) {
+  return modelOf('video', model)?.countMax || 1;
+}
 
 export function validateSeedvisBinding(kind, b) {
   const m = modelOf(kind, b?.model);
@@ -100,7 +108,7 @@ export function videoDuration(model, seconds) {
   return m.durations.reduce((a, b) => (Math.abs(b - s) < Math.abs(a - s) ? b : a));
 }
 
-export function buildRequest(kind, binding, prompt, images, durationSeconds) {
+export function buildRequest(kind, binding, prompt, images, durationSeconds, count = 1) {
   const m = modelOf(kind, binding.model);
   if (!m) throw new Error('Model Seedvis không còn hỗ trợ: ' + binding.model);
   if (kind === 'image') {
@@ -145,7 +153,12 @@ export function buildRequest(kind, binding, prompt, images, durationSeconds) {
       },
     };
   }
-  const body = { model: m.id, prompt, aspect_ratio: binding.aspectRatio, count: 1 };
+  const body = {
+    model: m.id,
+    prompt,
+    aspect_ratio: binding.aspectRatio,
+    count: Math.max(1, Math.min(count, m.countMax || 1)),
+  };
   if (images.length) {
     const max = m.maxImages || 1;
     if (images.length > max) throw new Error(m.name + ' nhận tối đa ' + max + ' ảnh cho video.');
@@ -345,9 +358,14 @@ export function createSeedvis(dataDir) {
         { definite: true },
       );
     }
-    const output = (state.outputs || []).find(o => o.url || o.b64);
-    onProgress('Đang tải kết quả từ Seedvis');
-    return download(output || {}, job.kind);
+    const outs = (state.outputs || []).filter(o => o.url || o.b64);
+    if (!outs.length)
+      throw Object.assign(new Error('Seedvis không trả file kết quả.'), { definite: true });
+    onProgress('Đang tải ' + outs.length + ' kết quả từ Seedvis');
+    // Download every output (one per requested version), in order.
+    const results = [];
+    for (const o of outs) results.push(await download(o, job.kind));
+    return results;
   }
 
   async function run(job, images, onProgress, onSave) {
@@ -357,6 +375,7 @@ export function createSeedvis(dataDir) {
       job.payload.prompt,
       images,
       job.payload.timing?.duration,
+      job.payload.count || 1,
     );
     onProgress('Đang gửi yêu cầu tới Seedvis · ' + job.payload.seedvis.modelName);
     let json;

@@ -46,9 +46,20 @@
           ><select id="autoTarget" aria-label="Node đích chạy tự động">
             <option value="">Toàn bộ workflow</option></select
           ><button id="autoStart" class="button primary">▶ Tự động tạo ảnh</button
-          ><button id="autoStop" class="button">Dừng sau node hiện tại</button>
+          ><button id="autoStop" class="button">Dừng sau node hiện tại</button
+          ><span class="toolbar-sep"></span
+          ><label class="inline-field"
+            >Phiên bản<select id="videoVersions" aria-label="Số phiên bản video mỗi node">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select></label
+          ><button id="autoVideoStart" class="button primary">▶ Tự động tạo video</button
+          ><button id="autoVideoStop" class="button">Dừng tạo video</button>
         </div>
         <p id="autoStatus" class="field-hint"></p>
+        <p id="autoVideoStatus" class="field-hint"></p>
         <p id="connectHint" class="field-hint">
           Kéo dây từ Out sang In · Bấm vào dây rồi bấm × (hoặc phím Delete) để xóa · Kéo thanh tên
           để di chuyển node · Kéo nền để pan · Lăn chuột để zoom.
