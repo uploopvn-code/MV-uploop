@@ -45,6 +45,22 @@ try {
   assert.equal(node(s, 'wide').zone, 'design', 'zone change persists');
   await api('/api/node', 'PATCH', { id: 'wide', zone: 'production' });
 
+  // Each zone is numbered from 1 independently.
+  s = (await api('/api/state')).data;
+  const bySeq = z =>
+    s.nodes
+      .filter(n => n.zone === z)
+      .sort((a, b) => a.seq - b.seq)
+      .map(n => n.seq);
+  assert.deepEqual(bySeq('design'), [1, 2, 3, 4, 5]); // ca sĩ, sân khấu, ghép cảnh, style, máy quay
+  assert.deepEqual(bySeq('production'), [1, 2, 3]); // 3 shots, numbered on their own
+  // Typing a new position reorders within the zone.
+  const before = node(s, 'close').seq;
+  s = (await api('/api/node', 'PATCH', { id: 'close', seq: 1 })).data;
+  assert.equal(node(s, 'close').seq, 1, 'moved to position 1');
+  assert.deepEqual(bySeq('production'), [1, 2, 3], 'production still 1..3');
+  assert.notEqual(node(s, 'close').seq, before);
+
   // Editing a setting node changes downstream prompts.
   await api('/api/node', 'PATCH', { id: 'style', config: 'NEON CYBERPUNK LOOK' });
   s = (await api('/api/state')).data;
@@ -90,7 +106,7 @@ try {
   assert.equal(r.status, 400);
 
   console.log(
-    'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, zones, create/switch/delete projects, isolation, per-project media',
+    'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, zones, per-zone numbering + reorder, create/switch/delete projects, isolation, per-project media',
   );
 } finally {
   proc.kill();

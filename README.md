@@ -33,7 +33,9 @@ Canvas chia 3 cột theo quy trình: **① Tạo hình** (node ảnh/nhân vật
   node sang cột khác** để chuyển).
 - Nút **⬓ Xếp khu vực**: tự xếp mọi node vào đúng cột, theo thứ tự (khu Tạo hình/Sản xuất theo
   số thứ tự #; khu Video theo thứ tự node sản xuất rồi tới phiên bản).
-- Số thứ tự **#N** trên node là mốc sắp xếp trong khu vực — sửa trong node để đổi thứ tự.
+- Số thứ tự **#N** đánh **riêng theo từng khu vực** (Tạo hình 1,2,3…; Sản xuất 1,2,3…; Video 1,2,3…).
+  Sửa ô **STT trong khu vực** của node và gõ vị trí mới để chèn node vào đúng chỗ; hệ thống tự
+  đánh lại 1..n. Tên video tải về dùng số của node sản xuất nguồn (vd `01_Toàn cảnh_v2.mp4`).
 
 ## Node Style & Máy quay
 - Là node trên canvas (nét đứt). Nội dung của chúng được **chèn vào prompt** của mọi

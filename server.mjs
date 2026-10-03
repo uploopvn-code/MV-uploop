@@ -82,16 +82,34 @@ if (!ws.order.includes(ws.active)) ws.active = ws.order[0];
 writeWorkspace(ws);
 
 let activeId, mediaDir, dbFile, db;
-const nextSeq = () => db.nodes.reduce((m, n) => Math.max(m, n.seq || 0), 0) + 1;
+// Workflow zones: design (tạo hình) → production (sản xuất) → output (video).
+const ZONES = ['design', 'production', 'output'];
+const defaultZone = n => (n.terminal ? 'output' : 'duration' in n ? 'production' : 'design');
+const nodeZone = n => (ZONES.includes(n.zone) ? n.zone : defaultZone(n));
+// Sequence numbers restart per zone, so each zone is numbered 1, 2, 3…
+const nextSeq = zone =>
+  db.nodes.reduce((m, n) => (nodeZone(n) === zone ? Math.max(m, n.seq || 0) : m), 0) + 1;
+// Order within a zone for numbering: by current seq, output by source then version.
+const seqKey = n =>
+  nodeZone(n) === 'output' ? (n.sourceSeq || 999) * 1000 + (n.version || 0) : n.seq || 9999;
+// Renumbers each zone to 1..n. Output follows production order (source then
+// version); other zones keep the current seq order (fractional seq lets the UI
+// insert a node at a chosen position before this tidies it back to integers).
+function renumberSeq(d) {
+  const key = (n, z) =>
+    z === 'output' ? (n.sourceSeq || 999) * 1000 + (n.version || 0) : (n.seq ?? 9999);
+  for (const z of ZONES)
+    d.nodes
+      .filter(n => nodeZone(n) === z)
+      .sort((a, b) => key(a, z) - key(b, z))
+      .forEach((n, i) => (n.seq = i + 1));
+}
 // Brings an older or freshly loaded project up to the current shape.
 function normalize(d) {
   d.outputDirectory ??= path.join(root, 'results');
   d.theme ??= 'music';
-  for (const n of d.nodes)
-    if (n.kind !== 'setting') {
-      n.outputNaming ??= { ...defaultNaming };
-      if (!n.terminal && !n.seq) n.seq = d.nodes.reduce((m, x) => Math.max(m, x.seq || 0), 0) + 1;
-    }
+  for (const n of d.nodes) if (n.kind !== 'setting') n.outputNaming ??= { ...defaultNaming };
+  renumberSeq(d);
   d.edges ??= [
     { source: 'singer', target: 'scene' },
     { source: 'stage', target: 'scene' },
@@ -134,10 +152,6 @@ const projectList = () =>
 loadProject(ws.active);
 const getNode = id => db.nodes.find(n => n.id === id);
 const deps = id => db.edges.filter(e => e.target === id).map(e => e.source);
-// Workflow zones: design (tạo hình) → production (sản xuất) → output (video).
-const ZONES = ['design', 'production', 'output'];
-const defaultZone = n => (n.terminal ? 'output' : 'duration' in n ? 'production' : 'design');
-const nodeZone = n => (ZONES.includes(n.zone) ? n.zone : defaultZone(n));
 // Style / camera config nodes: wired into the graph but carry text, not media.
 const isSetting = n => n?.kind === 'setting';
 const settingLabel = { style: 'Style', camera: 'Camera' };
@@ -293,6 +307,7 @@ function storeAsset(b) {
   return { id, url: '/media/' + id, mime: b.mime, name: String(b.name || id).slice(0, 200) };
 }
 function mutate() {
+  renumberSeq(db);
   db.revision++;
   save();
 }
@@ -441,6 +456,8 @@ function createBranchNode(sourceId, asset) {
     id,
     name: (src?.name || 'Video') + ' · v' + version,
     terminal: true,
+    zone: 'output',
+    seq: nextSeq('output'),
     source: sourceId,
     sourceSeq: src?.seq || null,
     sourceName: src?.name || '',
@@ -470,6 +487,7 @@ function storeSeedvisResults(j, results) {
     if (db.nodes.length + assets.length > 300)
       throw new Error('Quá nhiều node. Xóa bớt phiên bản cũ.');
     j.branchNodes = assets.map(a => createBranchNode(j.nodeId, a));
+    renumberSeq(db); // keep the Video zone numbered in production order
     j.progress = 'Đã tạo ' + assets.length + ' phiên bản video';
   } else {
     const n = getNode(j.nodeId);
@@ -824,12 +842,19 @@ const server = http.createServer(async (req, res) => {
       }
       if ('videoInput' in b) next.videoInput = b.videoInput === 'refs' ? 'refs' : 'self';
       // Output nodes stay in the output zone; others move between design/production.
-      if ('zone' in b && ZONES.includes(b.zone) && !n.terminal)
-        next.zone = b.zone === 'output' ? 'production' : b.zone;
+      if ('zone' in b && ZONES.includes(b.zone) && !n.terminal) {
+        const z = b.zone === 'output' ? 'production' : b.zone;
+        if (z !== nodeZone(n)) {
+          next.zone = z;
+          if (!('seq' in b)) next.seq = nextSeq(z); // fresh number in the new zone
+        }
+      }
       if ('seq' in b) {
         const v = Math.floor(Number(b.seq));
         if (!Number.isFinite(v) || v < 1 || v > 9999) throw new Error('Số thứ tự không hợp lệ.');
-        next.seq = v;
+        // Land just before the node currently at position v; mutate() then
+        // renumbers the zone back to clean integers, so typing v moves it there.
+        next.seq = v - 0.5;
       }
       if ('config' in b && isSetting(n)) next.config = String(b.config).slice(0, 5000);
       for (const k of ['prompt', 'videoPrompt', 'lyric'])
@@ -894,6 +919,8 @@ const server = http.createServer(async (req, res) => {
               id: 'node-' + crypto.randomUUID(),
               kind: 'setting',
               settingType: b.settingType === 'camera' ? 'camera' : 'style',
+              zone: 'design',
+              seq: nextSeq('design'),
               name: String(b.name || (b.settingType === 'camera' ? 'Máy quay' : 'Style')).slice(
                 0,
                 100,
@@ -903,7 +930,8 @@ const server = http.createServer(async (req, res) => {
           : {
               id: 'node-' + crypto.randomUUID(),
               name: String(b.name || 'Ảnh mới').slice(0, 100),
-              seq: nextSeq(),
+              zone: 'production',
+              seq: nextSeq('production'),
               prompt: '',
               videoPrompt: '',
               lyric: '',
