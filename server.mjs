@@ -19,6 +19,7 @@ import {
 import { projectTemplate, themes, themeLabel } from './templates.mjs';
 import { MASTER_PROMPT, buildGraph } from './director.mjs';
 import { createDirectorLLM } from './director-llm.mjs';
+import { buildZip } from './zip.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -284,6 +285,32 @@ const assetRefs = n =>
     .filter(s => s && !isSetting(s)) // skip setting nodes and dangling edges to missing nodes
     .map(s => ({ role: s.id, asset: s.image }))
     .filter(r => r.asset);
+// Download name for a video node: <STT>_<tên shot>[_vN].<ext> — mirrors the client's naming,
+// so a shot's source sequence number and name make the file obvious inside the ZIP.
+function videoFileName(n) {
+  const url = String(n.video?.url || '');
+  const ext = url.match(/\.(mp4|webm)(?:\?|$)/i)?.[1] || 'mp4';
+  const clean = s =>
+    String(s || 'video')
+      .replace(/[\\/:*?"<>|]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60) || 'video';
+  if (n.terminal) {
+    const src = getNode(n.source);
+    const seq = src?.seq ?? n.sourceSeq ?? 0;
+    return (
+      String(seq).padStart(2, '0') +
+      '_' +
+      clean(src?.name ?? n.sourceName) +
+      '_v' +
+      (n.version || 1) +
+      '.' +
+      ext
+    );
+  }
+  return String(n.seq || 0).padStart(2, '0') + '_' + clean(n.name) + '.' + ext;
+}
 function publicState() {
   return {
     ...db,
@@ -963,6 +990,43 @@ const server = http.createServer(async (req, res) => {
       writeWorkspace(ws);
       loadProject(id);
       return json(res, 200, publicState());
+    }
+    // Package the selected videos into one ZIP, each named by its shot (STT_tên_vN.mp4).
+    if (p === '/api/videos/zip' && req.method === 'POST') {
+      const b = await body(req);
+      const ids = Array.isArray(b.ids) ? b.ids : [];
+      const picked = db.nodes.filter(n => ids.includes(n.id) && n.video);
+      if (!picked.length) throw new Error('Không có video nào để tải.');
+      const used = new Map();
+      const files = [];
+      let total = 0;
+      for (const n of picked) {
+        const fileId = String(n.video.url || '').replace(/^\/media\//, '');
+        if (!/^[a-f0-9-]+\.(mp4|webm)$/.test(fileId)) continue;
+        const file = path.join(mediaDir, fileId);
+        if (!fs.existsSync(file)) continue;
+        let name = videoFileName(n);
+        // Keep filenames unique inside the archive.
+        if (used.has(name)) {
+          const c = used.get(name) + 1;
+          used.set(name, c);
+          name = name.replace(/(\.\w+)$/, '_' + c + '$1');
+        } else used.set(name, 1);
+        const dataBuf = fs.readFileSync(file);
+        total += dataBuf.length;
+        if (total > 3 * 1024 * 1024 * 1024)
+          throw new Error('Tổng dung lượng quá lớn (>3GB). Hãy chọn ít video hơn.');
+        files.push({ name, data: dataBuf });
+      }
+      if (!files.length) throw new Error('Không tìm thấy file video cho các node đã chọn.');
+      const zip = buildZip(files);
+      const zname = (db.name || 'videos').replace(/[^\w.\- ]+/g, '_') + '.zip';
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(zname)}`,
+        'Content-Length': zip.length,
+      });
+      return res.end(zip);
     }
     if (p === '/api/director' && req.method === 'GET')
       return json(res, 200, { masterPrompt: MASTER_PROMPT, llm: directorLLM.status() });

@@ -360,6 +360,27 @@ try {
   assert.ok(branches.every(n => n.video && n.terminal && n.video.mime === 'video/mp4'));
   assert.ok(branches.every(n => s.edges.some(e => e.source === A && e.target === n.id)));
 
+  // Download several videos as one ZIP named by shot.
+  const zr = await fetch('http://127.0.0.1:17793/api/videos/zip', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: branches.map(n => n.id) }),
+  });
+  assert.equal(zr.status, 200);
+  assert.match(zr.headers.get('content-type'), /zip/);
+  assert.match(zr.headers.get('content-disposition') || '', /attachment/);
+  const zbuf = Buffer.from(await zr.arrayBuffer());
+  assert.equal(zbuf.subarray(0, 4).toString('hex'), '504b0304', 'starts with the ZIP magic');
+  assert.equal(zbuf.readUInt16LE(zbuf.length - 12), 2, 'archive has two entries');
+  assert.match(zbuf.toString('latin1'), /_v1\.mp4/, 'entries named by shot version');
+  // Empty / unknown selection is rejected.
+  const zbad = await fetch('http://127.0.0.1:17793/api/videos/zip', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: [] }),
+  });
+  assert.equal(zbad.status, 400);
+
   // The video serves inline for playback, but ?dl=<name> forces a download.
   const vurl = 'http://127.0.0.1:17793' + branches[0].video.url;
   let dls = await fetch(vurl);

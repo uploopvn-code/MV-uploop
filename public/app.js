@@ -271,11 +271,38 @@ $('#galleryClear').onclick = () => {
 $('#galleryDownload').onclick = async () => {
   const picked = state.nodes.filter(n => gallerySel.has(n.id) && n.video);
   if (!picked.length) return toast('Chưa chọn video nào', true);
-  for (const n of picked) {
-    triggerDownload(n.video.url, downloadName(n));
-    await new Promise(r => setTimeout(r, 400)); // space out so the browser allows each save
+  // One video: download it directly. Several: package them into one ZIP named by shot.
+  if (picked.length === 1) {
+    triggerDownload(picked[0].video.url, downloadName(picked[0]));
+    return toast('Đang tải video');
   }
-  toast('Đang tải ' + picked.length + ' video');
+  const btn = $('#galleryDownload');
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = 'Đang nén…';
+  try {
+    const r = await fetch('/api/videos/zip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: picked.map(n => n.id) }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Nén thất bại');
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; // a blob URL already carries the right filename via the download attribute
+    a.download = (state.name || 'videos').replace(/[^\w.\- ]+/g, '_') + '.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast('Đã nén ' + picked.length + ' video thành ZIP');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
 };
 $('#galleryDelete').onclick = async () => {
   const picked = state.nodes.filter(n => gallerySel.has(n.id) && n.terminal);
