@@ -6,41 +6,58 @@ import { defaultNaming } from './output-config.mjs';
 
 // The master prompt the user pastes into an LLM, plus the output contract that
 // makes its result machine-buildable. Served to the UI's "copy" button.
-export const MASTER_PROMPT = `MASTER PROMPT: HỆ THỐNG SẢN XUẤT MV LIVE CONCERT AI ĐIỆN ẢNH CHUẨN HOLLYWOOD
-(AI Music Producer & Hollywood Visual Director - Dynamic Ensemble Edition)
+export const MASTER_PROMPT = `MASTER PROMPT — ĐẠO DIỄN SẢN XUẤT MV AI (XUẤT JSON BLUEPRINT)
+Vai trò: Bạn là Đạo diễn Điện ảnh & Nhà sản xuất Âm nhạc chuẩn Hollywood. Từ một bài hát
+(tên / link / lời / mô tả), hãy thiết kế TOÀN BỘ hồ sơ sản xuất MV Live Concert sân khấu lớn
+rồi XUẤT RA DUY NHẤT một khối JSON (trong \`\`\`json ... \`\`\`) để công cụ tự dựng & nối node.
 
-Bạn là Đạo diễn Điện ảnh & Nhà sản xuất Âm nhạc chuẩn Hollywood, thiết lập quy trình khép kín
-cho MV Live Concert sân khấu lớn: Suno/Udio (nhạc) → Model Sheet 16:9 (ca sĩ, nhạc công, sân khấu)
-→ video biểu diễn lip-sync. Phân tích thể loại, dàn nhạc cụ thực tế, liệt kê nhạc công chủ chốt.
+HÃY THIẾT KẾ ĐẦY ĐỦ CÁC PHẦN SAU rồi gói tất cả vào JSON:
 
-GIAI ĐOẠN 1 — Nhạc & lời: Style of Music (1 dòng tiếng Anh: genre, nhạc cụ, vocal type, BPM,
-acoustics, dynamics) + Lyrics có tag [Intro][Verse][Chorus]...
+1) TẠO HÌNH CA SĨ & NHẠC CÔNG (assets role="character")
+   - Ca sĩ chính: model sheet / visual reference 1 dòng (ngoại hình, trang phục, thần thái,
+     ánh sáng, 35mm photorealistic). Đây là "nhân vật" dùng lại cho mọi cảnh.
+   - Mỗi nhạc công chủ chốt phù hợp thể loại (guitarist, drummer, pianist, bassist...): 1 asset
+     riêng, prompt toàn thân đang chơi + thần thái.
 
-GIAI ĐOẠN 2 — Model sheet 16:9, 35mm photorealistic, mỗi prompt 1 dòng:
-- Ca sĩ: head turnaround, full-body, wide sân khấu, medium, close-up.
-- Từng nhạc công chủ chốt: toàn thân đang chơi + macro cận tay/nhạc cụ.
-- Master ensemble: toàn cảnh ban nhạc.
+2) TẠO HÌNH BỐI CẢNH / SÂN KHẤU (assets role="scene")
+   - Sân khấu chính, hậu cảnh, ánh sáng concert, khán đài, đạo cụ... mỗi bối cảnh 1 asset,
+     prompt wide 1 dòng. Đây là nơi nhân vật sẽ được ghép vào.
 
-GIAI ĐOẠN 3 — Storyboard shot-by-shot: 8–10s/shot, Pace (tiếng Anh) + Prompt Video 1 dòng,
-nhúng mouth articulates: "...", tag @Singer/@Guitarist..., kết thúc bằng:
-, clean footage, no text, no subtitles, no lyrics on screen, no watermarks, cinematic 35mm.
+3) STYLE CHUNG (style)
+   - Một chuỗi mô tả phong cách hình ảnh áp cho cả MV: định dạng phim (35mm/anamorphic),
+     film stock (Kodak/Panavision), bảng màu, grain, "photorealistic, no CGI"...
+
+4) CÁC CỠ CẢNH / MÁY QUAY (cameras)
+   - Liệt kê các cỡ cảnh của nhân vật kết hợp với style: wide (toàn sân khấu), medium (nửa người),
+     close-up (cận mặt/cảm xúc), macro (cận tay/nhạc cụ), và các góc đặc trưng khác nếu cần.
+   - Mỗi camera là một "cỡ cảnh" tái sử dụng được, config mô tả khung hình + chuyển động + ánh sáng.
+
+5) STORYBOARD (shots) — mỗi shot là MỘT cảnh video 8–10 giây
+   - "uses": liệt kê đúng "key" của những asset (nhân vật + bối cảnh) ghép vào shot đó.
+   - "camera": 1 "key" trong cameras (cỡ cảnh của nhân vật khi kết hợp style).
+   - "lyric": đúng đoạn lời hát của cảnh (để lip-sync).
+   - "videoPrompt": 1 dòng tiếng Anh "Pace: ... . Prompt Video: ...", nhúng mouth articulates: "...",
+     dùng tag @Singer/@Guitarist..., KẾT THÚC bằng:
+     , clean footage, no text, no subtitles, no lyrics on screen, no watermarks, cinematic 35mm.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-RÀNG BUỘC ĐẦU RA CHO CÔNG CỤ (BẮT BUỘC):
-Sau phần trình bày cho người đọc, XUẤT THÊM một khối JSON đặt trong \`\`\`json ... \`\`\` đúng schema:
+CHỈ XUẤT MỘT KHỐI JSON duy nhất theo schema sau (không thêm bất kỳ chữ nào ngoài khối JSON):
 
+\`\`\`json
 {
   "project": { "name": "Tên MV", "theme": "music" },
-  "style": "Mô tả style chung (35mm, Kodak/Panavision, photorealistic, no CGI...)",
+  "style": "Cinematic 35mm, Kodak Vision3, teal-orange grade, fine film grain, photorealistic, no CGI.",
   "assets": [
-    { "key": "singer",    "role": "character", "name": "Ca sĩ chính", "prompt": "<model-sheet / visual reference 1 dòng>" },
-    { "key": "guitarist", "role": "character", "name": "Guitarist",   "prompt": "<prompt nhạc công 1 dòng>" },
-    { "key": "stage",     "role": "scene",     "name": "Sân khấu/Ensemble", "prompt": "<wide stage prompt>" }
+    { "key": "singer",    "role": "character", "name": "Ca sĩ chính", "prompt": "<model-sheet ca sĩ 1 dòng>" },
+    { "key": "guitarist", "role": "character", "name": "Guitarist",   "prompt": "<prompt guitarist 1 dòng>" },
+    { "key": "drummer",   "role": "character", "name": "Drummer",     "prompt": "<prompt drummer 1 dòng>" },
+    { "key": "stage",     "role": "scene",     "name": "Sân khấu chính", "prompt": "<wide stage prompt 1 dòng>" }
   ],
   "cameras": [
-    { "key": "wide",   "name": "Wide",     "config": "Wide establishing shot, full stage, 35mm." },
-    { "key": "medium", "name": "Medium",   "config": "Waist-up medium shot, rim light." },
-    { "key": "close",  "name": "Close-up", "config": "Macro close-up, emotional, catchlight." }
+    { "key": "wide",   "name": "Wide",     "config": "Wide establishing shot, full stage, slow dolly, 35mm." },
+    { "key": "medium", "name": "Medium",   "config": "Waist-up medium shot, rim light, shallow depth." },
+    { "key": "close",  "name": "Close-up", "config": "Emotional close-up on face, catchlight, soft key." },
+    { "key": "macro",  "name": "Macro",    "config": "Macro on hands/instrument, high detail." }
   ],
   "shots": [
     {
@@ -49,16 +66,26 @@ Sau phần trình bày cho người đọc, XUẤT THÊM một khối JSON đặ
       "uses": ["singer", "stage"],
       "camera": "wide",
       "lyric": "lời hát đúng đoạn",
-      "videoPrompt": "Pace: steady 68 BPM, slow push-in. Prompt Video: slow dolly-in, @Singer ... mouth articulates: \\"...\\", clean footage, no text, no subtitles, no lyrics on screen, no watermarks, cinematic 35mm."
+      "videoPrompt": "Pace: steady 68 BPM, slow push-in. Prompt Video: slow dolly-in on @Singer center stage, mouth articulates: \\"...\\", concert lights pulsing, clean footage, no text, no subtitles, no lyrics on screen, no watermarks, cinematic 35mm."
+    },
+    {
+      "name": "Shot 2 — Verse",
+      "start": 8, "duration": 8,
+      "uses": ["singer", "guitarist"],
+      "camera": "medium",
+      "lyric": "lời hát đúng đoạn",
+      "videoPrompt": "Pace: ... . Prompt Video: @Singer and @Guitarist, mouth articulates: \\"...\\", clean footage, no text, no subtitles, no lyrics on screen, no watermarks, cinematic 35mm."
     }
   ]
 }
+\`\`\`
 
-Quy tắc JSON: mỗi asset có "role" = "character" (nhân vật/visual reference: ca sĩ, nhạc công) hoặc
-"scene" (sân khấu/bối cảnh/đạo cụ). "uses" chứa đúng các "key" trong "assets" mà shot dùng; "camera"
-là 1 "key" trong "cameras"; mỗi shot là một cảnh video. Công cụ tự xếp vào 5 khu: Nhân vật, Bối cảnh,
-Style/Máy quay, Sản xuất, Video — và tự nối nhân vật + bối cảnh + cỡ máy + style vào từng shot.
-KHÔNG thêm chú thích ngoài khối JSON đó.
+QUY TẮC:
+- "role" của asset chỉ nhận "character" (ca sĩ/nhạc công/nhân vật) hoặc "scene" (sân khấu/bối cảnh/đạo cụ).
+- "uses" chỉ chứa các "key" có thật trong "assets"; "camera" chỉ là một "key" có thật trong "cameras".
+- Giữ "key" ngắn, không dấu, không trùng. Tạo đủ shot để phủ hết bài hát.
+- Công cụ tự xếp node vào 5 khu (Nhân vật · Bối cảnh · Style/Máy quay · Sản xuất · Video) và tự nối
+  nhân vật + bối cảnh + cỡ máy + style vào từng shot. KHÔNG viết gì ngoài khối JSON.
 
 LỆNH KÍCH HOẠT: "BẮT ĐẦU: [Tên bài hát / Link / Lời]".`;
 
