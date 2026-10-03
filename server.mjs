@@ -1288,6 +1288,16 @@ const server = http.createServer(async (req, res) => {
       const range = req.headers.range?.match(/^bytes=(\d+)-(\d*)$/);
       res.setHeader('Content-Type', mime);
       res.setHeader('Accept-Ranges', 'bytes');
+      // ?dl=<filename> forces a download (browsers otherwise play video inline). The
+      // name is sent RFC 5987-encoded so Vietnamese letters and dashes survive.
+      const dl = u.searchParams.get('dl');
+      if (dl) {
+        const safe = dl.replace(/[^\w.\- ]+/g, '_').slice(0, 200) || 'download';
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(dl)}`,
+        );
+      }
       if (range) {
         const start = Number(range[1]),
           end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;

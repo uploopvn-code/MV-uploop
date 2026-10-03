@@ -325,6 +325,17 @@ try {
   assert.ok(branches.every(n => n.video && n.terminal && n.video.mime === 'video/mp4'));
   assert.ok(branches.every(n => s.edges.some(e => e.source === A && e.target === n.id)));
 
+  // The video serves inline for playback, but ?dl=<name> forces a download.
+  const vurl = 'http://127.0.0.1:17793' + branches[0].video.url;
+  let dls = await fetch(vurl);
+  assert.equal(dls.headers.get('content-type'), 'video/mp4');
+  assert.ok(!dls.headers.get('content-disposition'), 'plain fetch plays inline');
+  await dls.arrayBuffer();
+  dls = await fetch(vurl + '?dl=' + encodeURIComponent('01_Cảnh — A_v1.mp4'));
+  assert.match(dls.headers.get('content-disposition') || '', /attachment/);
+  assert.match(dls.headers.get('content-disposition') || '', /filename\*=UTF-8''/);
+  await dls.arrayBuffer();
+
   // Re-run adds more versions (keeps the old ones).
   r = await api('/api/auto/video/start', 'POST', { target: A, versions: 1 });
   assert.equal(r.status, 200);

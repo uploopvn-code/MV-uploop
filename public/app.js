@@ -98,9 +98,13 @@ function downloadName(n, kind = 'video') {
   }
   return pad2(n.seq) + '_' + safeName(n.name) + '.' + ext;
 }
+// Point a media URL at the download route so the server forces a file save (browsers
+// otherwise play video inline and ignore the download attribute).
+const dlUrl = (url, name) =>
+  String(url) + (String(url).includes('?') ? '&' : '?') + 'dl=' + encodeURIComponent(name);
 function triggerDownload(url, name) {
   const a = document.createElement('a');
-  a.href = url;
+  a.href = dlUrl(url, name);
   a.download = name;
   document.body.appendChild(a);
   a.click();
@@ -234,7 +238,7 @@ function renderGallery() {
             `<div class="gallery-group"><h3>${g.seq ? '#' + g.seq + ' ' : ''}${esc(g.name)} <small>${g.items.length} video</small></h3><div class="gallery-grid">${g.items
               .map(
                 n =>
-                  `<div class="gallery-item ${gallerySel.has(n.id) ? 'sel' : ''}" data-node="${n.id}"><label class="pick" title="Chọn"><input type="checkbox" data-pick="${n.id}" ${gallerySel.has(n.id) ? 'checked' : ''}></label><div class="preview video"><video muted playsinline preload="metadata" src="${esc(n.video.url)}"></video><span class="play-badge">▶</span></div><div class="gallery-meta"><strong>${esc(n.terminal ? 'v' + (n.version || 1) : n.name)}</strong><a class="text-button" href="${esc(n.video.url)}" download="${esc(downloadName(n))}" data-dl>↓ ${esc(downloadName(n))}</a></div></div>`,
+                  `<div class="gallery-item ${gallerySel.has(n.id) ? 'sel' : ''}" data-node="${n.id}"><label class="pick" title="Chọn"><input type="checkbox" data-pick="${n.id}" ${gallerySel.has(n.id) ? 'checked' : ''}></label><div class="preview video"><video muted playsinline preload="metadata" src="${esc(n.video.url)}"></video><span class="play-badge">▶</span></div><div class="gallery-meta"><strong>${esc(n.terminal ? 'v' + (n.version || 1) : n.name)}</strong><a class="text-button" href="${esc(dlUrl(n.video.url, downloadName(n)))}" download="${esc(downloadName(n))}" data-dl>↓ ${esc(downloadName(n))}</a></div></div>`,
               )
               .join('')}</div></div>`,
         )
@@ -359,7 +363,7 @@ function renderJobs() {
         .reverse()
         .map(
           j =>
-            `<div class="job-row"><div><strong>${esc(state.nodes.find(n => n.id === j.nodeId)?.name)} · ${j.kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</strong><p>${esc(j.payload.website)} · ${new Date(j.createdAt).toLocaleString('vi-VN')}</p>${j.progress ? `<p>${esc(j.progress)}</p>` : ''}${j.error ? `<p>${esc(j.error)}</p>` : ''}${j.warning ? `<p>${esc(j.warning)}</p>` : ''}${j.resultStale ? '<p>Đầu vào đã thay đổi trong khi chạy: cần duyệt lại kết quả.</p>' : ''}</div><span class="badge">${esc({ queued: 'Đang chờ', running: 'Đang chạy', script_completed: 'Kịch bản đã xong', completed: 'Hoàn tất', failed: 'Lỗi', needs_review: 'Cần kiểm tra', cancelled: 'Đã hủy' }[j.status])}</span>${j.status === 'queued' ? `<button class="button" data-cancel="${j.id}">Hủy chờ</button>` : ['needs_review', 'script_completed'].includes(j.status) && (j.payload.output || j.payload.seedvis) ? `<button class="button" data-collect="${j.id}">${j.payload.seedvis ? 'Kiểm tra lại' : 'Nhận file'}</button>` : j.result ? `<a class="button" href="${esc(j.result.url)}" download>Tải kết quả</a>` : '<span></span>'}</div>`,
+            `<div class="job-row"><div><strong>${esc(state.nodes.find(n => n.id === j.nodeId)?.name)} · ${j.kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</strong><p>${esc(j.payload.website)} · ${new Date(j.createdAt).toLocaleString('vi-VN')}</p>${j.progress ? `<p>${esc(j.progress)}</p>` : ''}${j.error ? `<p>${esc(j.error)}</p>` : ''}${j.warning ? `<p>${esc(j.warning)}</p>` : ''}${j.resultStale ? '<p>Đầu vào đã thay đổi trong khi chạy: cần duyệt lại kết quả.</p>' : ''}</div><span class="badge">${esc({ queued: 'Đang chờ', running: 'Đang chạy', script_completed: 'Kịch bản đã xong', completed: 'Hoàn tất', failed: 'Lỗi', needs_review: 'Cần kiểm tra', cancelled: 'Đã hủy' }[j.status])}</span>${j.status === 'queued' ? `<button class="button" data-cancel="${j.id}">Hủy chờ</button>` : ['needs_review', 'script_completed'].includes(j.status) && (j.payload.output || j.payload.seedvis) ? `<button class="button" data-collect="${j.id}">${j.payload.seedvis ? 'Kiểm tra lại' : 'Nhận file'}</button>` : j.result ? `<a class="button" href="${esc(dlUrl(j.result.url, j.result.name || 'ket-qua'))}" download="${esc(j.result.name || 'ket-qua')}">Tải kết quả</a>` : '<span></span>'}</div>`,
         )
         .join('')
     : '<div class="empty">Chưa có tác vụ. Chọn một node và nhấn “Tạo ảnh”.</div>';
@@ -479,7 +483,7 @@ function inspect(id) {
       `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div>` +
       `<p class="field-hint">Phiên bản video${src ? ' từ node “' + esc(src.name) + '”' : ''}. Node này chỉ để xem/tải; tạo lại từ node nguồn.</p>` +
       (n.video
-        ? `<video controls src="${esc(n.video.url)}" style="width:100%;border-radius:8px"></video><p class="field-hint">Tên file tải về: <code>${esc(downloadName(n))}</code></p><div class="actions"><a class="button" href="${esc(n.video.url)}" download="${esc(downloadName(n))}">↓ Tải video</a></div>`
+        ? `<video controls src="${esc(n.video.url)}" style="width:100%;border-radius:8px"></video><p class="field-hint">Tên file tải về: <code>${esc(downloadName(n))}</code></p><div class="actions"><a class="button" href="${esc(dlUrl(n.video.url, downloadName(n)))}" download="${esc(downloadName(n))}">↓ Tải video</a></div>`
         : '<p>Chưa có video.</p>') +
       `<section class="inspector-section"><button class="button wide danger" id="deleteNode">Xóa phiên bản này</button></section>`;
     $('.close').onclick = closeInspector;
