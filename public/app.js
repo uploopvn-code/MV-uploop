@@ -87,6 +87,10 @@ function preview(n, cls = '') {
 }
 function card(n, shot = false) {
   const s = status(n);
+  if (n.kind === 'setting') {
+    const icon = n.settingType === 'camera' ? '🎥' : '🎨';
+    return `<article class="node setting" tabindex="0" role="button" data-node="${n.id}" aria-label="Chỉnh ${esc(n.name)}"><div class="node-top"><span>${icon} ${esc(n.name)}</span><span class="mini">↗</span></div><div class="setting-body">${n.config ? esc(n.config) : '<em>Chưa đặt nội dung</em>'}</div><div class="node-footer"><span class="status">Áp cho node được nối</span></div></article>`;
+  }
   if (n.terminal)
     return `<article class="node terminal" tabindex="0" role="button" data-node="${n.id}" aria-label="Xem ${esc(n.name)}"><div class="node-top"><span>🎬 ${esc(n.name)}</span><span class="mini">↗</span></div><div class="preview video"><video muted playsinline preload="metadata" src="${esc(n.video?.url || '')}"></video><span class="play-badge">▶</span></div><div class="node-footer"><span class="status good">Phiên bản video</span><span>Bấm để xem</span></div></article>`;
   const seq = n.seq ? `<span class="seq">#${n.seq}</span>` : '';
@@ -97,6 +101,7 @@ function card(n, shot = false) {
 function render() {
   const online = state.worker?.online;
   $('#projectName').textContent = state.name;
+  renderProjects();
   $('#workerBadge').textContent = online ? '● Orbit worker đã nối' : '○ Chưa nối Orbit';
   $('#workerBadge').className = 'badge' + (online ? ' online' : '');
   $('#jobCount').textContent = state.jobs.filter(j =>
@@ -104,7 +109,7 @@ function render() {
   ).length;
   renderGraph();
   $('#timelineTrack').innerHTML = state.nodes
-    .slice(3)
+    .filter(n => 'duration' in n && !n.terminal && n.kind !== 'setting')
     .map(
       n =>
         `<button data-node="${n.id}">${esc(n.name)}<small>${n.start}s · ${n.duration}s</small></button>`,
@@ -216,6 +221,56 @@ $('#galleryDelete').onclick = async () => {
     toast(e.message, true);
   }
 };
+const themeLabel = id => (state.themes || []).find(t => t.id === id)?.label || id;
+function renderProjects() {
+  const sel = $('#projectSelect');
+  sel.innerHTML = (state.projects || [])
+    .map(
+      p =>
+        `<option value="${p.id}" ${p.id === state.activeProjectId ? 'selected' : ''}>${esc(p.name)} · ${esc(themeLabel(p.theme))}</option>`,
+    )
+    .join('');
+  document.querySelector('.eyebrow').textContent =
+    'WORKSPACE / ' + themeLabel(state.theme).toUpperCase();
+}
+$('#projectSelect').onchange = async e => {
+  try {
+    state = await api('/api/projects/switch', { method: 'POST', body: { id: e.target.value } });
+    gallerySel.clear();
+    closeInspector();
+    render();
+  } catch (err) {
+    toast(err.message, true);
+    render();
+  }
+};
+$('#newProject').onclick = () => {
+  selected = null;
+  $('#overlay').hidden = false;
+  $('#inspector').hidden = false;
+  $('#inspector').innerHTML =
+    '<div class="inspector-head"><h2>Project mới</h2><button class="close" aria-label="Đóng">×</button></div>' +
+    '<label>Tên project<input id="npName" placeholder="Ví dụ: MV ca khúc X"></label>' +
+    '<label>Chủ đề<select id="npTheme">' +
+    (state.themes || []).map(t => `<option value="${t.id}">${esc(t.label)}</option>`).join('') +
+    '</select></label><p class="field-hint">Project mới được nhân từ bộ node mẫu của chủ đề (kèm node Style và Máy quay).</p>' +
+    '<button class="button primary wide" id="npCreate">Tạo project</button>';
+  $('.close').onclick = closeInspector;
+  $('#npCreate').onclick = async () => {
+    try {
+      state = await api('/api/projects', {
+        method: 'POST',
+        body: { name: $('#npName').value, theme: $('#npTheme').value },
+      });
+      gallerySel.clear();
+      closeInspector();
+      render();
+      toast('Đã tạo project mới');
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+};
 function renderJobs() {
   $('#jobs').innerHTML = state.jobs.length
     ? [...state.jobs]
@@ -276,9 +331,39 @@ function inspect(id) {
   selected = id;
   dirty = false;
   const n = state.nodes.find(n => n.id === id),
-    shot = !['singer', 'stage', 'scene'].includes(id);
+    // Shots carry timing; compose/reference nodes (scene, singer…) do not.
+    shot = n && 'duration' in n && !n.terminal && n.kind !== 'setting';
   $('#inspector').hidden = false;
   $('#overlay').hidden = false;
+  if (n.kind === 'setting') {
+    const targets = state.edges
+      .filter(e => e.source === n.id)
+      .map(e => state.nodes.find(x => x.id === e.target)?.name)
+      .filter(Boolean);
+    $('#inspector').innerHTML =
+      `<div class="inspector-head"><h2>${n.settingType === 'camera' ? '🎥' : '🎨'} ${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div>` +
+      `<p class="field-hint">Node ${n.settingType === 'camera' ? 'máy quay' : 'style'}: nội dung dưới đây được chèn vào prompt của mọi node bạn nối ra. Nối cổng Ra của node này vào node cần áp.</p>` +
+      `<label>Tên<input id="settingName" value="${esc(n.name)}"></label>` +
+      `<label>Nội dung ${n.settingType === 'camera' ? '(mô tả máy quay, góc, ống kính…)' : '(mô tả phong cách, màu, chất liệu…)'}<textarea id="settingConfig" rows="5">${esc(n.config || '')}</textarea></label>` +
+      `<p class="field-hint">Đang áp cho: ${targets.length ? esc(targets.join(', ')) : 'chưa nối node nào'}</p>` +
+      `<section class="inspector-section"><button class="button wide primary" id="saveSetting">Lưu</button>${id.startsWith('node-') ? '<button class="button wide danger" id="deleteNode">Xóa node này</button>' : ''}</section>`;
+    $('.close').onclick = closeInspector;
+    $('#saveSetting').onclick = async () => {
+      try {
+        state = await api('/api/node', {
+          method: 'PATCH',
+          body: { id, name: $('#settingName').value, config: $('#settingConfig').value },
+        });
+        render();
+        inspect(id);
+        toast('Đã lưu');
+      } catch (e) {
+        toast(e.message, true);
+      }
+    };
+    if ($('#deleteNode')) $('#deleteNode').onclick = () => deleteNode(id);
+    return;
+  }
   if (n.terminal) {
     const src = state.nodes.find(x => x.id === n.source);
     $('#inspector').innerHTML =
@@ -841,19 +926,50 @@ $('#projectSettings').onclick = () => {
   $('#inspector').innerHTML =
     '<div class="inspector-head"><h2>Cài đặt project</h2><button class="close" aria-label="Đóng">×</button></div><label>Tên project<input id="projectTitle" value="' +
     esc(state.name) +
-    '"></label><label>Thư mục lưu trên máy chạy Orbit <code class="variable-tag">{{mv_output_dir}}</code><input id="outputDirectory" value="' +
+    '"></label><label>Chủ đề<select id="projectTheme">' +
+    (state.themes || [])
+      .map(
+        t =>
+          `<option value="${t.id}" ${t.id === state.theme ? 'selected' : ''}>${esc(t.label)}</option>`,
+      )
+      .join('') +
+    '</select></label><p class="field-hint">Đổi chủ đề chỉ đổi nhãn phân loại; không dựng lại node. Dùng Project mới để lấy bộ node mẫu của chủ đề khác.</p><label>Thư mục lưu trên máy chạy Orbit <code class="variable-tag">{{mv_output_dir}}</code><input id="outputDirectory" value="' +
     esc(state.outputDirectory) +
-    '"></label><p class="field-hint">Nhập đường dẫn tuyệt đối. Thư mục phải truy cập được bằng cùng đường dẫn từ MV Director và Orbit (cùng máy hoặc thư mục mạng dùng chung). Kịch bản cần tạo thư mục và lưu file; nhập ở đây không tự chuyển thư mục Downloads của trình duyệt.</p><p>Đường dẫn đầy đủ gửi sang Orbit: <code>{{mv_output_path}}</code></p><button class="button primary" id="saveProjectSettings">Lưu cài đặt</button>';
+    '"></label><p class="field-hint">Nhập đường dẫn tuyệt đối. Thư mục phải truy cập được bằng cùng đường dẫn từ MV Director và Orbit (cùng máy hoặc thư mục mạng dùng chung).</p><p>Đường dẫn đầy đủ gửi sang Orbit: <code>{{mv_output_path}}</code></p><button class="button primary wide" id="saveProjectSettings">Lưu cài đặt</button><button class="button wide danger" id="deleteProject">🗑 Xóa project này</button>';
   $('.close').onclick = closeInspector;
   $('#saveProjectSettings').onclick = async () => {
     try {
       state = await api('/api/project', {
         method: 'PATCH',
-        body: { name: $('#projectTitle').value, outputDirectory: $('#outputDirectory').value },
+        body: {
+          name: $('#projectTitle').value,
+          theme: $('#projectTheme').value,
+          outputDirectory: $('#outputDirectory').value,
+        },
       });
       render();
       closeInspector();
-      toast('Đã lưu thư mục cho các tác vụ mới');
+      toast('Đã lưu cài đặt project');
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+  $('#deleteProject').onclick = async () => {
+    if (
+      !confirm(
+        'Xóa project "' + state.name + '" cùng toàn bộ video/ảnh của nó? Không hoàn tác được.',
+      )
+    )
+      return;
+    try {
+      state = await api('/api/projects/delete', {
+        method: 'POST',
+        body: { id: state.activeProjectId },
+      });
+      gallerySel.clear();
+      closeInspector();
+      render();
+      toast('Đã xóa project');
     } catch (e) {
       toast(e.message, true);
     }
@@ -1060,6 +1176,17 @@ $('#addNode').onclick = async () => {
     toast(e.message, true);
   }
 };
+async function addSetting(settingType) {
+  try {
+    state = await api('/api/nodes', { method: 'POST', body: { kind: 'setting', settingType } });
+    render();
+    inspect(state.nodes.at(-1).id);
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+$('#addStyle').onclick = () => addSetting('style');
+$('#addCamera').onclick = () => addSetting('camera');
 $('#autoStart').onclick = async () => {
   try {
     state = await api('/api/auto/start', {

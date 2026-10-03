@@ -1,0 +1,89 @@
+// Multi-project + style/camera setting nodes, against a running server.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import assert from 'node:assert/strict';
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-proj-'));
+const proc = spawn(process.execPath, ['server.mjs'], {
+  cwd: new URL('.', import.meta.url),
+  env: { ...process.env, MV_PORT: '17795', MV_ORBIT_URL: 'http://127.0.0.1:1', MV_DATA_DIR: dir },
+  stdio: 'pipe',
+});
+async function api(p, method = 'GET', body) {
+  const r = await fetch('http://127.0.0.1:17795' + p, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { status: r.status, data: await r.json() };
+}
+const node = (s, id) => s.nodes.find(n => n.id === id);
+try {
+  await new Promise((r, j) => {
+    proc.stdout.once('data', r);
+    proc.once('error', j);
+  });
+  // Default project: music template with style + camera setting nodes.
+  let s = (await api('/api/state')).data;
+  assert.equal(s.projects.length, 1);
+  assert.ok(s.themes.some(t => t.id === 'film'));
+  assert.equal(s.theme, 'music');
+  assert.equal(node(s, 'style').kind, 'setting');
+  assert.equal(node(s, 'camera').settingType, 'camera');
+  // Setting text is injected into connected nodes' prompts.
+  assert.match(node(s, 'scene').resolvedPrompts.image, /Cinematic concert film/);
+  assert.match(node(s, 'wide').resolvedPrompts.video, /35mm lens/);
+  // Setting nodes are not image inputs (scene's references exclude them).
+  assert.ok(!node(s, 'scene').references.some(r => r.role === 'style'));
+
+  // Editing a setting node changes downstream prompts.
+  await api('/api/node', 'PATCH', { id: 'style', config: 'NEON CYBERPUNK LOOK' });
+  s = (await api('/api/state')).data;
+  assert.match(node(s, 'scene').resolvedPrompts.image, /NEON CYBERPUNK LOOK/);
+
+  // A setting node cannot generate.
+  let r = await api('/api/jobs', 'POST', { nodeId: 'style', kind: 'image' });
+  assert.equal(r.status, 400);
+  assert.match(r.data.error, /cài đặt/);
+
+  // Rename a node, to prove project isolation later.
+  await api('/api/node', 'PATCH', { id: 'singer', name: 'CA SĨ A' });
+
+  // Create a film project — becomes active, cloned from the film template.
+  r = await api('/api/projects', 'POST', { name: 'Phim A', theme: 'film' });
+  assert.equal(r.status, 201);
+  s = r.data;
+  assert.equal(s.projects.length, 2);
+  assert.equal(s.theme, 'film');
+  assert.ok(node(s, 'char') && node(s, 'world') && node(s, 'shot1'));
+  assert.ok(!node(s, 'singer'), 'film project has no music nodes');
+  assert.equal(node(s, 'style').kind, 'setting');
+  assert.match(node(s, 'scene').resolvedPrompts.image, /anamorphic/i);
+  const filmId = s.activeProjectId;
+  const musicId = s.projects.find(p => p.id !== filmId).id;
+
+  // Switch back to the music project — its edits persisted and are isolated.
+  s = (await api('/api/projects/switch', 'POST', { id: musicId })).data;
+  assert.equal(node(s, 'singer').name, 'CA SĨ A');
+  assert.match(node(s, 'scene').resolvedPrompts.image, /NEON CYBERPUNK LOOK/);
+  assert.ok(!node(s, 'char'), 'music project unaffected by film project');
+
+  // Each project stores media separately.
+  assert.ok(fs.existsSync(path.join(dir, 'projects', musicId, 'media')));
+  assert.ok(fs.existsSync(path.join(dir, 'projects', filmId, 'media')));
+
+  // Delete the film project; cannot delete the last one.
+  s = (await api('/api/projects/delete', 'POST', { id: filmId })).data;
+  assert.equal(s.projects.length, 1);
+  assert.equal(s.activeProjectId, musicId);
+  assert.ok(!fs.existsSync(path.join(dir, 'projects', filmId)));
+  r = await api('/api/projects/delete', 'POST', { id: musicId });
+  assert.equal(r.status, 400);
+
+  console.log(
+    'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, create/switch/delete projects, isolation, per-project media',
+  );
+} finally {
+  proc.kill();
+}

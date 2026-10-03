@@ -16,6 +16,7 @@ import {
   validateSeedvisBinding,
   videoDuration,
 } from './seedvis-client.mjs';
+import { projectTemplate, themes, themeLabel } from './templates.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,82 +25,126 @@ import { fileURLToPath } from 'node:url';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const data = process.env.MV_DATA_DIR || path.join(root, 'data');
 const port = Number(process.env.MV_PORT || 7788);
-fs.mkdirSync(path.join(data, 'media'), { recursive: true });
-const dbFile = path.join(data, 'project.json');
+// Worker token and Seedvis key stay at the data root, shared by every project.
 const tokenFile = path.join(data, 'worker-token.txt');
+fs.mkdirSync(data, { recursive: true });
 if (!fs.existsSync(tokenFile)) fs.writeFileSync(tokenFile, crypto.randomBytes(32).toString('hex'));
 const workerToken = fs.readFileSync(tokenFile, 'utf8').trim();
 const seedvis = createSeedvis(data);
 const suffix =
   ', clean footage, no text, no subtitles, no lyrics on screen, no watermarks, cinematic 35mm.';
-function initial() {
-  return {
-    name: 'Live Concert đầu tiên',
-    revision: 1,
-    website: '',
-    audio: null,
-    audioDuration: null,
-    fields: {
-      identity: 'Adult singer, dark wavy hair, natural appearance',
-      wardrobe: 'Burgundy velvet evening outfit',
-      instrument: 'Matte black handheld microphone',
-      stage:
-        'Grand concert theater, polished wooden stage, singer center, guitarist left, piano right',
-      lighting: 'Warm amber key light, soft golden rim light, gentle haze',
-      bpm: '',
-    },
-    nodes: [
-      { id: 'singer', name: 'Ca sĩ', prompt: '', image: null, video: null },
-      { id: 'stage', name: 'Sân khấu', prompt: '', image: null, video: null },
-      { id: 'scene', name: 'Ghép cảnh', prompt: '', image: null, video: null },
-      ...['wide', 'medium', 'close'].map((id, i) => ({
-        id,
-        name: ['Toàn cảnh', 'Trung cảnh', 'Cận cảnh'][i],
-        prompt: '',
-        videoPrompt: '',
-        lyric: '',
-        start: i * 8,
-        duration: 8,
-        image: null,
-        video: null,
-      })),
-    ],
-    jobs: [],
-    worker: null,
-  };
+
+// --- Projects: each lives in data/projects/<id>/ with its own project.json + media/.
+const projectsDir = path.join(data, 'projects');
+const workspaceFile = path.join(data, 'workspace.json');
+fs.mkdirSync(projectsDir, { recursive: true });
+const projectDir = id => path.join(projectsDir, id);
+const projectDbFile = id => path.join(projectDir(id), 'project.json');
+const readWorkspace = () => {
+  try {
+    return JSON.parse(fs.readFileSync(workspaceFile, 'utf8'));
+  } catch {
+    return { active: null, order: [] };
+  }
+};
+const writeWorkspace = w => {
+  fs.writeFileSync(workspaceFile + '.tmp', JSON.stringify(w, null, 2));
+  fs.renameSync(workspaceFile + '.tmp', workspaceFile);
+};
+function writeProject(id, d) {
+  fs.mkdirSync(path.join(projectDir(id), 'media'), { recursive: true });
+  fs.writeFileSync(projectDbFile(id), JSON.stringify(d, null, 2));
 }
-let db = fs.existsSync(dbFile) ? JSON.parse(fs.readFileSync(dbFile, 'utf8')) : initial();
-db.outputDirectory ??= path.join(root, 'results');
-for (const n of db.nodes) n.outputNaming ??= { ...defaultNaming };
-// Stable per-node sequence number, used in download file names and shown on the card.
+function createProjectFiles(name, theme) {
+  const id = crypto.randomUUID();
+  const d = projectTemplate(theme);
+  if (name) d.name = String(name).slice(0, 100);
+  writeProject(id, d);
+  return id;
+}
+// One-time migration of the legacy single-project layout.
+const legacyDb = path.join(data, 'project.json');
+if (fs.existsSync(legacyDb) && !fs.existsSync(workspaceFile)) {
+  const id = crypto.randomUUID();
+  fs.mkdirSync(projectDir(id), { recursive: true });
+  fs.renameSync(legacyDb, projectDbFile(id));
+  const legacyMedia = path.join(data, 'media');
+  if (fs.existsSync(legacyMedia)) fs.renameSync(legacyMedia, path.join(projectDir(id), 'media'));
+  writeWorkspace({ active: id, order: [id] });
+}
+let ws = readWorkspace();
+ws.order = (ws.order || []).filter(id => fs.existsSync(projectDbFile(id)));
+if (!ws.order.length) {
+  const id = createProjectFiles(null, 'music');
+  ws = { active: id, order: [id] };
+}
+if (!ws.order.includes(ws.active)) ws.active = ws.order[0];
+writeWorkspace(ws);
+
+let activeId, mediaDir, dbFile, db;
 const nextSeq = () => db.nodes.reduce((m, n) => Math.max(m, n.seq || 0), 0) + 1;
-for (const n of db.nodes) if (!n.terminal && !n.seq) n.seq = nextSeq();
-db.edges ??= [
-  { source: 'singer', target: 'scene' },
-  { source: 'stage', target: 'scene' },
-  ...['wide', 'medium', 'close'].map(target => ({ source: 'scene', target })),
-];
-if (db.autoRun?.status === 'running') {
-  db.autoRun.status = 'stopped';
-  db.autoRun.message = 'Đã khởi động lại. Kiểm tra tác vụ cũ trước khi chạy tiếp.';
-}
-if (db.autoVideoRun?.status === 'running') {
-  db.autoVideoRun.status = 'stopped';
-  db.autoVideoRun.message = 'Đã khởi động lại. Kiểm tra tác vụ cũ trước khi chạy tiếp.';
+// Brings an older or freshly loaded project up to the current shape.
+function normalize(d) {
+  d.outputDirectory ??= path.join(root, 'results');
+  d.theme ??= 'music';
+  for (const n of d.nodes)
+    if (n.kind !== 'setting') {
+      n.outputNaming ??= { ...defaultNaming };
+      if (!n.terminal && !n.seq) n.seq = d.nodes.reduce((m, x) => Math.max(m, x.seq || 0), 0) + 1;
+    }
+  d.edges ??= [
+    { source: 'singer', target: 'scene' },
+    { source: 'stage', target: 'scene' },
+    ...['wide', 'medium', 'close'].map(target => ({ source: 'scene', target })),
+  ];
+  for (const run of [d.autoRun, d.autoVideoRun])
+    if (run?.status === 'running') {
+      run.status = 'stopped';
+      run.message = 'Đã khởi động lại. Kiểm tra tác vụ cũ trước khi chạy tiếp.';
+    }
+  // Never silently resubmit a possibly successful action after a restart.
+  for (const j of d.jobs || [])
+    if (j.status === 'running') {
+      j.status = 'needs_review';
+      j.error = 'Ứng dụng đã khởi động lại. Kiểm tra trước khi tạo lại.';
+    }
+  return d;
 }
 function save() {
   fs.writeFileSync(dbFile + '.tmp', JSON.stringify(db, null, 2));
   fs.renameSync(dbFile + '.tmp', dbFile);
 }
-// Never silently resubmit a possibly successful browser action after a restart.
-for (const j of db.jobs)
-  if (j.status === 'running') {
-    j.status = 'needs_review';
-    j.error = 'Ứng dụng đã khởi động lại. Kiểm tra website trước khi tạo lại.';
-  }
-save();
+function loadProject(id) {
+  activeId = id;
+  mediaDir = path.join(projectDir(id), 'media');
+  fs.mkdirSync(mediaDir, { recursive: true });
+  dbFile = projectDbFile(id);
+  db = normalize(JSON.parse(fs.readFileSync(dbFile, 'utf8')));
+  save();
+}
+const projectList = () =>
+  ws.order.map(id => {
+    try {
+      const d = JSON.parse(fs.readFileSync(projectDbFile(id), 'utf8'));
+      return { id, name: d.name, theme: d.theme || 'music' };
+    } catch {
+      return { id, name: '(lỗi đọc project)', theme: '' };
+    }
+  });
+loadProject(ws.active);
 const getNode = id => db.nodes.find(n => n.id === id);
 const deps = id => db.edges.filter(e => e.target === id).map(e => e.source);
+// Style / camera config nodes: wired into the graph but carry text, not media.
+const isSetting = n => n?.kind === 'setting';
+const settingLabel = { style: 'Style', camera: 'Camera' };
+// Text contributed by the setting nodes connected into `n`.
+function settingText(n) {
+  return deps(n.id)
+    .map(getNode)
+    .filter(s => isSetting(s) && s.config?.trim())
+    .map(s => (settingLabel[s.settingType] || 'Setting') + ': ' + s.config.trim())
+    .join(' ');
+}
 function markChildren(id) {
   for (const n of db.nodes)
     if (!n.terminal && deps(n.id).includes(id)) {
@@ -111,6 +156,7 @@ function markAll() {
   for (const n of db.nodes) if (!n.terminal && (n.image || n.video)) n.stale = true;
 }
 function prompts(n) {
+  if (isSetting(n)) return { image: '', video: '' };
   const f = db.fields,
     common = `${f.identity}. ${f.wardrobe}. ${f.instrument}.`,
     stage = `${f.stage}. ${f.lighting}.`;
@@ -119,14 +165,19 @@ function prompts(n) {
     medium: 'Medium shot, waist-up singer',
     close: 'Close-up three-quarter view, face and microphone',
   };
-  const generated =
-    n.id === 'singer'
+  const hasRefs = assetRefs(n).length > 0;
+  // Music template keeps its tailored prompts; other themes use a generic builder.
+  const generated = ['singer', 'stage', 'scene', 'wide', 'medium', 'close'].includes(n.id)
+    ? n.id === 'singer'
       ? `${common} Neutral reference portrait and clear face, realistic skin texture, no text.`
       : n.id === 'stage'
         ? `${stage} Wide establishing shot of the empty stage, no singer, no text.`
         : n.id === 'scene'
           ? `Place the referenced singer in the referenced stage, preserve identity, outfit and instrument. ${common} ${stage} Wide shot, physically coherent scale, 16:9, photorealistic.`
-          : `${size[n.id] || 'Compose the connected reference images into one coherent photograph'}. Preserve the referenced singer and scene. ${common} ${stage} Photorealistic concert still, 16:9, no text.`;
+          : `${size[n.id] || 'Compose the connected reference images into one coherent photograph'}. Preserve the referenced singer and scene. ${common} ${stage} Photorealistic concert still, 16:9, no text.`
+    : hasRefs
+      ? `Compose the connected reference images into one coherent shot for "${n.name}". Preserve the referenced subjects. ${common} ${stage} 16:9, no text.`
+      : `${n.name}. ${common} ${stage} Clear reference frame, 16:9, no text.`;
   const pace = f.bpm
     ? `Steady ${f.bpm} BPM, natural breathing pauses.`
     : 'Natural breathing and restrained motion; align phrasing to the supplied audio.';
@@ -135,9 +186,17 @@ function prompts(n) {
       ? 'Slow dolly-in'
       : n.id === 'medium'
         ? 'Gentle push-in'
-        : 'Very slow push-in, stable face';
+        : n.id === 'close'
+          ? 'Very slow push-in, stable face'
+          : 'Smooth, motivated camera move';
   let video = `Pace: ${pace} Prompt Video: ${movement}. Preserve the approved keyframe, identity, clothing and lighting. Subtle emotional performance.${n.lyric ? ' mouth articulates: ' + JSON.stringify(n.lyric) + '.' : ''}${suffix}`;
-  return { image: n.prompt || generated, video: n.videoPrompt || video };
+  // Append style / camera text from connected setting nodes.
+  const settings = settingText(n);
+  const withSettings = s => (settings ? s + ' ' + settings : s);
+  return {
+    image: withSettings(n.prompt || generated),
+    video: withSettings(n.videoPrompt || video),
+  };
 }
 // Seedvis is the default generator; a node keeps Orbit when it already has an Orbit
 // binding or was explicitly switched to Orbit (seedvis[kind] === false).
@@ -163,6 +222,7 @@ function providers(n) {
 }
 const assetRefs = n =>
   deps(n.id)
+    .filter(id => !isSetting(getNode(id)))
     .map(id => ({ role: id, asset: getNode(id).image }))
     .filter(r => r.asset);
 function publicState() {
@@ -172,6 +232,9 @@ function publicState() {
     seedvisConfigured: seedvis.configured(),
     seedvisCatalog,
     seedvisDefaults: defaultSeedvis,
+    activeProjectId: activeId,
+    projects: projectList(),
+    themes,
     nodes: db.nodes.map(n => ({
       ...n,
       videoInput: n.videoInput === 'refs' ? 'refs' : 'self',
@@ -221,7 +284,7 @@ function storeAsset(b) {
   if (!bytes.length || bytes.length > 100 * 1024 * 1024)
     throw new Error('File trống hoặc lớn hơn 100 MB.');
   const id = crypto.randomUUID() + '.' + ext;
-  fs.writeFileSync(path.join(data, 'media', id), bytes);
+  fs.writeFileSync(path.join(mediaDir, id), bytes);
   return { id, url: '/media/' + id, mime: b.mime, name: String(b.name || id).slice(0, 200) };
 }
 function mutate() {
@@ -236,6 +299,7 @@ async function createJob(req, b) {
   const n = getNode(b.nodeId);
   if (!n) throw new Error('Node không tồn tại');
   if (n.terminal) throw new Error('Node phiên bản chỉ để xem, không tạo tiếp từ nó.');
+  if (isSetting(n)) throw new Error('Node cài đặt (style/máy quay) không tạo ảnh/video.');
   const kind = b.kind === 'video' ? 'video' : 'image';
   const count = kind === 'video' ? Math.max(1, Math.min(8, Math.floor(Number(b.count) || 1))) : 1;
   // Branch mode: each produced version becomes its own output node.
@@ -266,9 +330,11 @@ async function createJob(req, b) {
     throw new Error(
       'Cần ảnh của node này trước khi tạo video, hoặc chuyển sang dùng ảnh node nối vào.',
     );
-  if ((kind === 'image' || videoFromRefs) && deps(n.id).some(id => !getNode(id).image))
+  // Setting-node parents carry text, not images; they never block generation.
+  const imgParents = deps(n.id).filter(id => !isSetting(getNode(id)));
+  if ((kind === 'image' || videoFromRefs) && imgParents.some(id => !getNode(id).image))
     throw new Error('Hãy tạo hoặc tải ảnh các node nối vào trước.');
-  if (kind === 'image' && deps(n.id).some(id => getNode(id).stale))
+  if (kind === 'image' && imgParents.some(id => getNode(id).stale))
     throw new Error('Ảnh node nối vào đã thay đổi. Hãy tạo lại trước.');
   if (kind === 'video' && !videoFromRefs && n.stale)
     throw new Error('Ảnh cần cập nhật sau thay đổi đầu vào. Hãy tạo lại hoặc tải ảnh đã duyệt.');
@@ -424,7 +490,7 @@ function seedvisImages(j) {
     if (!/^[a-f0-9-]+\.(png|jpg|webp)$/.test(ref.asset.id))
       throw new Error('Ảnh tham chiếu không hợp lệ.');
     return {
-      data: fs.readFileSync(path.join(data, 'media', ref.asset.id)).toString('base64'),
+      data: fs.readFileSync(path.join(mediaDir, ref.asset.id)).toString('base64'),
       file_name: ref.role + '-' + ref.asset.id,
     };
   });
@@ -459,7 +525,7 @@ async function runJob(req, j) {
     if (j.payload.seedvis) {
       storeSeedvisResults(j, await seedvis.run(j, seedvisImages(j), onProgress, save));
     } else {
-      await prepareInputs(j, path.join(data, 'media'));
+      await prepareInputs(j, mediaDir);
       save();
       await executeOrbit(req, j, onProgress);
       j.progress = 'Đang chờ file đầu ra';
@@ -679,7 +745,42 @@ const server = http.createServer(async (req, res) => {
       db.outputDirectory = outputDirectory;
       if ('website' in b) db.website = String(b.website).slice(0, 500);
       if ('name' in b) db.name = String(b.name).slice(0, 100);
+      if ('theme' in b && themes.some(t => t.id === b.theme)) db.theme = b.theme;
       mutate();
+      return json(res, 200, publicState());
+    }
+    if (p === '/api/projects' && req.method === 'GET')
+      return json(res, 200, { active: activeId, projects: projectList(), themes });
+    if (p === '/api/projects' && req.method === 'POST') {
+      requireIdle();
+      const b = await body(req);
+      const theme = themes.some(t => t.id === b.theme) ? b.theme : 'music';
+      const id = createProjectFiles(b.name, theme);
+      ws.order.push(id);
+      ws.active = id;
+      writeWorkspace(ws);
+      loadProject(id);
+      return json(res, 201, publicState());
+    }
+    if (p === '/api/projects/switch' && req.method === 'POST') {
+      requireIdle();
+      const b = await body(req);
+      if (!ws.order.includes(b.id)) throw new Error('Project không tồn tại.');
+      ws.active = b.id;
+      writeWorkspace(ws);
+      loadProject(b.id);
+      return json(res, 200, publicState());
+    }
+    if (p === '/api/projects/delete' && req.method === 'POST') {
+      requireIdle();
+      const b = await body(req);
+      if (!ws.order.includes(b.id)) throw new Error('Project không tồn tại.');
+      if (ws.order.length === 1) throw new Error('Phải còn ít nhất một project.');
+      fs.rmSync(projectDir(b.id), { recursive: true, force: true });
+      ws.order = ws.order.filter(x => x !== b.id);
+      if (ws.active === b.id) ws.active = ws.order[0];
+      writeWorkspace(ws);
+      loadProject(ws.active);
       return json(res, 200, publicState());
     }
     if (p === '/api/node' && req.method === 'PATCH') {
@@ -722,6 +823,7 @@ const server = http.createServer(async (req, res) => {
         if (!Number.isFinite(v) || v < 1 || v > 9999) throw new Error('Số thứ tự không hợp lệ.');
         next.seq = v;
       }
+      if ('config' in b && isSetting(n)) next.config = String(b.config).slice(0, 5000);
       for (const k of ['prompt', 'videoPrompt', 'lyric'])
         if (k in b) next[k] = String(b[k]).slice(0, 20000);
       for (const k of ['start', 'duration'])
@@ -732,10 +834,12 @@ const server = http.createServer(async (req, res) => {
           next[k] = v;
         }
       const imageChanged = next.prompt !== n.prompt;
+      const configChanged = isSetting(n) && next.config !== n.config;
       const changed = JSON.stringify(n) !== JSON.stringify(next);
       Object.assign(n, next);
       if (changed && n.video) n.videoStale = true;
-      if (imageChanged) {
+      // A style/camera change or an image-prompt change invalidates children.
+      if (imageChanged || configChanged) {
         if (n.image) n.stale = true;
         markChildren(n.id);
       }
@@ -776,19 +880,31 @@ const server = http.createServer(async (req, res) => {
       requireIdle();
       const b = await body(req);
       if (db.nodes.length >= 100) throw new Error('Giới hạn 100 node/project.');
-      const node = {
-        id: 'node-' + crypto.randomUUID(),
-        name: String(b.name || 'Ảnh mới').slice(0, 100),
-        seq: nextSeq(),
-        prompt: '',
-        videoPrompt: '',
-        lyric: '',
-        start: 0,
-        duration: 8,
-        image: null,
-        video: null,
-        outputNaming: { ...defaultNaming },
-      };
+      const node =
+        b.kind === 'setting'
+          ? {
+              id: 'node-' + crypto.randomUUID(),
+              kind: 'setting',
+              settingType: b.settingType === 'camera' ? 'camera' : 'style',
+              name: String(b.name || (b.settingType === 'camera' ? 'Máy quay' : 'Style')).slice(
+                0,
+                100,
+              ),
+              config: String(b.config || '').slice(0, 5000),
+            }
+          : {
+              id: 'node-' + crypto.randomUUID(),
+              name: String(b.name || 'Ảnh mới').slice(0, 100),
+              seq: nextSeq(),
+              prompt: '',
+              videoPrompt: '',
+              lyric: '',
+              start: 0,
+              duration: 8,
+              image: null,
+              video: null,
+              outputNaming: { ...defaultNaming },
+            };
       db.nodes.push(node);
       mutate();
       return json(res, 201, publicState());
@@ -830,9 +946,9 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/auto/start' && req.method === 'POST') {
       requireIdle();
       const b = await body(req),
-        // Output nodes hold a finished video; they are never regenerated.
+        // Output nodes hold a finished video; setting nodes carry text. Skip both.
         order = orderGraph(db.nodes, db.edges, b.target || null).filter(
-          id => !getNode(id).terminal,
+          id => !getNode(id).terminal && !isSetting(getNode(id)),
         ),
         rerun = new Set();
       for (const id of order) {
@@ -887,7 +1003,7 @@ const server = http.createServer(async (req, res) => {
       const versions = Math.max(1, Math.min(8, Math.floor(Number(b.versions) || 1)));
       // Eligible: video-capable Seedvis nodes whose video input is already ready.
       const eligible = db.nodes.filter(n => {
-        if (n.terminal || ['singer', 'stage', 'scene'].includes(n.id)) return false;
+        if (n.terminal || isSetting(n) || ['singer', 'stage', 'scene'].includes(n.id)) return false;
         if (b.target && n.id !== b.target) return false;
         if (providers(n).video.type !== 'seedvis') return false;
         if (n.videoInput === 'refs') {
@@ -1028,7 +1144,7 @@ const server = http.createServer(async (req, res) => {
       const name = p.slice(7);
       if (!/^[a-f0-9-]+\.(png|jpg|webp|mp4|webm|mp3|wav|m4a|ogg)$/.test(name))
         return json(res, 404, { error: 'Not found' });
-      const file = path.join(data, 'media', name);
+      const file = path.join(mediaDir, name);
       if (!fs.existsSync(file)) return json(res, 404, { error: 'Not found' });
       const ext = path.extname(name),
         mime = {

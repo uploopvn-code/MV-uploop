@@ -22,7 +22,9 @@
           <h1 id="projectName">Live Concert đầu tiên</h1>
         </div>
         <div class="header-actions">
-          <span id="workerBadge" class="badge">Chưa nối web worker</span
+          <select id="projectSelect" class="button" aria-label="Chọn project"></select
+          ><button class="button" id="newProject">＋ Project</button
+          ><span id="workerBadge" class="badge">Chưa nối web worker</span
           ><button class="button" id="projectSettings">⚙ Project</button
           ><button class="button" id="export">↓ Xuất prompt</button>
         </div>
@@ -44,6 +46,8 @@
           ><button id="zoomIn" class="button" aria-label="Phóng to">＋</button
           ><button id="fitCanvas" class="button">Vừa khung</button
           ><button id="addNode" class="button">＋ Thêm node ảnh</button
+          ><button id="addStyle" class="button">＋ Style</button
+          ><button id="addCamera" class="button">＋ Máy quay</button
           ><select id="autoTarget" aria-label="Node đích chạy tự động">
             <option value="">Toàn bộ workflow</option></select
           ><button id="autoStart" class="button primary">▶ Tự động tạo ảnh</button

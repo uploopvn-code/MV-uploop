@@ -6,7 +6,7 @@ Mở http://127.0.0.1:7788 hoặc chạy Start-MV-Director.ps1.
 Yêu cầu Node.js 22 trở lên. Không cần `npm install` (không có thư viện phụ thuộc).
 
     npm start            # chạy server tại http://127.0.0.1:7788
-    npm test             # chạy toàn bộ 6 bộ kiểm thử (gồm Seedvis giả lập)
+    npm test             # chạy toàn bộ 7 bộ kiểm thử
     npm run format       # định dạng lại code bằng Prettier
 
 Biến môi trường: `MV_PORT` (cổng, mặc định 7788), `MV_DATA_DIR` (thư mục dữ liệu,
@@ -17,6 +17,22 @@ Bấm một thẻ để sửa prompt, upload ảnh/video hoặc xếp tác vụ.
 trang phục, nhạc cụ, ánh sáng được kế thừa từ Chỉnh mô tả chung.
 Ảnh ở các node trước được đính kèm vào dữ liệu job của node sau.
 Đây là bản thử giao diện 3 shot, chưa phải hệ thống sản xuất MV hàng loạt.
+
+## Nhiều project & chủ đề
+- Thanh trên cùng có ô chọn **project** và nút **＋ Project**. Mỗi project lưu riêng
+  node, ảnh, video, và cài đặt — không lẫn nhau (ở `data/projects/<id>/`).
+- Tạo project mới: đặt tên + chọn **chủ đề** (Music/MV, Phim, Hoạt hình, Khác). Project
+  được **nhân từ bộ node mẫu của chủ đề** (kèm node Style và Máy quay).
+- Đổi/xóa project trong **⚙ Project**. Luôn còn ít nhất một project.
+- API key Seedvis và worker token dùng chung cho mọi project (lưu ở gốc `data/`).
+
+## Node Style & Máy quay
+- Là node trên canvas (nét đứt). Nội dung của chúng được **chèn vào prompt** của mọi
+  node mà bạn nối cổng **Ra** của chúng vào.
+- Thêm bằng **＋ Style** / **＋ Máy quay** trên thanh công cụ; bấm node để sửa nội dung.
+- Style = mô tả phong cách/màu/chất liệu; Máy quay = góc máy/ống kính/chuyển động.
+- Node cài đặt không tạo ảnh/video và không nằm trong chạy tự động; đổi nội dung sẽ đánh
+  dấu các node nối sau cần cập nhật.
 
 ## Tạo ảnh / video bằng Seedvis API
 1. Kết nối web → Seedvis API → dán API key → Lưu key → Kiểm tra kết nối.

@@ -326,7 +326,12 @@ try {
 
   // The key never reaches the browser state.
   assert.ok(!JSON.stringify((await api('/api/state')).data).includes(KEY));
-  assert.ok(!fs.readFileSync(path.join(dir, 'project.json'), 'utf8').includes(KEY));
+  const projRoot = path.join(dir, 'projects');
+  const projJson = fs
+    .readdirSync(projRoot)
+    .map(id => fs.readFileSync(path.join(projRoot, id, 'project.json'), 'utf8'))
+    .join('');
+  assert.ok(!projJson.includes(KEY));
   console.log(
     'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency, auto-video versions+branch+rerun+delete, key not exposed',
   );
