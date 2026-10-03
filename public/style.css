@@ -1019,3 +1019,97 @@ h4 {
   min-width: 40px;
   text-align: center;
 }
+
+/* Số thứ tự node */
+.seq {
+  display: inline-block;
+  background: #2b3550;
+  color: #bcd2ff;
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+/* Thư viện video */
+.gallery-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  position: sticky;
+  top: 0;
+  background: #101216;
+  padding: 8px 0;
+  z-index: 2;
+}
+.gallery-bar #gallerySelected {
+  font-size: 13px;
+  color: var(--muted);
+  margin-right: auto;
+}
+.gallery-group {
+  margin-bottom: 26px;
+}
+.gallery-group h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+}
+.gallery-group h3 small {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 6px;
+}
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+.gallery-item {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #16191f;
+  cursor: pointer;
+}
+.gallery-item.sel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(159, 196, 108, 0.4);
+}
+.gallery-item .preview.video {
+  height: 118px;
+}
+.gallery-item .pick {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+  padding: 3px;
+  line-height: 0;
+}
+.gallery-item .pick input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+.gallery-meta {
+  padding: 9px 11px;
+}
+.gallery-meta strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.gallery-meta a {
+  font-size: 11px;
+  word-break: break-all;
+}

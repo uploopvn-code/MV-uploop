@@ -56,6 +56,17 @@ tạo lượt mới. Không bao giờ tự gửi lại sau khi Seedvis đã nh�
 khi đang chạy → job ở Cần kiểm tra; bấm Kiểm tra lại trong Hàng đợi để đọc tiếp đúng job đó.
 Seedvis từ chối (lỗi 4xx hoặc failed) → job Lỗi, sửa prompt/ảnh rồi tạo lại.
 
+## Thư viện Video & số thứ tự node
+- Thanh bên trái có mục **🎬 Video**: gom mọi video đã tạo theo node nguồn (kèm số thứ tự
+  và tên node). Mỗi video có nút xem, tải, và **ô tick** để chọn nhiều bản của cùng node.
+  Thanh trên cùng: **Chọn tất cả / Bỏ chọn / Tải đã chọn / Xóa đã chọn** (xóa áp dụng cho
+  node phiên bản).
+- **Số thứ tự (STT)** hiện trên mỗi node (badge `#3`), tự đánh khi tạo node, sửa được trong
+  node (ô "Số thứ tự").
+- **Tên file tải về** theo STT + tên node để nhận đúng nguồn:
+  - Node thường: `03_Toàn cảnh.mp4`
+  - Node phiên bản: `03_Toàn cảnh_v2.mp4`
+
 ## Dây nối
 Bấm vào một dây để chọn (dây chuyển đỏ nét đứt), rồi bấm nút × ở giữa dây hoặc phím Delete.
 Vẫn có danh sách dây kèm nút × dưới canvas. Không sửa dây khi đang có job chờ/chạy.

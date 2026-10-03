@@ -71,6 +71,9 @@ function initial() {
 let db = fs.existsSync(dbFile) ? JSON.parse(fs.readFileSync(dbFile, 'utf8')) : initial();
 db.outputDirectory ??= path.join(root, 'results');
 for (const n of db.nodes) n.outputNaming ??= { ...defaultNaming };
+// Stable per-node sequence number, used in download file names and shown on the card.
+const nextSeq = () => db.nodes.reduce((m, n) => Math.max(m, n.seq || 0), 0) + 1;
+for (const n of db.nodes) if (!n.terminal && !n.seq) n.seq = nextSeq();
 db.edges ??= [
   { source: 'singer', target: 'scene' },
   { source: 'stage', target: 'scene' },
@@ -368,6 +371,9 @@ function createBranchNode(sourceId, asset) {
     name: (src?.name || 'Video') + ' · v' + version,
     terminal: true,
     source: sourceId,
+    sourceSeq: src?.seq || null,
+    sourceName: src?.name || '',
+    version,
     image: null,
     video: asset,
     prompt: '',
@@ -711,6 +717,11 @@ const server = http.createServer(async (req, res) => {
                   : validateSeedvisBinding(kind, b.seedvis[kind]);
       }
       if ('videoInput' in b) next.videoInput = b.videoInput === 'refs' ? 'refs' : 'self';
+      if ('seq' in b) {
+        const v = Math.floor(Number(b.seq));
+        if (!Number.isFinite(v) || v < 1 || v > 9999) throw new Error('Số thứ tự không hợp lệ.');
+        next.seq = v;
+      }
       for (const k of ['prompt', 'videoPrompt', 'lyric'])
         if (k in b) next[k] = String(b[k]).slice(0, 20000);
       for (const k of ['start', 'duration'])
@@ -768,6 +779,7 @@ const server = http.createServer(async (req, res) => {
       const node = {
         id: 'node-' + crypto.randomUUID(),
         name: String(b.name || 'Ảnh mới').slice(0, 100),
+        seq: nextSeq(),
         prompt: '',
         videoPrompt: '',
         lyric: '',
