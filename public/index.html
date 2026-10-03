@@ -30,69 +30,63 @@
         </div>
       </header>
       <section id="studio" class="view">
-        <div class="intro">
-          <div>
-            <h2>Từ nhân vật đến từng góc máy.</h2>
-            <p>Tạo hoặc tải ảnh lên. Duyệt ảnh từng bước, rồi chuyển thành video.</p>
-          </div>
-          <label class="button upload-song"
-            >♫ <span id="songName">Thêm bài hát</span
-            ><input type="file" accept="audio/*" id="audioUpload" hidden
-          /></label>
+        <div class="graph-area" id="graphArea">
+          <div class="graph-scroll"><div id="graphCanvas"></div></div>
+          <aside class="graph-side">
+            <button id="fullscreenToggle" class="button">⛶ Toàn màn hình</button>
+            <div class="side-zoom">
+              <button id="zoomOut" class="button" aria-label="Thu nhỏ">−</button
+              ><span id="zoomValue">100%</span
+              ><button id="zoomIn" class="button" aria-label="Phóng to">＋</button>
+            </div>
+            <button id="fitCanvas" class="button">Vừa khung</button>
+            <button id="arrangeZones" class="button" title="Xếp node vào 3 khu vực theo thứ tự">
+              ⬓ Xếp khu vực
+            </button>
+            <div class="side-sep"></div>
+            <div class="side-title">Thêm node</div>
+            <button id="addNode" class="button">＋ Node ảnh</button>
+            <button id="addStyle" class="button">＋ Style</button>
+            <button id="addCamera" class="button">＋ Máy quay</button>
+            <div class="side-sep"></div>
+            <div class="side-title">Tạo tự động</div>
+            <label
+              >Chạy đến<select id="autoTarget" aria-label="Node đích chạy tự động">
+                <option value="">Toàn bộ workflow</option>
+              </select></label
+            >
+            <button id="autoStart" class="button primary">▶ Tạo ảnh</button>
+            <button id="autoStop" class="button">Dừng tạo ảnh</button>
+            <label
+              >Số phiên bản video<select
+                id="videoVersions"
+                aria-label="Số phiên bản video mỗi node"
+              >
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+              </select></label
+            >
+            <button id="autoVideoStart" class="button primary">▶ Tạo video</button>
+            <button id="autoVideoStop" class="button">Dừng tạo video</button>
+            <p id="autoStatus" class="field-hint"></p>
+            <p id="autoVideoStatus" class="field-hint"></p>
+            <div class="side-sep"></div>
+            <label class="button upload-song"
+              >♫ <span id="songName">Thêm bài hát</span
+              ><input type="file" accept="audio/*" id="audioUpload" hidden
+            /></label>
+            <button class="text-button" id="editBrief">Chỉnh mô tả chung ↗</button>
+            <audio id="songPlayer" controls hidden></audio>
+          </aside>
         </div>
-        <div class="graph-toolbar">
-          <button id="zoomOut" class="button" aria-label="Thu nhỏ">−</button
-          ><span id="zoomValue">100%</span
-          ><button id="zoomIn" class="button" aria-label="Phóng to">＋</button
-          ><button id="fitCanvas" class="button">Vừa khung</button
-          ><button id="arrangeZones" class="button" title="Xếp node vào 3 khu vực theo thứ tự">
-            ⬓ Xếp khu vực</button
-          ><button id="addNode" class="button">＋ Thêm node ảnh</button
-          ><button id="addStyle" class="button">＋ Style</button
-          ><button id="addCamera" class="button">＋ Máy quay</button
-          ><select id="autoTarget" aria-label="Node đích chạy tự động">
-            <option value="">Toàn bộ workflow</option></select
-          ><button id="autoStart" class="button primary">▶ Tự động tạo ảnh</button
-          ><button id="autoStop" class="button">Dừng sau node hiện tại</button
-          ><span class="toolbar-sep"></span
-          ><label class="inline-field"
-            >Phiên bản<select id="videoVersions" aria-label="Số phiên bản video mỗi node">
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-            </select></label
-          ><button id="autoVideoStart" class="button primary">▶ Tự động tạo video</button
-          ><button id="autoVideoStop" class="button">Dừng tạo video</button>
-        </div>
-        <p id="autoStatus" class="field-hint"></p>
-        <p id="autoVideoStatus" class="field-hint"></p>
         <p id="connectHint" class="field-hint">
           Kéo dây từ Out sang In · Bấm vào dây rồi bấm × (hoặc phím Delete) để xóa · Kéo thanh tên
           để di chuyển node · Kéo nền để pan · Lăn chuột để zoom.
         </p>
-        <div class="graph-scroll"><div id="graphCanvas"></div></div>
         <div id="edgeList" class="edge-list"></div>
-        <div class="bottom-note">
-          <span>✦</span>
-          <div>
-            <strong>Prompt tự kế thừa từ bước trước</strong>
-            <p>
-              Nhân vật, trang phục, nhạc cụ và ánh sáng được truyền sang từng shot. Không cần viết
-              lại.
-            </p>
-          </div>
-          <button class="text-button" id="editBrief">Chỉnh mô tả chung ↗</button>
-        </div>
-        <section class="timeline">
-          <div class="timeline-head">
-            <h3>Timeline thử nghiệm</h3>
-            <span>Chỉnh thời gian trong từng node</span>
-          </div>
-          <div class="track" id="timelineTrack"></div>
-          <p class="muted">Thời gian hiện là mẫu, chưa phân tích hoặc căn theo audio.</p>
-          <audio id="songPlayer" controls hidden></audio>
-        </section>
+        <div class="track" id="timelineTrack" hidden></div>
       </section>
       <section id="queue" class="view" hidden>
         <div class="section-heading">

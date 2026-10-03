@@ -850,7 +850,6 @@ h4 {
 }
 .graph-scroll {
   overflow: auto;
-  max-height: 760px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #12151a;
@@ -942,8 +941,9 @@ h4 {
 }
 
 .graph-scroll {
-  height: 690px;
-  max-height: 75vh;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
   overflow: hidden;
   position: relative;
   touch-action: none;
@@ -1174,4 +1174,76 @@ h4 {
 }
 .graph-node {
   z-index: 1;
+}
+
+/* Khu vực làm việc rộng + thanh công cụ dọc bên phải */
+.graph-area {
+  display: flex;
+  gap: 12px;
+  height: calc(100vh - 150px);
+  min-height: 420px;
+  margin-top: 6px;
+}
+.graph-side {
+  width: 208px;
+  flex: none;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-right: 2px;
+}
+.graph-side .button {
+  width: 100%;
+  text-align: center;
+}
+.graph-side label {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.graph-side select {
+  margin-top: 4px;
+}
+.graph-side .text-button {
+  margin-top: 2px;
+}
+.graph-side #songPlayer {
+  width: 100%;
+  margin-top: 6px;
+}
+.side-zoom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.side-zoom .button {
+  flex: 1;
+}
+.side-zoom #zoomValue {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.side-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 5px 0;
+}
+.side-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6f7682;
+}
+.graph-area.full {
+  position: fixed;
+  inset: 0;
+  height: 100vh;
+  z-index: 60;
+  margin: 0;
+  padding: 10px;
+  background: #0d0f13;
 }

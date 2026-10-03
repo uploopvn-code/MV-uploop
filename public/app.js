@@ -1237,6 +1237,16 @@ async function addSetting(settingType) {
 }
 $('#addStyle').onclick = () => addSetting('style');
 $('#addCamera').onclick = () => addSetting('camera');
+$('#fullscreenToggle').onclick = () => {
+  const full = $('#graphArea').classList.toggle('full');
+  $('#fullscreenToggle').textContent = full ? '⤢ Thu nhỏ' : '⛶ Toàn màn hình';
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('#graphArea').classList.contains('full') && $('#inspector').hidden) {
+    $('#graphArea').classList.remove('full');
+    $('#fullscreenToggle').textContent = '⛶ Toàn màn hình';
+  }
+});
 $('#autoStart').onclick = async () => {
   try {
     state = await api('/api/auto/start', {
