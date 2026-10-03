@@ -592,8 +592,10 @@ function seedvisImages(j) {
     };
   });
 }
-// Seedvis jobs run concurrently (up to this cap); Orbit runs one at a time.
-const SV_CAP = Math.max(1, Number(process.env.MV_SEEDVIS_CONCURRENCY) || 3);
+// Seedvis handles its own queue, so we submit every ready job at once (push max) instead
+// of trickling them; Seedvis queues what its streams can't run yet. The cap only guards
+// against absurd fan-out and can be tuned with MV_SEEDVIS_CONCURRENCY. Orbit stays serial.
+const SV_CAP = Math.max(1, Number(process.env.MV_SEEDVIS_CONCURRENCY) || 64);
 const svActive = new Set();
 let orbitBusy = false;
 let lastReq = null;

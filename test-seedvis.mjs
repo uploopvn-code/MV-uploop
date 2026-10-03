@@ -322,6 +322,16 @@ try {
   await settle(jb);
   assert.ok(maxInFlight >= 2, 'two Seedvis jobs overlapped (maxInFlight=' + maxInFlight + ')');
 
+  // Push max: more than the old cap of 3 submit at once (Seedvis queues the rest).
+  const many = [];
+  for (let i = 0; i < 5; i++) many.push(await mkNode('Đẩy luồng ' + i));
+  maxInFlight = 0;
+  const manyJobs = [];
+  for (const id of many)
+    manyJobs.push((await api('/api/jobs', 'POST', { nodeId: id, kind: 'video' })).data.job.id);
+  for (const id of manyJobs) await settle(id);
+  assert.ok(maxInFlight >= 4, 'many jobs run in parallel (maxInFlight=' + maxInFlight + ')');
+
   // --- Auto video run, 2 versions, scoped to node A → 2 output branch nodes.
   const nap = ms => new Promise(r => setTimeout(r, ms));
   const settleAuto = async () => {
@@ -449,7 +459,7 @@ try {
     .join('');
   assert.ok(!projJson.includes(KEY));
   console.log(
-    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency, auto-video versions+branch+rerun+delete, retry failed videos, key not exposed',
+    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency (push max), auto-video versions+branch+rerun+delete, retry failed videos, key not exposed',
   );
 } finally {
   proc.kill();

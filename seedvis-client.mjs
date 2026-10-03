@@ -392,6 +392,8 @@ export function createSeedvis(dataDir) {
     onProgress('Đang gửi yêu cầu tới Seedvis · ' + job.payload.seedvis.modelName);
     let json;
     for (let attempt = 1; ; attempt++) {
+      if (job.aborted)
+        throw Object.assign(new Error('Đã dừng theo yêu cầu.'), { aborted: true, definite: true });
       try {
         // Same Idempotency-Key on every retry: Seedvis returns the same job, no second charge.
         json = await call(endpoint, {
@@ -402,14 +404,23 @@ export function createSeedvis(dataDir) {
         });
         break;
       } catch (e) {
-        const transient = !e.status || e.status === 429 || e.status === 503;
-        if (!transient || attempt >= 4) {
+        // The plan's concurrency+queue is full (422): wait for a slot instead of failing,
+        // so pushing every job at once degrades to queueing rather than errors.
+        const queueFull =
+          e.status === 422 && /queue|concurren|limit|capacity|too many/i.test(e.message || '');
+        const transient = !e.status || e.status === 429 || e.status === 503 || queueFull;
+        const maxAttempts = queueFull ? 12 : 4;
+        if (!transient || attempt >= maxAttempts) {
           // A clear 4xx means Seedvis created nothing; a network error leaves it uncertain.
           if (e.status && e.status < 500) e.definite = true;
           throw e;
         }
-        onProgress('Seedvis bận, gửi lại cùng mã chống trùng (' + attempt + ')');
-        await sleep(e.retryAfter ? e.retryAfter * 1000 : 2000 * 2 ** attempt);
+        onProgress(
+          queueFull
+            ? 'Hàng chờ Seedvis đầy, chờ chỗ trống (' + attempt + ')'
+            : 'Seedvis bận, gửi lại cùng mã chống trùng (' + attempt + ')',
+        );
+        await sleep(e.retryAfter ? e.retryAfter * 1000 : Math.min(30000, 2000 * 2 ** attempt));
       }
     }
     const state = lifecycle(json);
