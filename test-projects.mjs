@@ -126,6 +126,16 @@ try {
   // A bad bundle is rejected.
   assert.equal((await api('/api/projects/import', 'POST', { foo: 1 })).status, 400);
 
+  // A dangling edge (pointing to a missing node) must not break state — repaired on load.
+  const musicFile = path.join(dir, 'projects', musicId, 'project.json');
+  const pj = JSON.parse(fs.readFileSync(musicFile, 'utf8'));
+  pj.edges.push({ source: 'ghost-node', target: 'scene' });
+  fs.writeFileSync(musicFile, JSON.stringify(pj));
+  await api('/api/projects/switch', 'POST', { id: importedId }); // away…
+  const back = await api('/api/projects/switch', 'POST', { id: musicId }); // …and back = reload
+  assert.equal(back.status, 200, 'state still loads with a dangling edge');
+  assert.ok(!back.data.edges.some(e => e.source === 'ghost-node'), 'dangling edge repaired');
+
   console.log(
     'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, zones, per-zone numbering + reorder, create/switch/delete projects, isolation, per-project media, export/import backup',
   );

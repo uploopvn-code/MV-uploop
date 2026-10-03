@@ -151,6 +151,10 @@ function normalize(d) {
     { source: 'stage', target: 'scene' },
     ...['wide', 'medium', 'close'].map(target => ({ source: 'scene', target })),
   ];
+  // Drop edges that point to a node that no longer exists — a dangling edge would make
+  // reference-resolution throw and 500 the whole state (blank page).
+  const ids = new Set(d.nodes.map(n => n.id));
+  d.edges = d.edges.filter(e => ids.has(e.source) && ids.has(e.target));
   for (const run of [d.autoRun, d.autoVideoRun])
     if (run?.status === 'running') {
       run.status = 'stopped';
@@ -276,8 +280,9 @@ function providers(n) {
 }
 const assetRefs = n =>
   deps(n.id)
-    .filter(id => !isSetting(getNode(id)))
-    .map(id => ({ role: id, asset: getNode(id).image }))
+    .map(getNode)
+    .filter(s => s && !isSetting(s)) // skip setting nodes and dangling edges to missing nodes
+    .map(s => ({ role: s.id, asset: s.image }))
     .filter(r => r.asset);
 function publicState() {
   return {
@@ -1457,6 +1462,8 @@ const server = http.createServer(async (req, res) => {
     }
     return json(res, 404, { error: 'Not found' });
   } catch (e) {
+    // Log unexpected (non-validation) failures so a broken project can be diagnosed.
+    if (!e.status) console.error('Lỗi xử lý', req.method, req.url, '→', e.stack || e.message);
     json(res, e.status || 400, { error: e.message });
   }
 });
