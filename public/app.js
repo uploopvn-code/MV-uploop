@@ -40,14 +40,35 @@ const zoneIndex = id =>
 const zoneOrder = n =>
   n.zone === 'output' ? (n.sourceSeq || 999) * 100 + (n.version || 0) : n.seq || 999;
 // Lays every node out into its zone column, stacked in order (the arrange button).
+// Output videos are special: each sits on the SAME ROW as the production node it came
+// from, and extra versions line up to its right — so a shot with no video yet leaves a
+// gap instead of pulling the videos below it upward.
+const OUT_STEP = 250; // horizontal gap between versions of the same shot
 function zoneLayout() {
   const rows = {},
-    pos = {};
+    pos = {},
+    sourceY = {},
+    outputs = [];
   for (const n of [...state.nodes].sort((a, b) => zoneOrder(a) - zoneOrder(b))) {
+    if (n.zone === 'output') {
+      outputs.push(n);
+      continue;
+    }
     const zi = zoneIndex(n.zone),
       row = rows[zi] || 0;
     rows[zi] = row + 1;
-    pos[n.id] = { x: 24 + zi * ZONE_W, y: 54 + row * 285 };
+    const y = 54 + row * 285;
+    pos[n.id] = { x: 24 + zi * ZONE_W, y };
+    sourceY[n.id] = y;
+  }
+  const oi = zoneIndex('output');
+  const used = {}; // versions already placed per source → horizontal offset
+  let orphanRow = Object.values(sourceY).length; // videos whose source is gone stack below
+  for (const n of outputs) {
+    const y = n.source in sourceY ? sourceY[n.source] : 54 + orphanRow++ * 285;
+    const col = used[n.source || n.id] || 0;
+    used[n.source || n.id] = col + 1;
+    pos[n.id] = { x: 24 + oi * ZONE_W + col * OUT_STEP, y };
   }
   return pos;
 }
