@@ -327,10 +327,9 @@ export function createSeedvis(dataDir) {
     const deadline = Date.now() + timeout;
     let failures = 0;
     while (!state.is_final) {
-      // Stopped by the user: end the poll now (the remote generation may still run, but
-      // we stop waiting and discard the result). `definite` so it is not retried.
-      if (job.aborted)
-        throw Object.assign(new Error('Đã dừng theo yêu cầu.'), { aborted: true, definite: true });
+      // Note: a job the user cancelled keeps polling here on purpose. If Seedvis could
+      // cancel it (still queued) the next poll returns failed/cancelled and we stop; if it
+      // was already generating (and charged), we let it finish so the result is not wasted.
       if (Date.now() > deadline)
         throw new Error(
           'Quá thời gian chờ Seedvis. Tác vụ có thể vẫn chạy; bấm Kiểm tra lại, không tạo mới.',
@@ -363,7 +362,7 @@ export function createSeedvis(dataDir) {
     if (state.status === 'failed') {
       const e = state.error || {};
       // A job we asked to stop (or that Seedvis reports as cancelled) is not a real failure.
-      if (job.aborted || e.code === 'cancelled')
+      if (job.cancelRequested || e.code === 'cancelled')
         throw Object.assign(new Error('Đã dừng theo yêu cầu.'), { aborted: true, definite: true });
       throw Object.assign(
         new Error('Seedvis báo lỗi: ' + (e.message || e.code || 'không rõ lý do')),
@@ -392,7 +391,8 @@ export function createSeedvis(dataDir) {
     onProgress('Đang gửi yêu cầu tới Seedvis · ' + job.payload.seedvis.modelName);
     let json;
     for (let attempt = 1; ; attempt++) {
-      if (job.aborted)
+      // Cancelled before the request even left: abort, nothing to collect upstream.
+      if (job.cancelRequested)
         throw Object.assign(new Error('Đã dừng theo yêu cầu.'), { aborted: true, definite: true });
       try {
         // Same Idempotency-Key on every retry: Seedvis returns the same job, no second charge.

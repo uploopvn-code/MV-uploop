@@ -517,12 +517,18 @@ function storeSeedvisResults(j, results) {
     j.progress = 'Đã tạo ' + assets.length + ' phiên bản video';
   } else {
     const n = getNode(j.nodeId);
-    n[j.kind] = assets[0];
-    if (j.kind === 'image') {
-      n.stale = j.resultStale;
-      markChildren(n.id);
-    } else n.videoStale = j.resultStale;
-    j.progress = 'Đã nhận file vào node';
+    // The node may have been deleted while a detached (stopped) job finished — keep the
+    // result on the job for download, but there is nothing to write back into.
+    if (n) {
+      n[j.kind] = assets[0];
+      if (j.kind === 'image') {
+        n.stale = j.resultStale;
+        markChildren(n.id);
+      } else n.videoStale = j.resultStale;
+      j.progress = 'Đã nhận file vào node';
+    } else {
+      j.progress = 'Đã nhận file (node nguồn đã bị xóa)';
+    }
   }
   save();
 }
@@ -544,10 +550,11 @@ function failedVideoNodeIds() {
     ...new Set(db.jobs.filter(j => j.kind === 'video' && j.status === 'failed').map(j => j.nodeId)),
   ];
 }
-// Stops jobs the user asked to halt: queued ones are cancelled outright; running ones
-// are flagged aborted so their poll ends and the result is discarded. Aborted jobs no
-// longer count as busy, so the workflow unlocks immediately. Seedvis jobs already sent
-// upstream are also asked to cancel there — a still-queued one is refunded in full.
+// Stops jobs the user asked to halt. A locally-queued job (not yet sent) is cancelled
+// outright. A running Seedvis job is flagged cancelRequested — it no longer counts as
+// busy (the workflow unlocks at once) and we ask Seedvis to cancel it: if it was still
+// queued there, Seedvis stops and refunds it; if it was already generating (and charged),
+// it keeps running and its result is still stored into the workflow when it finishes.
 function haltJobs(match) {
   const toCancel = [];
   for (const j of db.jobs) {
@@ -556,20 +563,19 @@ function haltJobs(match) {
       j.status = 'cancelled';
       j.progress = 'Đã hủy khi dừng';
     } else if (j.status === 'running') {
-      j.aborted = true;
-      j.progress = 'Đang dừng…';
+      j.cancelRequested = true;
+      j.progress = 'Đang hủy trên Seedvis…';
       if (j.payload.seedvis && j.remote?.id) toCancel.push(j);
     }
   }
-  // Best-effort remote cancel, off the response path (refunds a still-queued Seedvis job).
+  // Best-effort remote cancel, off the response path.
   for (const j of toCancel)
     seedvis
       .cancel(j)
       .then(r => {
-        j.progress =
-          r.outcome === 'not_cancellable'
-            ? 'Đã dừng (Seedvis đã bắt đầu, không hoàn lượt)'
-            : 'Đã dừng; Seedvis hoàn lượt nếu còn trong hàng chờ';
+        // not_cancellable = already generating upstream → it finishes and is collected.
+        if (r.outcome === 'not_cancellable')
+          j.progress = 'Seedvis đang tạo (không hủy được); sẽ tự thêm vào workflow khi xong';
         save();
       })
       .catch(() => {});
@@ -578,7 +584,7 @@ function requireIdle() {
   if (
     db.autoRun?.status === 'running' ||
     db.autoVideoRun?.status === 'running' ||
-    db.jobs.some(j => ['queued', 'running'].includes(j.status) && !j.aborted)
+    db.jobs.some(j => ['queued', 'running'].includes(j.status) && !j.cancelRequested)
   )
     throw new Error('Đợi tác vụ hoàn tất hoặc dừng chuỗi trước khi sửa workflow.');
 }

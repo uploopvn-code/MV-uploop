@@ -16,6 +16,7 @@ const API = 'http://127.0.0.1:17794/api/v1';
 let submits = [],
   polls = 0,
   cancels = [],
+  cancellable = true, // false → Seedvis replies 409 not_cancellable (already generating)
   mode = 'ok',
   inFlight = 0,
   maxInFlight = 0;
@@ -37,7 +38,11 @@ const lifecycle = (id, j) => ({
       : [],
   references: j.refs.map((_, index) => ({ field: 'reference_images', index })),
   ...(j.status === 'failed'
-    ? { error: { code: 'content_policy', message: 'Prompt bị từ chối' } }
+    ? {
+        error: j.cancelled
+          ? { code: 'cancelled', message: 'Cancelled by user' }
+          : { code: 'content_policy', message: 'Prompt bị từ chối' },
+      }
     : {}),
 });
 const mock = http.createServer(async (req, res) => {
@@ -64,6 +69,8 @@ const mock = http.createServer(async (req, res) => {
   if (cancel && req.method === 'POST') {
     const id = cancel[1] || cancel[2];
     cancels.push(id);
+    if (!cancellable)
+      return send(409, { error: { code: 'not_cancellable', message: 'already processing' } });
     const j = jobs.get(id);
     if (j && j.status === 'queued') {
       j.status = 'failed';
@@ -437,6 +444,23 @@ try {
   // Stop also asked Seedvis to cancel the upstream job (refunds it if still queued).
   for (let i = 0; i < 50 && !cancels.length; i++) await new Promise(res => setTimeout(res, 20));
   assert.ok(cancels.length >= 1, 'server called the Seedvis cancel endpoint');
+
+  // If Seedvis cannot cancel (already generating), the job keeps running and its result
+  // is still stored into the workflow when it finishes — not discarded.
+  cancellable = false;
+  mode = 'stuck';
+  const H = await mkNode('Shot không hủy được');
+  const hId = (await api('/api/jobs', 'POST', { nodeId: H, kind: 'video' })).data.job.id;
+  await new Promise(res => setTimeout(res, 150));
+  await api('/api/auto/video/stop', 'POST', {}); // 409 not_cancellable → stays running
+  // Editing is unlocked even though the job still runs in the background.
+  assert.equal((await api('/api/node', 'PATCH', { id: H, name: 'Sửa khi chạy nền' })).status, 200);
+  // The generation finishes → its video lands on the node.
+  mode = 'ok';
+  const { s: hs, j: hj } = await settle(hId);
+  assert.equal(hj.status, 'completed', 'uncancellable job completes');
+  assert.ok(hs.nodes.find(n => n.id === H).video, 'finished video is stored into the workflow');
+  cancellable = true;
   mode = 'ok';
 
   // Output nodes are terminal: cannot generate from them, and can be deleted.

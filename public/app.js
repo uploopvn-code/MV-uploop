@@ -20,7 +20,7 @@ const workflowBusy = () =>
     state &&
     (state.autoRun?.status === 'running' ||
       state.autoVideoRun?.status === 'running' ||
-      state.jobs?.some(j => ['queued', 'running'].includes(j.status) && !j.aborted))
+      state.jobs?.some(j => ['queued', 'running'].includes(j.status) && !j.cancelRequested))
   );
 // Workflow zones (process stages) shown as columns on the canvas.
 const ZONES = [
@@ -181,7 +181,7 @@ function render() {
   $('#workerBadge').textContent = online ? '● Orbit worker đã nối' : '○ Chưa nối Orbit';
   $('#workerBadge').className = 'badge' + (online ? ' online' : '');
   $('#jobCount').textContent = state.jobs.filter(
-    j => ['queued', 'running'].includes(j.status) && !j.aborted,
+    j => ['queued', 'running'].includes(j.status) && !j.cancelRequested,
   ).length;
   renderGraph();
   $('#timelineTrack').innerHTML = state.nodes
