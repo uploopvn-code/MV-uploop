@@ -38,8 +38,11 @@ try {
   assert.ok(!node(s, 'scene').references.some(r => r.role === 'style'));
 
   // Zones: image/setting nodes in design, shots in production.
-  assert.equal(node(s, 'singer').zone, 'design');
-  assert.equal(node(s, 'style').zone, 'design');
+  // 5 zones: singer=character, stage/scene=design, style/camera=setup, shots=production.
+  assert.equal(node(s, 'singer').zone, 'character');
+  assert.equal(node(s, 'style').zone, 'setup');
+  assert.equal(node(s, 'camera').zone, 'setup');
+  assert.equal(node(s, 'scene').zone, 'design');
   assert.equal(node(s, 'wide').zone, 'production');
   s = (await api('/api/node', 'PATCH', { id: 'wide', zone: 'design' })).data;
   assert.equal(node(s, 'wide').zone, 'design', 'zone change persists');
@@ -52,7 +55,9 @@ try {
       .filter(n => n.zone === z)
       .sort((a, b) => a.seq - b.seq)
       .map(n => n.seq);
-  assert.deepEqual(bySeq('design'), [1, 2, 3, 4, 5]); // ca sĩ, sân khấu, ghép cảnh, style, máy quay
+  assert.deepEqual(bySeq('character'), [1]); // ca sĩ
+  assert.deepEqual(bySeq('design'), [1, 2]); // sân khấu, ghép cảnh
+  assert.deepEqual(bySeq('setup'), [1, 2]); // style, máy quay
   assert.deepEqual(bySeq('production'), [1, 2, 3]); // 3 shots, numbered on their own
   // Typing a new position reorders within the zone.
   const before = node(s, 'close').seq;

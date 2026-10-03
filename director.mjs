@@ -33,9 +33,9 @@ Sau phần trình bày cho người đọc, XUẤT THÊM một khối JSON đặ
   "project": { "name": "Tên MV", "theme": "music" },
   "style": "Mô tả style chung (35mm, Kodak/Panavision, photorealistic, no CGI...)",
   "assets": [
-    { "key": "singer",    "name": "Ca sĩ chính", "prompt": "<model-sheet prompt 1 dòng>" },
-    { "key": "guitarist", "name": "Guitarist",   "prompt": "<prompt nhạc công 1 dòng>" },
-    { "key": "stage",     "name": "Sân khấu/Ensemble", "prompt": "<wide stage prompt>" }
+    { "key": "singer",    "role": "character", "name": "Ca sĩ chính", "prompt": "<model-sheet / visual reference 1 dòng>" },
+    { "key": "guitarist", "role": "character", "name": "Guitarist",   "prompt": "<prompt nhạc công 1 dòng>" },
+    { "key": "stage",     "role": "scene",     "name": "Sân khấu/Ensemble", "prompt": "<wide stage prompt>" }
   ],
   "cameras": [
     { "key": "wide",   "name": "Wide",     "config": "Wide establishing shot, full stage, 35mm." },
@@ -54,8 +54,11 @@ Sau phần trình bày cho người đọc, XUẤT THÊM một khối JSON đặ
   ]
 }
 
-Quy tắc JSON: "uses" chứa đúng các "key" trong "assets" mà shot dùng; "camera" là 1 "key" trong
-"cameras"; mỗi shot là một cảnh video. KHÔNG thêm chú thích ngoài khối JSON đó.
+Quy tắc JSON: mỗi asset có "role" = "character" (nhân vật/visual reference: ca sĩ, nhạc công) hoặc
+"scene" (sân khấu/bối cảnh/đạo cụ). "uses" chứa đúng các "key" trong "assets" mà shot dùng; "camera"
+là 1 "key" trong "cameras"; mỗi shot là một cảnh video. Công cụ tự xếp vào 5 khu: Nhân vật, Bối cảnh,
+Style/Máy quay, Sản xuất, Video — và tự nối nhân vật + bối cảnh + cỡ máy + style vào từng shot.
+KHÔNG thêm chú thích ngoài khối JSON đó.
 
 LỆNH KÍCH HOẠT: "BẮT ĐẦU: [Tên bài hát / Link / Lời]".`;
 
@@ -98,7 +101,7 @@ export function buildGraph(bp) {
   const assetId = {},
     camId = {};
 
-  // Style node (one, in design zone), connected to every shot.
+  // Style node (one, in the Style/Camera setup zone), connected to every shot.
   let styleId = null;
   if (b.style && str(b.style).trim()) {
     styleId = nid();
@@ -106,20 +109,25 @@ export function buildGraph(bp) {
       id: styleId,
       kind: 'setting',
       settingType: 'style',
-      zone: 'design',
+      zone: 'setup',
       name: 'Style',
       config: str(b.style, 5000),
     });
   }
 
+  const charRe = /singer|char|vocal|ca s[iĩ]|nh[aâ]n v[aậ]t|artist/i;
   for (const a of assets) {
     const key = str(a.key || a.id || a.name, 100);
     if (!key) continue;
     const id = nid();
     assetId[key] = id;
+    // Character / visual-reference assets go to the Nhân vật zone; others to Bối cảnh.
+    const isChar =
+      a.role === 'character' || a.zone === 'character' || charRe.test(key + ' ' + str(a.name, 100));
     nodes.push({
       id,
-      zone: 'design',
+      zone: isChar ? 'character' : 'design',
+      role: isChar ? 'character' : undefined,
       name: str(a.name || key, 100),
       prompt: str(a.prompt),
       videoPrompt: '',
@@ -137,7 +145,7 @@ export function buildGraph(bp) {
       id,
       kind: 'setting',
       settingType: 'camera',
-      zone: 'design',
+      zone: 'setup',
       name: str(c.name || key, 100),
       config: str(c.config || c.prompt, 5000),
     });

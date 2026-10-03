@@ -13,11 +13,13 @@ let selectedEdge = null;
 const gallerySel = new Set();
 // Workflow zones (process stages) shown as columns on the canvas.
 const ZONES = [
-  { id: 'design', label: '① Tạo hình' },
-  { id: 'production', label: '② Sản xuất video' },
-  { id: 'output', label: '③ Video' },
+  { id: 'character', label: '① Nhân vật' },
+  { id: 'design', label: '② Bối cảnh' },
+  { id: 'setup', label: '③ Style & Máy quay' },
+  { id: 'production', label: '④ Sản xuất video' },
+  { id: 'output', label: '⑤ Video' },
 ];
-const ZONE_W = 360;
+const ZONE_W = 340;
 const zoneIndex = id =>
   Math.max(
     0,

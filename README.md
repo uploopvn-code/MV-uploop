@@ -44,8 +44,7 @@ nên tạo Project mới cho mỗi bài hát. Key LLM dùng chung mọi project 
 - API key Seedvis và worker token dùng chung cho mọi project (lưu ở gốc `data/`).
 
 ## Khu vực quy trình (zones)
-Canvas chia 3 cột theo quy trình: **① Tạo hình** (node ảnh/nhân vật/bối cảnh + Style/Máy quay),
-**② Sản xuất video** (các shot), **③ Video** (các node video đã tạo, xếp theo thứ tự sản xuất).
+Canvas chia 5 cột theo quy trình: **① Nhân vật** (thiết kế nhân vật / visual reference: ca sĩ, nhạc công), **② Bối cảnh** (sân khấu/cảnh), **③ Style & Máy quay** (node Style + các cỡ máy), **④ Sản xuất video** (các shot), **⑤ Video** (video đã tạo). Mỗi shot = nhân vật + bối cảnh + cỡ máy + style nối lại.
 - Mỗi node thuộc một khu vực (tự gán theo loại; đổi trong node ở ô **Khu vực**, hoặc **kéo
   node sang cột khác** để chuyển).
 - Nút **⬓ Xếp khu vực**: tự xếp mọi node vào đúng cột, theo thứ tự (khu Tạo hình/Sản xuất theo

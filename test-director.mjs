@@ -12,9 +12,9 @@ const bp = {
   project: { name: 'Test MV', theme: 'music' },
   style: 'Cinematic 35mm photorealistic, no CGI',
   assets: [
-    { key: 'singer', name: 'Ca sĩ', prompt: 'singer model sheet' },
-    { key: 'guitarist', name: 'Guitarist', prompt: 'guitarist playing' },
-    { key: 'stage', name: 'Sân khấu', prompt: 'wide stage' },
+    { key: 'singer', role: 'character', name: 'Ca sĩ', prompt: 'singer model sheet' },
+    { key: 'guitarist', role: 'character', name: 'Guitarist', prompt: 'guitarist playing' },
+    { key: 'stage', role: 'scene', name: 'Sân khấu', prompt: 'wide stage' },
   ],
   cameras: [
     { key: 'wide', name: 'Wide', config: 'wide establishing shot' },
@@ -43,10 +43,15 @@ const bp = {
 const g = buildGraph(bp);
 assert.equal(g.name, 'Test MV');
 const byName = n => g.nodes.find(x => x.name === n);
-// Assets + settings in design, shots in production.
-assert.equal(g.nodes.filter(n => n.zone === 'design').length, 6); // style + 3 assets + 2 cameras
+// Characters, scene, setup (style+cameras), shots across the 5 zones.
+assert.equal(g.nodes.filter(n => n.zone === 'character').length, 2); // singer + guitarist
+assert.equal(g.nodes.filter(n => n.zone === 'design').length, 1); // stage
+assert.equal(g.nodes.filter(n => n.zone === 'setup').length, 3); // style + 2 cameras
 assert.equal(g.nodes.filter(n => n.zone === 'production').length, 2);
 assert.equal(byName('Style').kind, 'setting');
+assert.equal(byName('Style').zone, 'setup');
+assert.equal(byName('Ca sĩ').zone, 'character');
+assert.equal(byName('Sân khấu').zone, 'design');
 assert.equal(byName('Wide').settingType, 'camera');
 assert.equal(byName('Ca sĩ').prompt, 'singer model sheet');
 assert.equal(byName('Shot 1').videoInput, 'refs');

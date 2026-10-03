@@ -85,9 +85,19 @@ if (!ws.order.includes(ws.active)) ws.active = ws.order[0];
 writeWorkspace(ws);
 
 let activeId, mediaDir, dbFile, db;
-// Workflow zones: design (tạo hình) → production (sản xuất) → output (video).
-const ZONES = ['design', 'production', 'output'];
-const defaultZone = n => (n.terminal ? 'output' : 'duration' in n ? 'production' : 'design');
+// Workflow zones: Nhân vật → Bối cảnh → Style/Máy quay → Sản xuất → Video.
+const ZONES = ['character', 'design', 'setup', 'production', 'output'];
+const CHARACTER_IDS = new Set(['singer', 'char', 'character']);
+const defaultZone = n =>
+  n.terminal
+    ? 'output'
+    : n.kind === 'setting'
+      ? 'setup'
+      : 'duration' in n
+        ? 'production'
+        : n.role === 'character' || CHARACTER_IDS.has(n.id)
+          ? 'character'
+          : 'design';
 const nodeZone = n => (ZONES.includes(n.zone) ? n.zone : defaultZone(n));
 // Sequence numbers restart per zone, so each zone is numbered 1, 2, 3…
 const nextSeq = zone =>

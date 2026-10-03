@@ -12,6 +12,7 @@ export const themeLabel = id => themes.find(t => t.id === id)?.label || id;
 const shot = (id, name, i) => ({
   id,
   name,
+  zone: 'production',
   prompt: '',
   videoPrompt: '',
   lyric: '',
@@ -20,11 +21,20 @@ const shot = (id, name, i) => ({
   image: null,
   video: null,
 });
-const imageNode = (id, name) => ({ id, name, prompt: '', image: null, video: null });
+// zone: 'character' for the character/visual reference, 'design' for stage/scene.
+const imageNode = (id, name, zone = 'design') => ({
+  id,
+  name,
+  zone,
+  prompt: '',
+  image: null,
+  video: null,
+});
 const setting = (settingType, name, config) => ({
   id: settingType,
   kind: 'setting',
   settingType,
+  zone: 'setup',
   name,
   config,
 });
@@ -53,7 +63,7 @@ const TEMPLATES = {
         bpm: '',
       },
       nodes: [
-        imageNode('singer', 'Ca sĩ'),
+        imageNode('singer', 'Ca sĩ', 'character'),
         imageNode('stage', 'Sân khấu'),
         imageNode('scene', 'Ghép cảnh'),
         shot('wide', 'Toàn cảnh', 0),
@@ -88,7 +98,7 @@ const TEMPLATES = {
         bpm: '',
       },
       nodes: [
-        imageNode('char', 'Nhân vật'),
+        imageNode('char', 'Nhân vật', 'character'),
         imageNode('world', 'Bối cảnh'),
         imageNode('scene', 'Cảnh dựng'),
         shot('shot1', 'Cảnh 1', 0),
@@ -123,7 +133,7 @@ const TEMPLATES = {
         bpm: '',
       },
       nodes: [
-        imageNode('char', 'Nhân vật'),
+        imageNode('char', 'Nhân vật', 'character'),
         imageNode('bg', 'Bối cảnh'),
         imageNode('scene', 'Ghép cảnh'),
         shot('shot1', 'Cảnh 1', 0),
