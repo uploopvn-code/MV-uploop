@@ -143,14 +143,17 @@
           </p>
         </div>
         <div class="settings-panel">
-          <h3>1. Master prompt</h3>
+          <h3>1. Master prompt <span id="masterBadge" class="muted"></span></h3>
           <p class="muted">
             Chép và dán vào ChatGPT/Claude kèm bài hát (hoặc dùng mục 3 để tự động). Model phải trả
-            về khối JSON blueprint theo mẫu ở cuối prompt.
+            về khối JSON blueprint theo mẫu ở cuối prompt. Bạn có thể sửa và lưu riêng cho project
+            này.
           </p>
-          <textarea id="masterPrompt" rows="8" readonly></textarea>
+          <textarea id="masterPrompt" rows="10"></textarea>
           <div class="actions">
-            <button id="copyMaster" class="button">📋 Chép master prompt</button>
+            <button id="copyMaster" class="button">📋 Chép</button>
+            <button id="saveMaster" class="button primary">💾 Lưu cho project</button>
+            <button id="resetMaster" class="button">↩ Dùng mặc định</button>
           </div>
         </div>
         <div class="settings-panel">

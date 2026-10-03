@@ -460,7 +460,8 @@ function view(id) {
   document
     .querySelectorAll('[data-view]')
     .forEach(b => b.classList.toggle('active', b.dataset.view === id));
-  if (id === 'director' && !directorLoaded) loadDirector();
+  // Reload each time: the master prompt is per-project, so it must refresh after a switch.
+  if (id === 'director') loadDirector();
 }
 document.querySelectorAll('[data-view]').forEach(b => (b.onclick = () => view(b.dataset.view)));
 function closeInspector() {
@@ -1413,10 +1414,18 @@ $('#addStyle').onclick = () => addSetting('style');
 $('#addCamera').onclick = () => addSetting('camera');
 // --- Đạo diễn: master prompt + build graph from blueprint + LLM auto ---
 let directorLoaded = false;
+let defaultMaster = '';
+function showMasterBadge(custom) {
+  $('#masterBadge').textContent = custom
+    ? '· đã sửa riêng cho project này'
+    : '· đang dùng mặc định';
+}
 async function loadDirector() {
   try {
     const d = await api('/api/director');
     $('#masterPrompt').value = d.masterPrompt;
+    defaultMaster = d.defaultMaster || '';
+    showMasterBadge(d.customMaster);
     showDirectorLLM(d.llm);
     directorLoaded = true;
   } catch (e) {
@@ -1431,6 +1440,30 @@ function showDirectorLLM(llm) {
   if (!$('#llmModel').value) $('#llmModel').value = llm.model || '';
 }
 $('#copyMaster').onclick = () => copy($('#masterPrompt').value);
+$('#saveMaster').onclick = async () => {
+  try {
+    const r = await api('/api/director/master', {
+      method: 'POST',
+      body: { masterPrompt: $('#masterPrompt').value },
+    });
+    $('#masterPrompt').value = r.masterPrompt;
+    showMasterBadge(r.customMaster);
+    toast('Đã lưu master prompt cho project này');
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
+$('#resetMaster').onclick = async () => {
+  if (!confirm('Khôi phục master prompt mặc định cho project này?')) return;
+  try {
+    const r = await api('/api/director/master', { method: 'POST', body: { masterPrompt: '' } });
+    $('#masterPrompt').value = r.masterPrompt;
+    showMasterBadge(r.customMaster);
+    toast('Đã dùng lại master prompt mặc định');
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
 $('#buildGraph').onclick = async () => {
   const bp = $('#blueprintInput').value.trim();
   if (!bp) return toast('Dán blueprint JSON trước', true);

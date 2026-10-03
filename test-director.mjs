@@ -98,12 +98,13 @@ assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
 // --- Integration: build endpoint + LLM auto path ---
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mv-dir-'));
 let llmCalls = 0;
+let lastSystem = '';
 const llm = http.createServer(async (req, res) => {
   let raw = '';
   for await (const c of req) raw += c;
   llmCalls++;
   const body = JSON.parse(raw);
-  assert.ok(body.messages[0].content.includes('MASTER PROMPT'), 'system = master prompt');
+  lastSystem = body.messages[0].content;
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(
     JSON.stringify({
@@ -156,10 +157,26 @@ try {
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.name, 'Test MV');
   assert.equal(llmCalls, 1);
+  assert.ok(lastSystem.includes('MASTER PROMPT'), 'default master prompt sent to the LLM');
   assert.equal((await api('/api/director/auto', 'POST', { song: '' })).status, 400);
 
+  // Per-project master prompt: save a custom one, confirm it is served and used by auto.
+  let d = (await api('/api/director')).data;
+  assert.equal(d.customMaster, false);
+  const custom = 'MASTER PROMPT TUỲ CHỈNH RIÊNG · marker-XYZ';
+  d = (await api('/api/director/master', 'POST', { masterPrompt: custom })).data;
+  assert.equal(d.customMaster, true);
+  assert.equal(d.masterPrompt, custom);
+  assert.equal((await api('/api/director')).data.masterPrompt, custom);
+  await api('/api/director/auto', 'POST', { song: 'Bài 2' });
+  assert.ok(lastSystem.includes('marker-XYZ'), 'the custom prompt is sent to the LLM');
+  // Reset restores the default.
+  d = (await api('/api/director/master', 'POST', { masterPrompt: '' })).data;
+  assert.equal(d.customMaster, false);
+  assert.ok(d.masterPrompt.includes('MASTER PROMPT'), 'default restored');
+
   console.log(
-    'PASS: buildGraph assets/cameras/style/shots + wiring, fence parsing, build endpoint, style injection, bad blueprint rejected, LLM auto path',
+    'PASS: buildGraph assets/cameras/style/shots + wiring, fence parsing, build endpoint, style injection, bad blueprint rejected, LLM auto path, per-project master prompt',
   );
 } finally {
   proc.kill();

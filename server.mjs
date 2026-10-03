@@ -1051,9 +1051,26 @@ const server = http.createServer(async (req, res) => {
       return res.end(zip);
     }
     if (p === '/api/director' && req.method === 'GET')
-      return json(res, 200, { masterPrompt: MASTER_PROMPT, llm: directorLLM.status() });
+      return json(res, 200, {
+        masterPrompt: db.masterPrompt || MASTER_PROMPT,
+        customMaster: !!db.masterPrompt, // true = edited for this project
+        defaultMaster: MASTER_PROMPT,
+        llm: directorLLM.status(),
+      });
     if (p === '/api/director/llm' && req.method === 'POST')
       return json(res, 200, { llm: directorLLM.save(await body(req)) });
+    // Save (or reset) the master prompt for THIS project. Empty text restores the default.
+    if (p === '/api/director/master' && req.method === 'POST') {
+      const b = await body(req);
+      const text = String(b.masterPrompt || '').slice(0, 100000);
+      if (text.trim()) db.masterPrompt = text;
+      else delete db.masterPrompt;
+      save();
+      return json(res, 200, {
+        masterPrompt: db.masterPrompt || MASTER_PROMPT,
+        customMaster: !!db.masterPrompt,
+      });
+    }
     if (p === '/api/director/build' && req.method === 'POST') {
       requireIdle();
       const b = await body(req);
@@ -1067,7 +1084,7 @@ const server = http.createServer(async (req, res) => {
       const song = String(b.song || '').slice(0, 20000);
       if (!song.trim()) throw new Error('Nhập tên bài hát / lời / link để chạy.');
       const text = await directorLLM.complete(
-        MASTER_PROMPT,
+        db.masterPrompt || MASTER_PROMPT,
         'BẮT ĐẦU: ' +
           song +
           '\n\nChỉ trả về đúng khối JSON blueprint theo schema đã mô tả, không thêm chữ nào ngoài khối JSON.',
