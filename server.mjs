@@ -382,8 +382,22 @@ function mutate() {
 }
 // Replaces the active project's graph with a built one (keeps audio/fields/output).
 function applyGraph(graph) {
+  // Keep this project's character/scene images (keyed by blueprint key) before replacing the
+  // graph, then re-attach them to the new sequence so shared assets are not regenerated.
+  db.assetLibrary = db.assetLibrary || {};
+  for (const n of db.nodes)
+    if (n.assetKey && n.image)
+      db.assetLibrary[n.assetKey] = { image: n.image, name: n.name, role: n.role || null };
   db.nodes = graph.nodes;
   db.edges = graph.edges;
+  let reused = 0;
+  for (const n of db.nodes)
+    if (n.assetKey && db.assetLibrary[n.assetKey]?.image && !n.image) {
+      n.image = db.assetLibrary[n.assetKey].image;
+      n.stale = false;
+      reused++;
+    }
+  db.graphReused = reused; // surfaced to the UI so it can report how many assets were reused
   if (graph.name) db.name = graph.name;
   if (graph.theme && themes.some(t => t.id === graph.theme)) db.theme = graph.theme;
   db.autoRun = null;
@@ -526,9 +540,51 @@ function storeResult(j, content) {
   if (j.kind === 'image') {
     n.stale = j.resultStale;
     markChildren(n.id);
+    rememberAndExport(n);
   } else n.videoStale = j.resultStale;
   j.progress = 'Đã nhận file vào node';
   save();
+}
+// Filesystem-safe filename piece.
+const safeFile = s =>
+  String(s || 'anh')
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80) || 'anh';
+// Keeps an asset node's image in the project's library (keyed by its stable blueprint key)
+// so a later sequence reuses it, and writes a readable copy into the project folders:
+//   thu-vien/nhan-vat/<key>.png, thu-vien/boi-canh/<key>.png, khung-hinh/<seq>/<STT>_<tên>.png
+function rememberAndExport(n) {
+  if (!n || !n.image) return;
+  if (n.assetKey) {
+    db.assetLibrary = db.assetLibrary || {};
+    db.assetLibrary[n.assetKey] = { image: n.image, name: n.name, role: n.role || null };
+  }
+  try {
+    const id = String(n.image.url || '').replace(/^\/media\//, '');
+    if (!/^[a-f0-9-]+\.(png|jpg|jpeg|webp)$/.test(id)) return;
+    const src = path.join(mediaDir, id);
+    if (!fs.existsSync(src)) return;
+    const projectRoot = path.dirname(mediaDir);
+    const ext = path.extname(id);
+    const z = nodeZone(n);
+    let folder, base;
+    if (z === 'character') {
+      folder = path.join(projectRoot, 'thu-vien', 'nhan-vat');
+      base = safeFile(n.assetKey || n.name);
+    } else if (z === 'design') {
+      folder = path.join(projectRoot, 'thu-vien', 'boi-canh');
+      base = safeFile(n.assetKey || n.name);
+    } else if (z === 'production') {
+      folder = path.join(projectRoot, 'khung-hinh', safeFile(db.name));
+      base = String(n.seq || 0).padStart(2, '0') + '_' + safeFile(n.name);
+    } else return;
+    fs.mkdirSync(folder, { recursive: true });
+    fs.copyFileSync(src, path.join(folder, base + ext));
+  } catch (e) {
+    console.error('Xuất ảnh ra thư mục lỗi:', e.message);
+  }
 }
 // A display-only node holding one produced video, wired from the source node.
 function createBranchNode(sourceId, asset) {
@@ -581,6 +637,7 @@ function storeSeedvisResults(j, results) {
       if (j.kind === 'image') {
         n.stale = j.resultStale;
         markChildren(n.id);
+        rememberAndExport(n);
       } else n.videoStale = j.resultStale;
       j.progress = 'Đã nhận file vào node';
     } else {
@@ -1224,6 +1281,7 @@ const server = http.createServer(async (req, res) => {
           n.stale = false;
           if (n.video) n.videoStale = true;
           markChildren(n.id);
+          rememberAndExport(n);
         } else n.videoStale = false;
       }
       mutate();
@@ -1522,6 +1580,7 @@ const server = http.createServer(async (req, res) => {
       if (j.kind === 'image') {
         if (n.video) n.videoStale = true;
         markChildren(n.id);
+        rememberAndExport(n);
       } else {
         n.videoStale = n.stale;
         n.stale = false;

@@ -235,6 +235,7 @@ export function buildGraph(bp) {
       id,
       zone: isChar ? 'character' : 'design',
       role: isChar ? 'character' : undefined,
+      assetKey: key, // stable id across sequences → lets the project reuse its image
       name: str(a.name || key, 100),
       prompt: str(a.prompt),
       videoPrompt: '',

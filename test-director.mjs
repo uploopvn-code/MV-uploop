@@ -253,6 +253,30 @@ try {
     'bible asset built from the array',
   );
 
+  // Reuse across sequences: give the asset an image, then build a NEW sequence with the same
+  // key — the image is re-attached automatically so it is not regenerated.
+  const qNode = r.data.nodes.find(n => n.assetKey === 'q');
+  const PNG =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  await api('/api/upload', 'POST', {
+    nodeId: qNode.id,
+    kind: 'image',
+    mime: 'image/png',
+    base64: PNG,
+  });
+  const seqB = {
+    project: { title: 'Seq B' },
+    shots: [{ name: 'SB', duration: 6, uses: ['q'], camera: 'c1', videoPrompt: 'Veo @q.' }],
+  };
+  r = await api('/api/director/build', 'POST', { blueprint: [bibleObj, seqB] });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.name, 'Seq B');
+  assert.equal(r.data.graphReused, 1, 'reused the asset image from the previous sequence');
+  assert.ok(
+    r.data.nodes.find(n => n.assetKey === 'q')?.image,
+    'the new sequence node already has the reused image',
+  );
+
   // LLM auto path: point the Director at the mock, then auto-build.
   await api('/api/director/llm', 'POST', {
     key: 'test-key-1234',

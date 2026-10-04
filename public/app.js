@@ -1493,7 +1493,12 @@ async function buildFromBlueprint(blueprint) {
     view('studio');
     render();
     $('#arrangeZones').onclick();
-    toast('Đã dựng sơ đồ từ blueprint');
+    toast(
+      'Đã dựng sơ đồ' +
+        (state.graphReused
+          ? ' · tái dùng ' + state.graphReused + ' ảnh nhân vật/bối cảnh có sẵn'
+          : ''),
+    );
   } catch (e) {
     toast(e.message, true);
   } finally {
