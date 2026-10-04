@@ -1464,14 +1464,12 @@ $('#resetMaster').onclick = async () => {
     toast(e.message, true);
   }
 };
-$('#buildGraph').onclick = async () => {
-  const bp = $('#blueprintInput').value.trim();
-  if (!bp) return toast('Dán blueprint JSON trước', true);
+async function buildFromBlueprint(blueprint) {
   if (!confirm('Dựng sơ đồ sẽ THAY TOÀN BỘ node của project đang mở. Tiếp tục?')) return;
   const btn = $('#buildGraph');
   btn.disabled = true;
   try {
-    state = await api('/api/director/build', { method: 'POST', body: { blueprint: bp } });
+    state = await api('/api/director/build', { method: 'POST', body: { blueprint } });
     gallerySel.clear();
     view('studio');
     render();
@@ -1481,6 +1479,24 @@ $('#buildGraph').onclick = async () => {
     toast(e.message, true);
   } finally {
     btn.disabled = false;
+  }
+}
+$('#buildGraph').onclick = () => {
+  const bp = $('#blueprintInput').value.trim();
+  if (!bp) return toast('Dán blueprint JSON hoặc chọn file trước', true);
+  buildFromBlueprint(bp);
+};
+// Pick one or more .json files (feature mode: bible.json + seq-XX.json) and build from them.
+$('#blueprintFiles').onchange = async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (!files.length) return;
+  try {
+    const parts = [];
+    for (const f of files) parts.push(JSON.parse(await f.text()));
+    await buildFromBlueprint(parts);
+  } catch (err) {
+    toast('File JSON không hợp lệ: ' + err.message, true);
   }
 };
 $('#saveLLM').onclick = async () => {

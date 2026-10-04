@@ -172,7 +172,21 @@
           ></textarea>
           <div class="actions">
             <button id="buildGraph" class="button primary">✦ Dựng sơ đồ</button>
+            <label
+              class="button"
+              title="Chọn file .json (phim dài: chọn cả bible.json và seq-XX.json)"
+              >📁 Chọn file JSON<input
+                type="file"
+                id="blueprintFiles"
+                accept=".json,application/json"
+                multiple
+                hidden
+            /></label>
           </div>
+          <p class="field-hint">
+            Phim dài: chọn <strong>cả bible.json và seq-XX.json</strong> cùng lúc — tool tự gộp nhân
+            vật/bối cảnh từ bible với các shot của phân đoạn.
+          </p>
         </div>
         <div class="settings-panel">
           <h3>3. Tự động qua API (tuỳ chọn)</h3>

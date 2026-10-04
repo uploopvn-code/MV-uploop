@@ -234,6 +234,25 @@ try {
   r = await api('/api/director/build', 'POST', { blueprint: '{"assets":[]}' });
   assert.equal(r.status, 400);
 
+  // Build from an array of files (feature mode: bible + sequence picked together).
+  const bibleObj = {
+    bible: { assets: [{ key: 'q', role: 'character', name: 'Q', prompt: 'p' }] },
+    cameras: [{ key: 'c1', name: 'C', config: 'x' }],
+    style: 'Cinematic',
+  };
+  const seqObj = {
+    project: { title: 'Seq A' },
+    shots: [{ name: 'SA', duration: 6, uses: ['q'], camera: 'c1', videoPrompt: 'Veo @q.' }],
+  };
+  r = await api('/api/director/build', 'POST', { blueprint: [bibleObj, seqObj] });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.name, 'Seq A');
+  assert.equal(r.data.theme, 'film');
+  assert.ok(
+    r.data.nodes.some(n => n.name === 'Q'),
+    'bible asset built from the array',
+  );
+
   // LLM auto path: point the Director at the mock, then auto-build.
   await api('/api/director/llm', 'POST', {
     key: 'test-key-1234',
