@@ -91,6 +91,47 @@ assert.ok(
 assert.ok(!/Camera:/i.test(bshot.prompt), 'baked Camera: stripped from the shot prompt');
 assert.ok(!/Burgundy|wavy hair|polished wooden/i.test(bshot.prompt), 'no default-template leakage');
 
+// Drama (Google VEO) blueprint: project.title, role:"prop", self-contained videoPrompt.
+const drama = buildGraph({
+  project: { title: 'Bẫy Ngầm (The Trap)', country_setting: 'Việt Nam' },
+  style: 'Cinematic 35mm anamorphic, chiaroscuro, photorealistic.',
+  assets: [
+    { key: 'wife', role: 'character', name: 'Người vợ', prompt: 'model sheet wife' },
+    { key: 'husband', role: 'character', name: 'Người chồng', prompt: 'model sheet husband' },
+    { key: 'scene_table', role: 'scene', name: 'Bàn ăn', prompt: 'dining table' },
+    { key: 'prop_card', role: 'prop', name: 'Thẻ khách sạn', prompt: 'hotel keycard macro' },
+  ],
+  cameras: [{ key: 'ots', name: 'OTS', config: 'over-the-shoulder push-in' }],
+  shots: [
+    {
+      name: 'Shot 01',
+      start: 0,
+      duration: 7,
+      beat: 'setup',
+      uses: ['wife', 'husband', 'scene_table', 'prop_card'],
+      camera: 'ots',
+      dialogue: 'Anh về muộn.',
+      videoPrompt:
+        'Veo Video Prompt: @wife and @husband at @scene_table. Camera: over-the-shoulder. Lighting & Physics: amber chiaroscuro, 16:9, cinematic 35mm, no text.',
+    },
+  ],
+});
+assert.equal(drama.name, 'Bẫy Ngầm (The Trap)', 'name comes from project.title');
+assert.equal(drama.theme, 'film', 'drama defaults to the film theme');
+const dByName = n => drama.nodes.find(x => x.name === n);
+assert.equal(dByName('Người vợ').zone, 'character');
+assert.equal(dByName('Bàn ăn').zone, 'design');
+assert.equal(dByName('Thẻ khách sạn').zone, 'design', 'a prop is a reference image');
+const dShot = dByName('Shot 01');
+assert.match(dShot.videoPrompt, /Lighting & Physics/, 'VEO prompt kept intact (not stripped)');
+assert.equal(dShot.lyric, 'Anh về muộn.', 'dialogue mapped to the shot line');
+// The shot is wired to its uses but NOT to camera/style (those are inline in the VEO prompt).
+const dParents = drama.edges.filter(e => e.target === dShot.id).map(e => e.source);
+assert.equal(dParents.length, 4, 'wired to the 4 reference assets only');
+assert.ok(dParents.includes(dByName('Thẻ khách sạn').id));
+assert.ok(!dParents.includes(dByName('Style').id), 'style not wired for drama');
+assert.ok(!dParents.includes(dByName('OTS').id), 'camera not wired for drama');
+
 // parseBlueprint tolerates a ```json fence and surrounding prose.
 const wrapped = 'Đây là kết quả:\n```json\n' + JSON.stringify(bp) + '\n```\ncảm ơn';
 assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');

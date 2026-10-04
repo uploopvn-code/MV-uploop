@@ -134,12 +134,20 @@ export function buildGraph(bp) {
   if (assets.length + cameras.length + shots.length + 1 > 100)
     throw new Error('Blueprint quá lớn (>100 node). Giảm số asset/shot.');
 
+  // Drama (Google VEO) blueprints use project.title, role:"prop" assets, and each shot's
+  // videoPrompt already bakes in Camera + Lighting + style. For those we keep the VEO
+  // prompt verbatim and wire only the reference assets (no camera/style injection, which
+  // would duplicate). Music blueprints keep the editable camera/style wiring.
+  const isDrama =
+    !!(b.project && b.project.title && !b.project.name) || assets.some(a => a.role === 'prop');
+
   const nodes = [],
     edges = [];
   const assetId = {},
     camId = {};
 
-  // Style node (one, in the Style/Camera setup zone), connected to every shot.
+  // Style node (one, in the Style/Camera setup zone). Wired into every shot for music;
+  // kept as reference only (not wired) for drama, whose shots carry their own style.
   let styleId = null;
   if (b.style && str(b.style).trim()) {
     styleId = nid();
@@ -192,17 +200,17 @@ export function buildGraph(bp) {
   shots.forEach((sh, i) => {
     const id = nid();
     const dur = Number(sh.duration);
-    // Image (keyframe) and video share the composition/staging text; camera + style
-    // come from the wired setting nodes, so they are not baked in here. Falling back to
-    // the blueprint's own prompt only, never the project's default template fields.
-    const base = baseShotPrompt(sh);
+    // Drama: keep the full VEO videoPrompt (it carries camera + lighting + style inline).
+    // Music: strip the baked "Camera:/Style:" tail so the wired setting nodes are the source.
+    const base = isDrama ? str(sh.videoPrompt) : baseShotPrompt(sh);
     nodes.push({
       id,
       zone: 'production',
       name: str(sh.name || 'Shot ' + (i + 1), 100),
       prompt: str(sh.prompt) || base,
       videoPrompt: str(sh.videoPrompt) ? base : '',
-      lyric: str(sh.lyric, 5000),
+      // Drama shots carry a spoken line in "dialogue"; music shots in "lyric".
+      lyric: str(sh.lyric ?? sh.dialogue, 5000),
       start: Number.isFinite(Number(sh.start)) ? Number(sh.start) : i * 8,
       duration: Number.isFinite(dur) && dur > 0 ? dur : 8,
       videoInput: 'refs', // a storyboard shot is driven by the connected asset images
@@ -216,10 +224,13 @@ export function buildGraph(bp) {
       const src = assetId[str(u, 100)];
       if (src) edges.push({ source: src, target: id });
     }
-    // Wire its camera size and the shared style.
-    const cam = camId[str(sh.camera, 100)];
-    if (cam) edges.push({ source: cam, target: id });
-    if (styleId) edges.push({ source: styleId, target: id });
+    // Music: wire the shot's camera size and the shared style (text injected into prompts).
+    // Drama: skip — the VEO prompt already states camera + style per shot.
+    if (!isDrama) {
+      const cam = camId[str(sh.camera, 100)];
+      if (cam) edges.push({ source: cam, target: id });
+      if (styleId) edges.push({ source: styleId, target: id });
+    }
   });
 
   // Drop duplicate edges.
@@ -234,7 +245,7 @@ export function buildGraph(bp) {
   return {
     nodes,
     edges: uniqueEdges,
-    name: b.project?.name ? str(b.project.name, 100) : null,
-    theme: b.project?.theme || null,
+    name: b.project?.name || b.project?.title ? str(b.project.name || b.project.title, 100) : null,
+    theme: b.project?.theme || (isDrama ? 'film' : null),
   };
 }
