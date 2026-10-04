@@ -111,6 +111,34 @@ export function parseBlueprint(input) {
 const str = (v, n = 20000) => String(v ?? '').slice(0, n);
 const nid = () => 'node-' + crypto.randomUUID();
 
+// Collects every JSON blueprint from the input: an object, an array of objects, or text
+// with one or more ```json blocks. Lets the user paste a feature-mode bible together with a
+// sequence file (two blocks) and have them merged.
+function collectBlueprints(input) {
+  if (Array.isArray(input)) return input.filter(x => x && typeof x === 'object');
+  if (input && typeof input === 'object') return [input];
+  const text = String(input || '');
+  const out = [];
+  const re = /```(?:json)?\s*([\s\S]*?)```/gi;
+  let m;
+  while ((m = re.exec(text))) {
+    try {
+      out.push(JSON.parse(m[1]));
+    } catch {}
+  }
+  if (out.length) return out;
+  const first = text.indexOf('{'),
+    last = text.lastIndexOf('}');
+  for (const c of [first !== -1 && last > first ? text.slice(first, last + 1) : null, text]) {
+    if (!c) continue;
+    try {
+      return [JSON.parse(c)];
+    } catch {}
+  }
+  throw new Error('Không đọc được JSON blueprint. Dán đúng khối JSON từ master prompt / skill.');
+}
+const arr = v => (Array.isArray(v) ? v : []);
+
 // A blueprint usually bakes "Camera: … Style: …" into each videoPrompt, but the tool
 // injects those from the wired camera + style setting nodes. Strip that trailing clause
 // so they are not duplicated, leaving the composition + staging description that drives
@@ -125,13 +153,46 @@ function baseShotPrompt(sh) {
 // Builds nodes + edges from a blueprint and returns { nodes, edges, name, theme }.
 // Throws on invalid input. Does not touch audio/fields/output settings.
 export function buildGraph(bp) {
-  const b = parseBlueprint(bp);
-  const assets = Array.isArray(b.assets) ? b.assets : [];
-  const cameras = Array.isArray(b.cameras) ? b.cameras : [];
-  const shots = Array.isArray(b.shots) ? b.shots : [];
-  if (!assets.length) throw new Error('Blueprint thiếu "assets".');
+  const parts = collectBlueprints(bp).map(p => p.blueprint || p);
+  // Merge assets / cameras / shots across all parts, pulling from a feature-mode bible and
+  // from split character/scene/prop arrays too. Dedupe assets/cameras by key.
+  let project = null,
+    style = null;
+  const assets = [],
+    cameras = [],
+    shots = [];
+  for (const p of parts) {
+    project = project || p.project;
+    style = style || p.style || p.bible?.style;
+    for (const a of [p.assets, p.bible?.assets, p.characters, p.scenes, p.props].flatMap(arr))
+      assets.push(a);
+    for (const c of [p.cameras, p.bible?.cameras].flatMap(arr)) cameras.push(c);
+    for (const s of arr(p.shots)) shots.push(s);
+  }
+  const b = { project, style, assets, cameras, shots };
+  const dedupe = list => {
+    const seen = new Set();
+    return list.filter(x => {
+      const k = str(x?.key || x?.id || x?.name, 200);
+      if (!k || seen.has(k)) return !!k && false;
+      seen.add(k);
+      return true;
+    });
+  };
+  const uniqAssets = dedupe(assets);
+  const uniqCameras = dedupe(cameras);
+  if (!uniqAssets.length) {
+    const keys = [...new Set(parts.flatMap(p => Object.keys(p)))].join(', ') || '(trống)';
+    throw new Error(
+      'Blueprint thiếu "assets" (không thấy nhân vật/bối cảnh). Nếu đây là file phân đoạn ' +
+        'seq-XX của phim dài, hãy dán kèm cả bible.json (dán cả hai khối JSON vào ô này). ' +
+        'Khóa JSON tìm thấy: ' +
+        keys +
+        '.',
+    );
+  }
   if (!shots.length) throw new Error('Blueprint thiếu "shots".');
-  if (assets.length + cameras.length + shots.length + 1 > 100)
+  if (uniqAssets.length + uniqCameras.length + shots.length + 1 > 100)
     throw new Error('Blueprint quá lớn (>100 node). Giảm số asset/shot.');
 
   // Drama (Google VEO) blueprints use project.title, role:"prop" assets, and each shot's
@@ -162,7 +223,7 @@ export function buildGraph(bp) {
   }
 
   const charRe = /singer|char|vocal|ca s[iĩ]|nh[aâ]n v[aậ]t|artist/i;
-  for (const a of assets) {
+  for (const a of uniqAssets) {
     const key = str(a.key || a.id || a.name, 100);
     if (!key) continue;
     const id = nid();
@@ -182,7 +243,7 @@ export function buildGraph(bp) {
       outputNaming: { ...defaultNaming },
     });
   }
-  for (const c of cameras) {
+  for (const c of uniqCameras) {
     const key = str(c.key || c.id || c.name, 100);
     if (!key) continue;
     const id = nid();

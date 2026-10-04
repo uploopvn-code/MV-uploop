@@ -132,6 +132,53 @@ assert.ok(dParents.includes(dByName('Thẻ khách sạn').id));
 assert.ok(!dParents.includes(dByName('Style').id), 'style not wired for drama');
 assert.ok(!dParents.includes(dByName('OTS').id), 'camera not wired for drama');
 
+// Feature-mode: paste a bible (assets+cameras, no shots) AND a sequence (shots, no assets)
+// as two JSON blocks → they merge into one graph.
+const bibleTxt =
+  '```json\n' +
+  JSON.stringify({
+    bible: {
+      assets: [
+        { key: 'wife', role: 'character', name: 'Vợ', prompt: 'x' },
+        { key: 'room', role: 'scene', name: 'Phòng', prompt: 'y' },
+      ],
+      cameras: [{ key: 'ots', name: 'OTS', config: 'c' }],
+    },
+    style: 'Cinematic',
+  }) +
+  '\n```';
+const seqTxt =
+  '```json\n' +
+  JSON.stringify({
+    project: { title: 'Seq 1', part_of: 'Phim', sequence_index: 1 },
+    shots: [
+      {
+        name: 'S1',
+        duration: 6,
+        uses: ['wife', 'room'],
+        camera: 'ots',
+        videoPrompt: 'Veo: @wife in @room. Camera: ots. Lighting & Physics: amber.',
+      },
+    ],
+  }) +
+  '\n```';
+const merged = buildGraph(bibleTxt + '\n' + seqTxt);
+assert.equal(merged.name, 'Seq 1');
+assert.ok(
+  merged.nodes.some(n => n.name === 'Vợ'),
+  'bible assets merged into the sequence',
+);
+assert.ok(
+  merged.nodes.some(n => n.name === 'S1'),
+  'sequence shot present',
+);
+// A sequence file alone (no assets) gives a clear, guiding error.
+assert.throws(
+  () => buildGraph({ project: { title: 'Seq alone' }, shots: [{ name: 'S', uses: [] }] }),
+  /bible/i,
+  'missing-assets error mentions the bible',
+);
+
 // parseBlueprint tolerates a ```json fence and surrounding prose.
 const wrapped = 'Đây là kết quả:\n```json\n' + JSON.stringify(bp) + '\n```\ncảm ơn';
 assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
