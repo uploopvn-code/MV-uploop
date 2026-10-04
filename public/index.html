@@ -66,13 +66,24 @@
             <button id="addStyle" class="button">＋ Style</button>
             <button id="addCamera" class="button">＋ Máy quay</button>
             <div class="side-sep"></div>
+            <div class="side-title">Tạo ảnh nhanh theo khu</div>
+            <label
+              >Khu vực<select id="imageZone" aria-label="Khu vực tạo ảnh">
+                <option value="character">① Nhân vật</option>
+                <option value="design">② Bối cảnh</option>
+                <option value="production">④ Khung hình shot</option>
+              </select></label
+            >
+            <button id="autoImageStart" class="button primary">▶ Tạo ảnh khu vực</button>
+            <p id="autoImageStatus" class="field-hint"></p>
+            <div class="side-sep"></div>
             <div class="side-title">Tạo tự động</div>
             <label
               >Chạy đến<select id="autoTarget" aria-label="Node đích chạy tự động">
                 <option value="">Toàn bộ workflow</option>
               </select></label
             >
-            <button id="autoStart" class="button primary">▶ Tạo ảnh</button>
+            <button id="autoStart" class="button primary">▶ Tạo ảnh (chuỗi)</button>
             <button id="autoStop" class="button">Dừng tạo ảnh</button>
             <label
               >Số phiên bản video<select

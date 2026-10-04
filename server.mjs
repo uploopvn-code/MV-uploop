@@ -156,7 +156,7 @@ function normalize(d) {
   // reference-resolution throw and 500 the whole state (blank page).
   const ids = new Set(d.nodes.map(n => n.id));
   d.edges = d.edges.filter(e => ids.has(e.source) && ids.has(e.target));
-  for (const run of [d.autoRun, d.autoVideoRun])
+  for (const run of [d.autoRun, d.autoVideoRun, d.autoImageRun])
     if (run?.status === 'running') {
       run.status = 'stopped';
       run.message = 'Đã khởi động lại. Kiểm tra tác vụ cũ trước khi chạy tiếp.';
@@ -388,6 +388,7 @@ function applyGraph(graph) {
   if (graph.theme && themes.some(t => t.id === graph.theme)) db.theme = graph.theme;
   db.autoRun = null;
   db.autoVideoRun = null;
+  db.autoImageRun = null;
   db.jobs = [];
   normalize(db);
   mutate();
@@ -600,6 +601,20 @@ function autoVideoEligible(n) {
   }
   return !!n.image && !n.stale;
 }
+// Nodes in a zone ready to generate an IMAGE via Seedvis and still missing one (or stale):
+// text-to-image nodes, or compose nodes whose input images are ready. Used by the per-zone
+// "quick image" batch (e.g. generate all characters, or all scenes, at once).
+const IMAGE_ZONES = new Set(['character', 'design', 'production']);
+function imageBatchNodes(zone) {
+  return db.nodes.filter(n => {
+    if (n.terminal || isSetting(n)) return false;
+    if (nodeZone(n) !== zone) return false;
+    if (providers(n).image.type !== 'seedvis') return false;
+    const imgParents = deps(n.id).filter(id => !isSetting(getNode(id)));
+    if (imgParents.some(id => !getNode(id)?.image || getNode(id).stale)) return false;
+    return !n.image || n.stale; // only fill missing/stale, so a re-run doesn't recharge done ones
+  });
+}
 // Production nodes whose most recent video job failed (so they produced no output branch).
 function failedVideoNodeIds() {
   return [
@@ -662,6 +677,7 @@ function requireIdle() {
   if (
     db.autoRun?.status === 'running' ||
     db.autoVideoRun?.status === 'running' ||
+    db.autoImageRun?.status === 'running' ||
     db.jobs.some(j => ['queued', 'running'].includes(j.status) && !j.cancelRequested)
   )
     throw new Error('Đợi tác vụ hoàn tất hoặc dừng chuỗi trước khi sửa workflow.');
@@ -805,6 +821,32 @@ async function feedAuto() {
       vr.message = vr.errors.length
         ? 'Một số node lỗi: ' + vr.errors.join(' · ')
         : 'Đã tạo xong các phiên bản video';
+      save();
+    }
+  }
+  // Parallel image batch for one zone (Nhân vật / Bối cảnh …): enqueue every ready node.
+  const ir = db.autoImageRun;
+  if (ir?.status === 'running') {
+    for (const id of [...ir.pending]) {
+      try {
+        const j = await createJob(lastReq, { nodeId: id, kind: 'image' });
+        j.autoImageId = ir.id;
+        ir.pending = ir.pending.filter(x => x !== id);
+        save();
+      } catch (e) {
+        ir.pending = ir.pending.filter(x => x !== id);
+        ir.errors.push((getNode(id)?.name || id) + ': ' + e.message);
+        save();
+      }
+    }
+    const active = db.jobs.some(
+      j => j.autoImageId === ir.id && ['queued', 'running'].includes(j.status),
+    );
+    if (!ir.pending.length && !active) {
+      ir.status = ir.errors.length ? 'blocked' : 'completed';
+      ir.message = ir.errors.length
+        ? 'Một số ảnh lỗi: ' + ir.errors.join(' · ')
+        : 'Đã tạo xong ảnh của khu vực';
       save();
     }
   }
@@ -1314,9 +1356,37 @@ const server = http.createServer(async (req, res) => {
         db.autoRun.status = 'stopped';
         db.autoRun.message = 'Đã dừng chuỗi tạo ảnh';
       }
+      if (db.autoImageRun?.status === 'running') {
+        db.autoImageRun.pending = [];
+        db.autoImageRun.status = 'stopped';
+        db.autoImageRun.message = 'Đã dừng tạo ảnh khu vực';
+      }
       // Cancel queued image jobs and abort any running one so the workflow unlocks.
       haltJobs(j => j.kind === 'image' && ['queued', 'running'].includes(j.status));
       save();
+      return json(res, 200, publicState());
+    }
+    // Quick image batch: generate images for all ready nodes in one zone, in parallel.
+    if (p === '/api/auto/images/start' && req.method === 'POST') {
+      requireIdle();
+      if (!seedvis.configured()) throw new Error('Nhập API key Seedvis trong Kết nối web.');
+      const b = await body(req);
+      const zone = IMAGE_ZONES.has(b.zone) ? b.zone : null;
+      if (!zone) throw new Error('Chọn khu vực hợp lệ (Nhân vật / Bối cảnh / Sản xuất).');
+      const eligible = imageBatchNodes(zone);
+      if (!eligible.length)
+        throw new Error('Khu vực này không có node nào cần/đủ điều kiện tạo ảnh.');
+      db.autoImageRun = {
+        id: crypto.randomUUID(),
+        status: 'running',
+        zone,
+        pending: eligible.map(n => n.id),
+        total: eligible.length,
+        errors: [],
+        message: 'Đang tạo ảnh song song cho ' + eligible.length + ' node',
+      };
+      save();
+      pump(req);
       return json(res, 200, publicState());
     }
     if (p === '/api/auto/video/start' && req.method === 'POST') {

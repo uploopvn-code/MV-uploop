@@ -20,6 +20,7 @@ const workflowBusy = () =>
     state &&
     (state.autoRun?.status === 'running' ||
       state.autoVideoRun?.status === 'running' ||
+      state.autoImageRun?.status === 'running' ||
       state.jobs?.some(j => ['queued', 'running'].includes(j.status) && !j.cancelRequested))
   );
 // Workflow zones (process stages) shown as columns on the canvas.
@@ -1262,6 +1263,24 @@ function renderGraph() {
     : 'Tự động chạy theo đường nối, bỏ qua ảnh đã có và còn hợp lệ. Chỉ chạy node sau khi nhận được file.';
   $('#autoStart').disabled = run?.status === 'running';
   $('#autoStop').disabled = run?.status !== 'running';
+  // Per-zone quick image batch status.
+  const ir = state.autoImageRun;
+  const zoneLabel = { character: 'Nhân vật', design: 'Bối cảnh', production: 'Khung hình shot' };
+  $('#autoImageStatus').textContent = ir
+    ? '🖼 ' +
+      (zoneLabel[ir.zone] || ir.zone) +
+      ': ' +
+      ({
+        running: 'đang tạo song song',
+        completed: 'hoàn tất',
+        blocked: 'xong, một số lỗi',
+        stopped: 'đã dừng',
+      }[ir.status] || ir.status) +
+      ' · ' +
+      ir.message
+    : 'Chọn khu vực rồi tạo ảnh đồng loạt cho mọi node còn thiếu ảnh trong khu đó (song song).';
+  const otherBusy = run?.status === 'running' || state.autoVideoRun?.status === 'running';
+  $('#autoImageStart').disabled = otherBusy || ir?.status === 'running';
   const vr = state.autoVideoRun;
   $('#autoVideoStatus').textContent = vr
     ? '🎬 Video: ' +
@@ -1558,6 +1577,18 @@ $('#autoStart').onclick = async () => {
     });
     render();
     toast('Đã bắt đầu chuỗi tự động');
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
+$('#autoImageStart').onclick = async () => {
+  try {
+    state = await api('/api/auto/images/start', {
+      method: 'POST',
+      body: { zone: $('#imageZone').value },
+    });
+    render();
+    toast('Đang tạo ảnh đồng loạt cho khu vực đã chọn');
   } catch (e) {
     toast(e.message, true);
   }

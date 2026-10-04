@@ -339,6 +339,33 @@ try {
   for (const id of manyJobs) await settle(id);
   assert.ok(maxInFlight >= 4, 'many jobs run in parallel (maxInFlight=' + maxInFlight + ')');
 
+  // --- Quick image batch per zone: generate images for all ready nodes in a zone at once.
+  const settleImg = async () => {
+    for (let i = 0; i < 300; i++) {
+      const run = (await api('/api/state')).data.autoImageRun;
+      if (run && run.status !== 'running') return run;
+      await new Promise(x => setTimeout(x, 50));
+    }
+    throw new Error('image batch timed out');
+  };
+  const C1 = (await api('/api/nodes', 'POST', { name: 'Nhân vật 1' })).data.nodes.at(-1).id;
+  const C2 = (await api('/api/nodes', 'POST', { name: 'Nhân vật 2' })).data.nodes.at(-1).id;
+  await api('/api/node', 'PATCH', { id: C1, zone: 'character' });
+  await api('/api/node', 'PATCH', { id: C2, zone: 'character' });
+  r = await api('/api/auto/images/start', 'POST', { zone: 'character' });
+  assert.equal(r.status, 200);
+  const imgRun = await settleImg();
+  assert.equal(imgRun.status, 'completed', JSON.stringify(imgRun.errors));
+  s = (await api('/api/state')).data;
+  assert.ok(
+    s.nodes.find(n => n.id === C1).image && s.nodes.find(n => n.id === C2).image,
+    'both character nodes got images',
+  );
+  // Re-running the same zone finds nothing missing → rejected.
+  assert.equal((await api('/api/auto/images/start', 'POST', { zone: 'character' })).status, 400);
+  // An invalid zone is rejected.
+  assert.equal((await api('/api/auto/images/start', 'POST', { zone: 'setup' })).status, 400);
+
   // --- Auto video run, 2 versions, scoped to node A → 2 output branch nodes.
   const nap = ms => new Promise(r => setTimeout(r, ms));
   const settleAuto = async () => {
@@ -515,7 +542,7 @@ try {
     .join('');
   assert.ok(!projJson.includes(KEY));
   console.log(
-    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency (push max), auto-video versions+branch+rerun+delete, retry failed videos, key not exposed',
+    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency (push max), zone image batch, auto-video versions+branch+rerun+delete, retry failed videos, key not exposed',
   );
 } finally {
   proc.kill();
