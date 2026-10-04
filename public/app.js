@@ -1128,7 +1128,11 @@ $('#projectSettings').onclick = () => {
           `<option value="${t.id}" ${t.id === state.theme ? 'selected' : ''}>${esc(t.label)}</option>`,
       )
       .join('') +
-    '</select></label><p class="field-hint">Đổi chủ đề chỉ đổi nhãn phân loại; không dựng lại node. Dùng Project mới để lấy bộ node mẫu của chủ đề khác.</p><label>Thư mục lưu trên máy chạy Orbit <code class="variable-tag">{{mv_output_dir}}</code><input id="outputDirectory" value="' +
+    '</select></label><p class="field-hint">Đổi chủ đề chỉ đổi nhãn phân loại; không dựng lại node. Dùng Project mới để lấy bộ node mẫu của chủ đề khác.</p>' +
+    '<label>📁 Thư mục lưu ảnh/video của project<input id="exportDir" placeholder="Để trống = lưu trong thư mục mặc định của project" value="' +
+    esc(state.exportDir || '') +
+    '"></label><p class="field-hint">Đường dẫn tuyệt đối trên máy chạy tool (vd <code>D:\\MV\\Ashford</code>). Ảnh/video tạo ra được lưu thành các thư mục con: <code>thu-vien/nhan-vat</code>, <code>thu-vien/boi-canh</code>, <code>khung-hinh/&lt;seq&gt;</code>, <code>video/&lt;seq&gt;</code>. Để trống thì lưu trong thư mục mặc định của project.</p>' +
+    '<label>Thư mục lưu trên máy chạy Orbit <code class="variable-tag">{{mv_output_dir}}</code><input id="outputDirectory" value="' +
     esc(state.outputDirectory) +
     '"></label><p class="field-hint">Nhập đường dẫn tuyệt đối. Thư mục phải truy cập được bằng cùng đường dẫn từ MV Director và Orbit (cùng máy hoặc thư mục mạng dùng chung).</p><p>Đường dẫn đầy đủ gửi sang Orbit: <code>{{mv_output_path}}</code></p><button class="button primary wide" id="saveProjectSettings">Lưu cài đặt</button><button class="button wide danger" id="deleteProject">🗑 Xóa project này</button>';
   $('.close').onclick = closeInspector;
@@ -1140,6 +1144,7 @@ $('#projectSettings').onclick = () => {
           name: $('#projectTitle').value,
           theme: $('#projectTheme').value,
           outputDirectory: $('#outputDirectory').value,
+          exportDir: $('#exportDir').value.trim(),
         },
       });
       render();

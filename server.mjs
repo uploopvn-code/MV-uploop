@@ -552,8 +552,24 @@ const safeFile = s =>
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 80) || 'anh';
+// Root folder for this project's organized file exports: the user-chosen exportDir, or the
+// project's own folder by default.
+const exportRoot = () => db.exportDir || path.dirname(mediaDir);
+// Copies a media file to <exportRoot>/<folder>/<base><ext>, best-effort (never throws).
+function copyExport(mediaId, folderParts, base) {
+  try {
+    if (!/^[a-f0-9-]+\.(png|jpg|jpeg|webp|mp4|webm)$/.test(mediaId)) return;
+    const src = path.join(mediaDir, mediaId);
+    if (!fs.existsSync(src)) return;
+    const folder = path.join(exportRoot(), ...folderParts);
+    fs.mkdirSync(folder, { recursive: true });
+    fs.copyFileSync(src, path.join(folder, base + path.extname(mediaId)));
+  } catch (e) {
+    console.error('Xuất file ra thư mục lỗi:', e.message);
+  }
+}
 // Keeps an asset node's image in the project's library (keyed by its stable blueprint key)
-// so a later sequence reuses it, and writes a readable copy into the project folders:
+// so a later sequence reuses it, and writes a readable copy into the export folders:
 //   thu-vien/nhan-vat/<key>.png, thu-vien/boi-canh/<key>.png, khung-hinh/<seq>/<STT>_<tên>.png
 function rememberAndExport(n) {
   if (!n || !n.image) return;
@@ -561,30 +577,26 @@ function rememberAndExport(n) {
     db.assetLibrary = db.assetLibrary || {};
     db.assetLibrary[n.assetKey] = { image: n.image, name: n.name, role: n.role || null };
   }
-  try {
-    const id = String(n.image.url || '').replace(/^\/media\//, '');
-    if (!/^[a-f0-9-]+\.(png|jpg|jpeg|webp)$/.test(id)) return;
-    const src = path.join(mediaDir, id);
-    if (!fs.existsSync(src)) return;
-    const projectRoot = path.dirname(mediaDir);
-    const ext = path.extname(id);
-    const z = nodeZone(n);
-    let folder, base;
-    if (z === 'character') {
-      folder = path.join(projectRoot, 'thu-vien', 'nhan-vat');
-      base = safeFile(n.assetKey || n.name);
-    } else if (z === 'design') {
-      folder = path.join(projectRoot, 'thu-vien', 'boi-canh');
-      base = safeFile(n.assetKey || n.name);
-    } else if (z === 'production') {
-      folder = path.join(projectRoot, 'khung-hinh', safeFile(db.name));
-      base = String(n.seq || 0).padStart(2, '0') + '_' + safeFile(n.name);
-    } else return;
-    fs.mkdirSync(folder, { recursive: true });
-    fs.copyFileSync(src, path.join(folder, base + ext));
-  } catch (e) {
-    console.error('Xuất ảnh ra thư mục lỗi:', e.message);
-  }
+  const id = String(n.image.url || '').replace(/^\/media\//, '');
+  const z = nodeZone(n);
+  if (z === 'character') copyExport(id, ['thu-vien', 'nhan-vat'], safeFile(n.assetKey || n.name));
+  else if (z === 'design') copyExport(id, ['thu-vien', 'boi-canh'], safeFile(n.assetKey || n.name));
+  else if (z === 'production')
+    copyExport(
+      id,
+      ['khung-hinh', safeFile(db.name)],
+      String(n.seq || 0).padStart(2, '0') + '_' + safeFile(n.name),
+    );
+}
+// Writes a produced video into the export folder: video/<seq>/<STT>_<tên>_vN.mp4.
+function exportVideo(sourceNode, asset, version) {
+  if (!sourceNode || !asset?.url) return;
+  const id = String(asset.url).replace(/^\/media\//, '');
+  copyExport(
+    id,
+    ['video', safeFile(db.name)],
+    String(sourceNode.seq || 0).padStart(2, '0') + '_' + safeFile(sourceNode.name) + '_v' + version,
+  );
 }
 // A display-only node holding one produced video, wired from the source node.
 function createBranchNode(sourceId, asset) {
@@ -611,6 +623,7 @@ function createBranchNode(sourceId, asset) {
     outputNaming: { ...defaultNaming },
   });
   db.edges.push({ source: sourceId, target: id });
+  exportVideo(src, asset, version); // save the produced video into the export folder
   return id;
 }
 // Seedvis returns one result per requested version. Branch jobs turn each into
@@ -1031,6 +1044,9 @@ const server = http.createServer(async (req, res) => {
         markAll();
       }
       db.outputDirectory = outputDirectory;
+      // Folder where this project's generated images/videos are saved as organized files.
+      // Empty = default (inside the project's own folder). Must be an absolute path.
+      if ('exportDir' in b) db.exportDir = b.exportDir ? validateDirectory(b.exportDir) : '';
       if ('website' in b) db.website = String(b.website).slice(0, 500);
       if ('name' in b) db.name = String(b.name).slice(0, 100);
       if ('theme' in b && themes.some(t => t.id === b.theme)) db.theme = b.theme;

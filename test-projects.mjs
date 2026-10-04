@@ -136,8 +136,28 @@ try {
   assert.equal(back.status, 200, 'state still loads with a dangling edge');
   assert.ok(!back.data.edges.some(e => e.source === 'ghost-node'), 'dangling edge repaired');
 
+  // Custom export folder: generated/uploaded images are saved there, organized by zone.
+  const expDir = path.join(dir, 'exports-custom');
+  let rr = await api('/api/project', 'PATCH', { exportDir: expDir });
+  assert.equal(rr.status, 200);
+  assert.equal(rr.data.exportDir, expDir, 'export folder saved on the project');
+  const PNG =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  await api('/api/upload', 'POST', {
+    nodeId: 'singer',
+    kind: 'image',
+    mime: 'image/png',
+    base64: PNG,
+  });
+  assert.ok(
+    fs.existsSync(path.join(expDir, 'thu-vien', 'nhan-vat', 'CA SĨ A.png')),
+    'image exported into the chosen folder, by zone',
+  );
+  // A relative export path is rejected.
+  assert.equal((await api('/api/project', 'PATCH', { exportDir: 'relative/x' })).status, 400);
+
   console.log(
-    'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, zones, per-zone numbering + reorder, create/switch/delete projects, isolation, per-project media, export/import backup',
+    'PASS: default template + setting nodes, prompt injection, setting edit, no-gen on setting, zones, per-zone numbering + reorder, create/switch/delete projects, isolation, per-project media, export/import backup, custom export folder',
   );
 } finally {
   proc.kill();
