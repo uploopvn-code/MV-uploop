@@ -2,3 +2,6 @@
 # Note: files already tracked in data/ stay tracked until removed with `git rm --cached`.
 data/
 node_modules/
+# Local Claude Code tooling and archives (not part of the app).
+.claude/
+*.rar
