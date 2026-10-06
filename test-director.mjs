@@ -1309,6 +1309,41 @@ try {
     'bible has camera + style presets',
   );
 
+  // The drama-long preset's worked example must also build (its long-form schema is valid):
+  // recurring characters, a costume change, a prop, multiple merged dialogue clusters, the main
+  // scene's A/B angle plates, and a flashback scene that opts out of A/B (reverse_angles:false).
+  const dramaLong = mt.data.templates.find(t => t.id === 'builtin:drama-long');
+  assert.ok(dramaLong.prompt.length > 800, 'drama-long preset has real content');
+  assert.ok(dramaLong.prompt.includes('```json'), 'drama-long embeds a worked JSON example');
+  r = await api('/api/director/build', 'POST', { blueprint: dramaLong.prompt });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const ln = r.data.nodes;
+  assert.ok(
+    ln.filter(n => n.role === 'merged').length >= 2,
+    'drama-long builds multiple merged dialogue clusters (coverage pacing)',
+  );
+  assert.ok(
+    ln.filter(n => n.role === 'character').length >= 2,
+    'drama-long builds the recurring characters',
+  );
+  assert.ok(
+    ln.some(n => n.role === 'look'),
+    'drama-long builds a wardrobe costume (look) node',
+  );
+  assert.ok(
+    ln.some(n => n.role === 'prop' && n.zone === 'wardrobe'),
+    'drama-long prop sits in the Trang phục & vật dụng column (3-angle object sheet)',
+  );
+  const lByKey = k => ln.find(n => n.assetKey === k);
+  assert.ok(
+    lByKey('scene_study_a') && lByKey('scene_study_b'),
+    'the main dialogue scene gets its A/B angle plates',
+  );
+  assert.ok(
+    !lByKey('scene_garden_a') && !lByKey('scene_garden_b'),
+    'the flashback scene opts out of A/B (reverse_angles:false)',
+  );
+
   // Save a user template, confirm it lists, delete it; a built-in cannot be deleted.
   const sv = await api('/api/director/master-templates/save', 'POST', {
     name: 'Mẫu test',
