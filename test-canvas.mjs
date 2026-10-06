@@ -23,24 +23,40 @@ const els = {
   '#arrangeZones': {},
 };
 let connected;
+// The canvas module restores its view and node positions from localStorage.
+const saved = {
+  view: { x: 0, y: 0, z: 2 },
+  positions: { a: { x: 30, y: 40 }, b: { x: 300, y: 40 } },
+};
 const context = {
   console,
   Math,
   JSON,
-  localStorage: { setItem: (k, v) => (store[k] = v) },
+  localStorage: {
+    getItem: k => (k === 'mv-canvas-v2' ? JSON.stringify(saved) : null),
+    setItem: (k, v) => (store[k] = v),
+  },
+  // What public/js/canvas.js imports from the other modules.
   toast() {},
   render() {},
   workflowBusy: () => false,
+  card: () => '',
+  hasVideoPort: () => false,
+  videosOf: () => [],
+  shownClip: () => null,
+  showClip: () => null,
+  esc: s => String(s),
+  paint: () => true,
+  ZONES: [],
+  CLIP_ZONES: ['output', 'seedance-video'],
+  ZONE_W: 300,
+  zoneLayout: () => ({}),
   setTimeout: f => f(),
-  graphView: { x: 0, y: 0, z: 2 },
-  savedPositions: { a: { x: 30, y: 40 }, b: { x: 300, y: 40 } },
-  gesture: null,
-  suppressNodeClick: false,
-  selectedEdge: null,
-  connectSource: null,
-  state: { edges: [] },
-  $: s => els[s],
+  requestAnimationFrame: f => f(),
+  store: { state: { edges: [], nodes: [] }, selected: null, dirty: false },
+  $: s => els[s] || {},
   document: {
+    addEventListener() {},
     querySelector: () => node,
     querySelectorAll: () => [],
     elementFromPoint: () => ({
@@ -53,10 +69,16 @@ const context = {
   },
 };
 vm.createContext(context);
+// Run the module as a script: its imports are the stubs above (a new import in canvas.js
+// needs a stub here). Git may check the file out with CRLF line ends.
 const code = fs
-  .readFileSync(new URL('./public/app.js', import.meta.url), 'utf8')
-  .split(/(?=function persistCanvas\(\)\s*\{)/)[1];
+  .readFileSync(new URL('./public/js/canvas.js', import.meta.url), 'utf8')
+  .replace(/^import [^;]+;\r?\n/gm, '')
+  .replace(/^export /gm, '');
 vm.runInContext(code, context);
+// Module-level const/let are not properties of the context: read them through the script.
+const view = () => vm.runInContext('graphView', context);
+const positions = () => vm.runInContext('savedPositions', context);
 const evt = (x, y, target) => ({
   button: 0,
   clientX: x,
@@ -69,14 +91,14 @@ const header = { closest: s => (s === '.graph-node' ? node : s === '.node-top' ?
 events.pointerdown(evt(100, 100, header));
 events.pointermove(evt(140, 120, header));
 await events.pointerup(evt(140, 120, header));
-assert.equal(context.savedPositions.a.x, 50);
-assert.equal(context.savedPositions.a.y, 50);
+assert.equal(positions().a.x, 50);
+assert.equal(positions().a.y, 50);
 const background = { closest: () => null };
 events.pointerdown(evt(100, 100, background));
 events.pointermove(evt(160, 130, background));
 await events.pointerup(evt(160, 130, background));
-assert.equal(context.graphView.x, 60);
-assert.equal(context.graphView.y, 30);
+assert.equal(view().x, 60);
+assert.equal(view().y, 30);
 const before = context.worldPoint(400, 300);
 context.zoomAt(0.5, 400, 300);
 const after = context.worldPoint(400, 300);
@@ -90,7 +112,7 @@ await events.pointerup(evt(300, 200, target));
 await new Promise(r => setImmediate(r));
 assert.equal(connected[0].source, 'a');
 assert.equal(connected[0].target, 'b');
-assert.ok(store['mv-canvas-v1']);
+assert.ok(store['mv-canvas-v2']);
 console.log(
   'PASS: node drag at 200%, pan, cursor-anchored zoom, wire drop sends correct edge, layout persistence',
 );
