@@ -180,6 +180,11 @@ function showSeedvis(o) {
         o.account?.plan ? 'gói ' + o.account.plan : '',
         o.account?.balance != null ? 'số dư ' + o.account.balance : '',
         o.source === 'env' ? 'lấy từ biến môi trường SEEDVIS_API_KEY' : '',
+        // The exact model ids the account exposes (from /models) — so a model the app's catalog
+        // does not list yet (e.g. a distinct "Google Omni Flash" id) is visible for debugging.
+        Array.isArray(o.available) && o.available.length
+          ? 'model tài khoản: ' + o.available.join(', ')
+          : '',
       ]
         .filter(Boolean)
         .join(' · ')
