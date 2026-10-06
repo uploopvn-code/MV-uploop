@@ -1143,6 +1143,33 @@ try {
     dn.filter(n => n.role === 'character').length >= 2,
     'drama-short builds the recurring characters',
   );
+  // Export rebuilds a reusable Bible from the graph (assets + presets, no shots).
+  const ex = await api('/api/export');
+  assert.equal(ex.status, 200);
+  const bible = ex.data.bible;
+  assert.ok(bible && Array.isArray(bible.assets), 'export includes a bible');
+  const bChars = bible.assets.filter(a => a.role === 'character');
+  assert.ok(
+    bChars.length >= 2 && bChars.every(c => c.code && c.identity_label && c.prompt),
+    'bible characters carry code + identity_label + model-sheet prompt',
+  );
+  assert.ok(
+    bible.assets.some(a => a.role === 'scene' && a.conversation),
+    'bible scene carries conversation staging',
+  );
+  assert.ok(
+    bible.assets.some(a => a.role === 'prop'),
+    'bible has the prop',
+  );
+  assert.ok(
+    bible.wardrobe.length >= 1 && bible.wardrobe[0].for,
+    'bible wardrobe records the character it dresses',
+  );
+  assert.ok(
+    bible.cameras.length >= 1 && bible.styles.length >= 1,
+    'bible has camera + style presets',
+  );
+
   // Save a user template, confirm it lists, delete it; a built-in cannot be deleted.
   const sv = await api('/api/director/master-templates/save', 'POST', {
     name: 'Mẫu test',

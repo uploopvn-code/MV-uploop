@@ -45,7 +45,7 @@ cao hơn mọi mức mặc định trong hướng dẫn. Nếu input KHÔNG ghi 
    người trong một cảnh chỉ một look.
 
 5) VẬT DỤNG THEN CHỐT — mỗi đạo cụ quan trọng (điện thoại, lá thư, nhẫn, thẻ…) là một asset
-   role:"prop" với prompt macro/hero + "continuity_note" để giữ nhất quán. Shot nào dùng thì để
+   kind:"item" với prompt macro/hero + "continuity_note" để giữ nhất quán. Shot nào dùng thì để
    key vật dụng trong "uses" và nhắc @prop_key trong videoPrompt.
 
 6) NHỊP DỒN DẬP BẰNG CỤM GHÉP — ƯU TIÊN gộp các câu thoại ngắn thành CỤM ĐỐI THOẠI (setups):
@@ -75,7 +75,7 @@ assets (mảng gộp, phân biệt bằng role):
                conversation:{ place:"<english: câu mở; ảnh 1 là cảnh toàn trống người>",
                               two_shot:"<english: máy đặt đâu cho trung cảnh>",
                               left:{ anchor, background, light }, right:{ anchor, background, light } } }  // chỉ bối cảnh có đối thoại
-  prop:      { key:"prop_x", role:"prop", name, prompt:"<CHỈ MÔ TẢ vật dụng. Tool tự dựng model sheet 3 góc, nền xám, không người>", continuity_note:"<giữ nhất quán>" }
+  prop:      { key:"prop_x", kind:"item", name, prompt:"<CHỈ MÔ TẢ vật dụng. Tool tự dựng model sheet 3 góc, nền xám, không người>", continuity_note:"<giữ nhất quán>" }
 
 wardrobe (mảng riêng — CHỈ khi đổi đồ): mỗi look KHÁC đồ chính = ĐÚNG MỘT node costume
   (KHÔNG tạo cặp "outfit" + "worn" riêng — chỉ một entry; tool tự dựng cả hai bên dưới):
@@ -170,7 +170,7 @@ trang phục/vật dụng được nhắc, và nhiều cụm ghép hơn ví dụ
       } },
     { "key": "scene_villa", "role": "scene", "name": "Sảnh biệt thự", "lighting_profile": "Đèn chùm ấm, cửa kính lớn chiều muộn",
       "prompt": "Grand neoclassical villa entrance hall, marble floor, chandelier, warm late-afternoon light." },
-    { "key": "prop_phone", "role": "prop", "name": "Điện thoại của Mio",
+    { "key": "prop_phone", "kind": "item", "name": "Điện thoại của Mio",
       "prompt": "Macro hero shot of a dark smartphone on a desk, screen showing an incoming call 'Ba (Chủ tịch)', cinematic 35mm.",
       "continuity_note": "Cùng một điện thoại tối màu xuyên suốt; chỉ nội dung màn hình đổi." }
   ],

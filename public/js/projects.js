@@ -328,16 +328,24 @@ $('#editBrief').onclick = () => {
     }
   };
 };
+// Download a JSON object as a file.
+function downloadJson(obj, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(
+    new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }),
+  );
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
 $('#export').onclick = async () => {
   try {
     const b = await api('/api/export');
-    const blob = new Blob([JSON.stringify(b, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'MV-Director-batch.json';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    toast('Đã xuất prompt và metadata');
+    const { bible, ...batch } = b;
+    const base = (batch.project || 'project').replace(/[^\w.\- ]+/g, '_') || 'project';
+    downloadJson(batch, base + '-prompts.json'); // resolved prompts + metadata
+    if (bible) downloadJson(bible, base + '-bible.json'); // reusable asset definitions (Bible)
+    toast('Đã xuất prompt + bible.json');
   } catch (e) {
     toast(e.message, true);
   }
