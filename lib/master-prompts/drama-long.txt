@@ -39,11 +39,14 @@ assets (mảng gộp, phân biệt bằng role):
   (tùy chọn góc đảo của một địa điểm: { key:"scene_x_a", role:"scene", kind:"angle", of:"scene_x",
     uses:["scene_x"], name, prompt:"<cùng địa điểm, góc khác>" })
 
-wardrobe (mảng riêng, song song assets — chỉ khi có look KHÁC trang phục chính):
-  outfit: { key:"outfit_<ten>", kind:"outfit", for:"<key nhân vật>", prompt:"<CHỈ MÔ TẢ bộ đồ: màu + chất liệu + kiểu + phụ kiện. Tool tự dựng ảnh MA-NƠ-CANH không đầu/mặt, 3 góc, nền trắng-xám>" }
-  worn:   { key:"costume_<ten>", kind:"worn", for:"<key nhân vật>", wears:"<key outfit>",
-            uses:["<nhân vật>","<outfit>"], prompt:"<render nhân vật MẶC bộ đồ>", back_view:"<tùy chọn>" }
-  item:   { key:"prop_<ten>", kind:"item", name, prompt:"<CHỈ MÔ TẢ vật dụng. Tool tự dựng model sheet 3 góc, nền xám, không người>", continuity_note }
+wardrobe (mảng riêng, song song assets — chỉ khi có look KHÁC trang phục chính). Mỗi look =
+  ĐÚNG MỘT node costume (KHÔNG tạo cặp "outfit"+"worn" riêng; tool tự dựng cả hai):
+  costume: { key:"costume_<ten>", for:"<key nhân vật>", items:"<phụ kiện, tùy chọn>",
+             prompt:"<CHỈ MÔ TẢ bộ đồ: màu + chất liệu + kiểu + phụ kiện>" }
+    → Tool TỰ dựng: (a) ảnh bộ đồ MA-NƠ-CANH 3 góc nền trắng-xám (cột Trang phục);
+      (b) node "NV đã mặc" (nhân vật khóa mặt + bộ đồ) để cảnh dùng. Shot trỏ "uses" vào KEY
+      costume này (KHÔNG kèm nhân vật gốc). Thừa node nếu tạo cả outfit lẫn worn — đừng tạo.
+  item:    { key:"prop_<ten>", kind:"item", name, prompt:"<CHỈ MÔ TẢ vật dụng. Tool tự dựng model sheet 3 góc, nền xám, không người>", continuity_note }
 
 cameras: [ { key, name, config } ]  // tối thiểu: establishing, OTS, reaction/macro, slow push-in reveal, low-angle/dutch cao trào
 

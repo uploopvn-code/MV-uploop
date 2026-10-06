@@ -37,10 +37,12 @@ cao hơn mọi mức mặc định trong hướng dẫn. Nếu input KHÔNG ghi 
 
 4) TRANG PHỤC ĐẦY ĐỦ THEO TỪNG BỐI CẢNH — look mặc định nằm trong model sheet nhân vật (cảnh dùng
    look chính → shot trỏ thẳng nhân vật). Khi một nhân vật ĐỔI ĐỒ ở một bối cảnh khác, KHÔNG nhân
-   bản nhân vật — tạo ở mảng "wardrobe": một node "outfit" (CHỈ mô tả bộ đồ; tool tự dựng ảnh
-   MA-NƠ-CANH không đầu/mặt, 3 góc trước/nghiêng/sau, nền trắng-xám nổi bật bộ đồ) +
-   một node "worn" ("<NV> đã mặc bộ đó", uses = [nhân vật, outfit]); shot ở cảnh đó trỏ "uses" vào
-   node "worn" (KHÔNG kèm nhân vật gốc). Mỗi người trong một cảnh chỉ một look.
+   bản nhân vật — tạo ở mảng "wardrobe" ĐÚNG MỘT node costume: { key:"costume_<nv>_<look>",
+   for:"<nv>", prompt:"<CHỈ mô tả bộ đồ>" }. Tool TỰ dựng 2 thứ từ một entry đó: (a) ảnh bộ đồ
+   MA-NƠ-CANH 3 góc nền trắng-xám; (b) node "NV đã mặc" (nhân vật khóa mặt + bộ đồ) cho cảnh.
+   Shot ở cảnh đó trỏ "uses" vào key costume này (KHÔNG kèm nhân vật gốc). TUYỆT ĐỐI KHÔNG tạo
+   thêm node "outfit"/"worn" riêng — mỗi look chỉ MỘT costume, nếu không sẽ bị thừa node. Mỗi
+   người trong một cảnh chỉ một look.
 
 5) VẬT DỤNG THEN CHỐT — mỗi đạo cụ quan trọng (điện thoại, lá thư, nhẫn, thẻ…) là một asset
    role:"prop" với prompt macro/hero + "continuity_note" để giữ nhất quán. Shot nào dùng thì để
@@ -75,10 +77,13 @@ assets (mảng gộp, phân biệt bằng role):
                               left:{ anchor, background, light }, right:{ anchor, background, light } } }  // chỉ bối cảnh có đối thoại
   prop:      { key:"prop_x", role:"prop", name, prompt:"<CHỈ MÔ TẢ vật dụng. Tool tự dựng model sheet 3 góc, nền xám, không người>", continuity_note:"<giữ nhất quán>" }
 
-wardrobe (mảng riêng — CHỈ khi có đổi đồ):
-  { key:"outfit_<nv>_<look>", kind:"outfit", for:"<key nhân vật>", prompt:"<CHỈ MÔ TẢ bộ đồ: màu + chất liệu + kiểu + phụ kiện. Tool tự dựng model sheet MA-NƠ-CANH không đầu/mặt, 3 góc (trước/nghiêng/sau), nền trắng-xám>" }
-  { key:"costume_<nv>_<look>", kind:"worn", for:"<key nhân vật>", wears:"<key outfit>",
-    uses:["<nhân vật>","<outfit>"], prompt:"<render nhân vật MẶC bộ đồ, khóa mặt từ nhân vật>", back_view:"<tùy chọn>" }
+wardrobe (mảng riêng — CHỈ khi đổi đồ): mỗi look KHÁC đồ chính = ĐÚNG MỘT node costume
+  (KHÔNG tạo cặp "outfit" + "worn" riêng — chỉ một entry; tool tự dựng cả hai bên dưới):
+  { key:"costume_<nv>_<look>", for:"<key nhân vật>", items:"<phụ kiện/vật dụng đi kèm, tùy chọn>",
+    prompt:"<CHỈ MÔ TẢ bộ đồ: màu + chất liệu + kiểu + phụ kiện>" }
+  → Tool TỰ dựng: (a) ảnh bộ đồ MA-NƠ-CANH 3 góc nền trắng-xám (cột Trang phục);
+    (b) node "NV đã mặc" = nhân vật (khóa mặt) mặc bộ đồ đó (cột Nhân vật) để cảnh dùng.
+    Shot ở cảnh đó trỏ "uses" vào KEY COSTUME NÀY (KHÔNG kèm nhân vật gốc).
 
 cameras: [ { key, name, config:"<chuyển động máy VEO cụ thể>" } ]  // cho SHOT THƯỜNG
   Nên có: 1 establishing/truck, 1 macro-reaction, 1 slow push-in reveal, 1 low-angle/dutch cao trào.
@@ -170,12 +175,8 @@ trang phục/vật dụng được nhắc, và nhiều cụm ghép hơn ví dụ
       "continuity_note": "Cùng một điện thoại tối màu xuyên suốt; chỉ nội dung màn hình đổi." }
   ],
   "wardrobe": [
-    { "key": "outfit_mio_home", "kind": "outfit", "for": "mio",
-      "prompt": "a soft cream knit cardigan over a white A-line dress, delicate knit texture, subtle pearl buttons" },
-    { "key": "costume_mio_home", "kind": "worn", "for": "mio", "wears": "outfit_mio_home",
-      "uses": ["mio", "outfit_mio_home"],
-      "prompt": "Render the same girl (locked face and hair from the character reference) now wearing a soft cream knit cardigan over a white dress, full body, solid gray background, cinematic 35mm photorealistic.",
-      "back_view": "her black low ponytail above a cream cardigan collar" }
+    { "key": "costume_mio_home", "for": "mio",
+      "prompt": "a soft cream knit cardigan over a white A-line dress, delicate knit texture, subtle pearl buttons" }
   ],
   "cameras": [
     { "key": "cam_establish", "name": "Establishing", "config": "Wide establishing of the hall, slow truck-in, 35mm." },
