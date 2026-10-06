@@ -389,10 +389,11 @@ export function buildGraph(bp) {
     if (!key) continue;
     const id = nid();
     assetId[key] = id;
-    // Item (prop) → Trang phục & vật dụng column, rendered on its own; costume → same
-    // column, rendered FROM its character's image; character → Nhân vật; the rest
-    // (scene, older role "prop") → Bối cảnh.
-    const isItem = a.role === 'item' || a.kind === 'item';
+    // Item (prop/vật dụng) → Trang phục & vật dụng column, rendered on its own as a
+    // 3-angle object sheet; costume → same column, rendered FROM its character's image;
+    // character → Nhân vật; scenes → Bối cảnh. A prop is an object, never a location, so
+    // role:"prop" is treated exactly like an item (the LLM often writes "prop", not "item").
+    const isItem = a.role === 'item' || a.role === 'prop' || a.kind === 'item';
     const isWardrobe =
       !isItem && (a.role === 'wardrobe' || a.zone === 'wardrobe' || a.kind === 'costume');
     const isChar = !isItem && !isWardrobe && isCharAsset(a);
@@ -403,10 +404,21 @@ export function buildGraph(bp) {
       ? str(a.of || a.master || a.parent, 100) || sceneUses.find(k => sceneKeys.has(k)) || ''
       : '';
     if (ofKey) angleOf[key] = ofKey;
-    // reverse_angles: true (generic A/B) or { a: '…', b: '…' } written for this very place —
-    // the concrete form renders far better (a generic text tends to copy the master framing).
+    // Dialogue locations (drama/film) get their wide establishing plate PLUS two opposing
+    // A/B angle plates by default — both rendered from the wide, so the space, dressing and
+    // light stay in sync. reverse_angles can carry { a: '…', b: '…' } written for this very
+    // place — the concrete form renders far better than the generic A/B — while
+    // reverse_angles:false (or 'none' / 'off') opts a scene out. A derived angle (it has an
+    // "of") never spawns its own A/B. Music/other blueprints keep the explicit opt-in: a
+    // single stage rarely wants over-the-shoulder dialogue angles.
     const rev = a.reverse_angles ?? a.angles;
-    if (isScene && (rev === true || rev === 'ab' || (rev && typeof rev === 'object'))) {
+    const wantsReverse = rev === true || rev === 'ab' || (rev && typeof rev === 'object');
+    const defaultReverse = isDrama && rev !== false && rev !== 'none' && rev !== 'off';
+    // An explicit opt-out is remembered on the node so a Bible export can round-trip it:
+    // without it, re-ingesting a Bible (which has no angle children for an opted-out scene)
+    // would let the default fire again and re-add the A/B the author removed.
+    const optOutAngles = isScene && !ofKey && (rev === false || rev === 'none' || rev === 'off');
+    if (isScene && !ofKey && (wantsReverse || defaultReverse)) {
       reverse.add(key);
       if (rev && typeof rev === 'object')
         reverseText[key] = { a: str(rev.a, 2000), b: str(rev.b, 2000) };
@@ -450,6 +462,7 @@ export function buildGraph(bp) {
       // Where the two speakers stand in this location, and the light on each side: a merged
       // scene builds every one of its camera setups from it.
       ...(stagingOf(a.conversation) ? { staging: stagingOf(a.conversation) } : {}),
+      ...(optOutAngles ? { noAngles: true } : {}),
       ...(ofKey ? { role: 'angle', ofKey, angle: str(a.angle || a.prompt, 2000) } : {}),
       ...(isWardrobe
         ? { outfit: str(a.outfit || a.wardrobe || a.prompt, 2000), items: str(items, 2000) }

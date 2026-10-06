@@ -35,9 +35,11 @@ assets (mảng gộp, phân biệt bằng role):
     expression_matrix:{ suppressed:"…", suspicious:"…", collapse:"…", triumph:"…" },  // tùy chọn
     prompt:"<MODEL SHEET TURNAROUND 3 góc — DÙNG ĐÚNG công thức đã kiểm chứng: 'Character model sheet turnaround of a <tuổi> <sắc tộc/giới> <vai trò>, <nét mặt + tóc + vóc dáng + trang phục chính>, (thêm 'holding <instrument>' nếu là nhạc công/ca sĩ), portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling any celebrity, public figure or existing model; any resemblance is purely coincidental.'>" }
   scene: { key:"scene_x", role:"scene", name, lighting_profile, prompt:"<neo kiến trúc tổng>",
+    reverse_angles:{ a:"<english: máy cho GÓC A>", b:"<english: GÓC B>" },  // tùy chọn, khớp cảnh hơn
     conversation:{ place, two_shot, left:{anchor,background,light}, right:{anchor,background,light} } }  // chỉ địa điểm có đối thoại
-  (tùy chọn góc đảo của một địa điểm: { key:"scene_x_a", role:"scene", kind:"angle", of:"scene_x",
-    uses:["scene_x"], name, prompt:"<cùng địa điểm, góc khác>" })
+  // MỖI bối cảnh TỰ có 3 ảnh đồng bộ: CẢNH TOÀN (từ "prompt") + GÓC A + GÓC B (tool dựng từ cảnh
+  // toàn). Không khai gì vẫn có A/B; khai "reverse_angles":{a,b} để tả máy; "reverse_angles":false
+  // để bỏ. Cần THÊM góc khác nữa thì mới khai node riêng { role:"scene", of:"scene_x", prompt }.
 
 wardrobe (mảng riêng, song song assets — chỉ khi có look KHÁC trang phục chính). Mỗi look =
   ĐÚNG MỘT node costume (KHÔNG tạo cặp "outfit"+"worn" riêng; tool tự dựng cả hai):

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { buildGraph, parseBlueprint } from './director.mjs';
+import { buildBible } from './lib/bible.mjs';
 
 // --- Unit: blueprint parsing + graph building (no server) ---
 const bp = {
@@ -129,7 +130,16 @@ assert.equal(drama.theme, 'film', 'drama defaults to the film theme');
 const dByName = n => drama.nodes.find(x => x.name === n);
 assert.equal(dByName('Người vợ').zone, 'character');
 assert.equal(dByName('Bàn ăn').zone, 'design');
-assert.equal(dByName('Thẻ khách sạn').zone, 'design', 'a prop is a reference image');
+assert.equal(
+  dByName('Thẻ khách sạn').zone,
+  'wardrobe',
+  'a prop renders in the Trang phục & vật dụng column, not Bối cảnh',
+);
+assert.equal(
+  dByName('Thẻ khách sạn').role,
+  'prop',
+  'a prop keeps the prop role (3-angle object sheet)',
+);
 assert.equal(dByName('Gothic 35mm').settingType, 'style', 'styles[] entry becomes a Style node');
 assert.equal(dByName('Gothic 35mm').zone, 'setup');
 assert.match(dByName('Gothic 35mm').config, /Kodak|anamorphic/, 'style prompt is the config');
@@ -564,6 +574,135 @@ assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
     'no reverse angles on that view → itself',
   );
   assert.deepEqual(refs('S5'), ['ann', 'scene_hall_b'], 'explicit side');
+}
+
+// A drama/film location gets its wide establishing plate PLUS two synchronized A/B angle
+// plates by DEFAULT — no reverse_angles needed — so every dialogue scene comes with 3 refs.
+// reverse_angles:false opts a scene out; a music blueprint keeps the explicit opt-in.
+{
+  const g = buildGraph({
+    project: { title: 'Default angles' },
+    assets: [
+      { key: 'ann', role: 'character', code: 'NV1', name: 'Ann', prompt: 'p' },
+      { key: 'scene_hall', role: 'scene', name: 'Sảnh', prompt: 'wide hall' },
+      {
+        key: 'scene_alley',
+        role: 'scene',
+        name: 'Hẻm',
+        prompt: 'wide alley',
+        reverse_angles: false,
+      },
+      { key: 'prop_key', role: 'prop', name: 'Chìa khóa', prompt: 'brass key macro' },
+    ],
+    shots: [{ name: 'S1', duration: 6, uses: ['ann', 'scene_hall'], videoPrompt: 'Veo: @ann.' }],
+  });
+  const byKey = k => g.nodes.find(n => n.assetKey === k);
+  const hallA = byKey('scene_hall_a'),
+    hallB = byKey('scene_hall_b');
+  assert.ok(hallA && hallB, 'a drama scene gets A/B angle plates with no reverse_angles declared');
+  assert.equal(hallA.role, 'angle');
+  assert.equal(hallA.ofKey, 'scene_hall', 'the A angle is a derived view of its scene');
+  assert.deepEqual(
+    g.edges.filter(e => e.target === hallA.id).map(e => e.source),
+    [byKey('scene_hall').id],
+    'A/B are rendered from the wide so the space stays in sync',
+  );
+  assert.ok(
+    !byKey('scene_alley_a') && !byKey('scene_alley_b'),
+    'reverse_angles:false opts a scene out of the default A/B',
+  );
+  // The prop lands in the Trang phục & vật dụng column as a 3-angle object sheet, not a scene.
+  assert.equal(
+    byKey('prop_key').zone,
+    'wardrobe',
+    'a role:"prop" asset is an object, not a location',
+  );
+  assert.equal(byKey('prop_key').role, 'prop');
+  assert.ok(!byKey('prop_key_a'), 'a prop never spawns scene angles');
+}
+// A music blueprint scene does NOT get automatic A/B angles (over-the-shoulder dialogue
+// angles do not fit a single MV stage); the explicit opt-in still works.
+{
+  const g = buildGraph({
+    project: { name: 'MV', theme: 'music' },
+    assets: [{ key: 'stage', role: 'scene', name: 'Sân khấu', prompt: 'wide stage' }],
+    shots: [{ name: 'S1', duration: 8, uses: ['stage'], videoPrompt: 'v' }],
+  });
+  const byKey = k => g.nodes.find(n => n.assetKey === k);
+  assert.ok(!byKey('stage_a') && !byKey('stage_b'), 'music scenes keep the explicit A/B opt-in');
+}
+// Bible round-trip: buildBible → re-ingest with a fresh sequence must preserve (a) the
+// drama classification (project.title, so scenes default to A/B again), (b) an explicit
+// reverse_angles:false opt-out, and (c) a prop as a prop — not silently flip any of them.
+{
+  const g = buildGraph({
+    project: { title: 'Phim X' },
+    assets: [
+      { key: 'man', role: 'character', code: 'NV1', name: 'Nam', prompt: 'p' },
+      { key: 'scene_room', role: 'scene', name: 'Phòng', prompt: 'wide room' },
+      {
+        key: 'scene_road',
+        role: 'scene',
+        name: 'Đường',
+        prompt: 'wide road',
+        reverse_angles: false,
+      },
+      { key: 'prop_ring', role: 'prop', name: 'Nhẫn', prompt: 'gold ring macro' },
+    ],
+    shots: [{ name: 'S1', duration: 6, uses: ['man', 'scene_room'], videoPrompt: 'Veo: @man.' }],
+  });
+  const bible = buildBible({ name: g.name, theme: g.theme, nodes: g.nodes, edges: g.edges });
+  assert.equal(bible.project.title, 'Phim X', 'a film Bible keeps project.title (stays drama)');
+  assert.ok(!bible.project.name, 'and does not also carry project.name');
+  const bRoad = bible.assets.find(a => a.key === 'scene_road');
+  assert.equal(bRoad.reverse_angles, false, 'the A/B opt-out is serialized into the Bible');
+  assert.ok(
+    bible.assets.some(a => a.role === 'prop' && a.key === 'prop_ring'),
+    'the prop round-trips as a prop asset',
+  );
+  // Re-ingest the Bible with a new sequence (the documented reusable-Bible flow).
+  const g2 = buildGraph([
+    bible,
+    {
+      project: { title: 'Tập 2' },
+      shots: [{ name: 'T1', duration: 6, uses: ['man', 'scene_room'], videoPrompt: 'v' }],
+    },
+  ]);
+  const k2 = k => g2.nodes.find(n => n.assetKey === k);
+  assert.ok(
+    k2('scene_room_a') && k2('scene_room_b'),
+    're-ingested drama scene regains default A/B',
+  );
+  assert.ok(
+    !k2('scene_road_a') && !k2('scene_road_b'),
+    'the opted-out scene stays opted out after a round-trip',
+  );
+  assert.equal(k2('prop_ring').role, 'prop', 'the prop is still a prop after a round-trip');
+  assert.equal(k2('prop_ring').zone, 'wardrobe', 'and still in the Trang phục & vật dụng column');
+}
+// A music project round-trips as music: buildBible emits project.name, so re-ingesting does
+// NOT flip it to drama and its scenes do not sprout A/B angles.
+{
+  const g = buildGraph({
+    project: { name: 'MV2', theme: 'music' },
+    assets: [{ key: 'stage', role: 'scene', name: 'Sân khấu', prompt: 'wide stage' }],
+    shots: [{ name: 'S1', duration: 8, uses: ['stage'], videoPrompt: 'v' }],
+  });
+  const bible = buildBible({ name: g.name, theme: g.theme, nodes: g.nodes, edges: g.edges });
+  assert.equal(bible.project.name, 'MV2', 'a music Bible keeps project.name');
+  assert.ok(!bible.project.title, 'and does not carry project.title (would read as drama)');
+  const g2 = buildGraph([
+    bible,
+    {
+      project: { name: 'MV2 v2', theme: 'music' },
+      shots: [{ name: 'S1', duration: 8, uses: ['stage'], videoPrompt: 'v' }],
+    },
+  ]);
+  const k2 = k => g2.nodes.find(n => n.assetKey === k);
+  assert.ok(
+    !k2('stage_a') && !k2('stage_b'),
+    'a round-tripped music scene stays free of A/B angles',
+  );
 }
 
 // Sound: the bible's audio presets become their own column, wired into the shots that
