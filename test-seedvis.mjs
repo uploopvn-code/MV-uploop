@@ -222,6 +222,51 @@ try {
   assert.equal(j.remote.used, 2);
   assert.ok(s.nodes.find(n => n.id === 'scene').image);
 
+  // Project default MODEL: a node whose source is Seedvis but which has not chosen a model uses
+  // the project's default model (not only the built-in one), for both image and video. An invalid
+  // model id is ignored. Then reset to the built-in defaults for the rest of the suite.
+  assert.equal(
+    (
+      await api('/api/project', 'PATCH', {
+        defaults: {
+          image: 'seedvis',
+          video: 'seedvis',
+          imageModel: 'NARWHAL',
+          videoModel: 'seedance_2.5',
+        },
+      })
+    ).status,
+    200,
+  );
+  st = (await api('/api/state')).data;
+  assert.equal(
+    st.defaults.imageModel,
+    'NARWHAL',
+    'the default image model is stored on the project',
+  );
+  assert.equal(st.defaults.videoModel, 'seedance_2.5', 'and the default video model');
+  const wideP = st.nodes.find(n => n.id === 'wide').providers;
+  assert.equal(wideP.image.model, 'NARWHAL', 'a node inherits the project default image model');
+  assert.equal(
+    wideP.video.model,
+    'seedance_2.5',
+    'a node inherits the project default video model',
+  );
+  await api('/api/project', 'PATCH', { defaults: { imageModel: 'not-a-model' } });
+  assert.equal(
+    (await api('/api/state')).data.defaults.imageModel,
+    'NARWHAL',
+    'an invalid default model id is rejected',
+  );
+  await api('/api/project', 'PATCH', {
+    defaults: { imageModel: 'GEM_PIX_2', videoModel: 'Veo-3.1' },
+  });
+  assert.equal(
+    (await api('/api/state')).data.nodes.find(n => n.id === 'scene').providers.image.model,
+    'GEM_PIX_2',
+    'default model reset to the built-in for the rest of the suite',
+  );
+
   // Edit: the node's OWN image goes out with "change only this"; the answer replaces it and
   // the previous image is kept, so a disappointing edit can be swapped back.
   const original = s.nodes.find(n => n.id === 'scene').image;

@@ -425,12 +425,16 @@
               <option value="web">ChatGPT (extension)</option>
               <option value="orbit">Orbit (kịch bản web)</option>
             </select></label
+          ><label id="defaultImageModelRow">Model ảnh<select id="defaultImageModel"></select></label
           ><label
             >Tạo video<select id="defaultVideo">
               <option value="seedvis">Seedvis API</option>
+              <option value="gvids">Google Vids (extension)</option>
               <option value="orbit">Orbit (kịch bản web)</option>
             </select></label
-          >
+          ><label id="defaultVideoModelRow"
+            >Model video<select id="defaultVideoModel"></select
+          ></label>
           <p class="muted" id="defaultsHint"></p>
         </div>
         <div class="settings-panel">
@@ -478,6 +482,21 @@
             Kiểm tra kết nối (cửa sổ nào cũng được — extension tự tìm các cửa sổ còn lại) → đăng
             nhập ChatGPT → đặt số luồng → Bật worker. Muốn cả project dùng ChatGPT: đặt "Nguồn mặc
             định · Tạo ảnh = ChatGPT (extension)" ở trên.
+          </p>
+        </div>
+        <div class="settings-panel">
+          <h3>Google Vids (extension) · tạo video</h3>
+          <p class="muted">
+            Tạo video bằng phiên Google của bạn qua chính extension trên (cùng một worker token).
+            Dùng chung token ở ô trên — không cần token riêng.
+          </p>
+          <p class="muted">
+            Trong popup extension: đăng nhập Google →
+            <strong>mở sẵn một tài liệu Google Vids</strong> (docs.google.com/videos) và để tab đó
+            mở → Bật <strong>worker Google Vids</strong> (bật/tắt riêng, chạy song song với worker
+            ChatGPT). Đặt node video dùng "Google Vids (extension)", hoặc đặt "Nguồn mặc định · Tạo
+            video = Google Vids (extension)" ở trên. Extension tự điền prompt, chọn 1080p, bấm Tạo
+            và tải video về node. Prompt chỉ cần chữ — ảnh keyframe/ingredient là tùy chọn.
           </p>
         </div>
         <div class="settings-panel">

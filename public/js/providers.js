@@ -64,7 +64,16 @@ export function providerSettings(n, shot) {
           kind === 'image'
             ? `<p class="field-hint" data-web-hint="${kind}" ${cur.type === 'web' ? '' : 'hidden'}>Tạo ảnh bằng ChatGPT qua extension: cài extension, đăng nhập ChatGPT, bật worker. Gửi prompt${n.references.length ? ' + ' + n.references.length + ' ảnh đầu vào' : ''} sang ChatGPT.</p>`
             : '';
-        return `<h4>${kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</h4><label>Dùng<select data-provider="${kind}"><option value="seedvis" ${cur.type === 'seedvis' ? 'selected' : ''}>Seedvis API</option>${webOpt}<option value="orbit" ${cur.type === 'orbit' ? 'selected' : ''}>Orbit (kịch bản web)</option></select></label><div data-seedvis-fields="${kind}" ${cur.type === 'seedvis' ? '' : 'hidden'}>${seedvisFields(n, kind, sv)}</div>${webHint}`;
+        // Google Vids runs in the browser extension and only makes video.
+        const gvidsOpt =
+          kind === 'video'
+            ? `<option value="gvids" ${cur.type === 'gvids' ? 'selected' : ''}>Google Vids (extension)</option>`
+            : '';
+        const gvidsHint =
+          kind === 'video'
+            ? `<p class="field-hint" data-gvids-hint="${kind}" ${cur.type === 'gvids' ? '' : 'hidden'}>Tạo video bằng Google Vids qua extension: cài extension, đăng nhập Google, mở sẵn một tài liệu Google Vids, bật worker Google Vids. Gửi prompt${n.references.length ? ' + ' + n.references.length + ' ảnh làm nhân vật/ingredient' : ''} sang Google Vids, tự đặt 1080p rồi tải video về.</p>`
+            : '';
+        return `<h4>${kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</h4><label>Dùng<select data-provider="${kind}"><option value="seedvis" ${cur.type === 'seedvis' ? 'selected' : ''}>Seedvis API</option>${webOpt}${gvidsOpt}<option value="orbit" ${cur.type === 'orbit' ? 'selected' : ''}>Orbit (kịch bản web)</option></select></label><div data-seedvis-fields="${kind}" ${cur.type === 'seedvis' ? '' : 'hidden'}>${seedvisFields(n, kind, sv)}</div>${webHint}${gvidsHint}`;
       })
       .join('') +
     '</section>'
@@ -94,6 +103,8 @@ export function bindProviderSettings(n) {
       document.querySelector(`[data-seedvis-fields="${kind}"]`).hidden = off;
       const webHint = document.querySelector(`[data-web-hint="${kind}"]`);
       if (webHint) webHint.hidden = select.value !== 'web';
+      const gvidsHint = document.querySelector(`[data-gvids-hint="${kind}"]`);
+      if (gvidsHint) gvidsHint.hidden = select.value !== 'gvids';
       // Editing and several versions run on Seedvis only: follow the choice before it is saved.
       const edit = $('#editImage'),
         versions = $('#inspector #nodeVideoVersions');
@@ -109,18 +120,21 @@ export function bindProviderSettings(n) {
     bindFields(kind);
   });
 }
-// Only the kinds whose provider or Seedvis options changed are sent. Returns the seedvis and
-// web patches separately; the inspector PATCHes them as b.seedvis and b.web. Switching to a
-// browser source (orbit/web) sets seedvis[kind] = false so the server routes it there.
+// Only the kinds whose provider or Seedvis options changed are sent. Returns the seedvis, web
+// and gvids patches separately; the inspector PATCHes them as b.seedvis, b.web and b.gvids.
+// Switching to a browser source (orbit/web/gvids) sets seedvis[kind] = false so the server
+// routes it there.
 export function readProviderSettings(n) {
   const seedvis = {},
-    web = {};
+    web = {},
+    gvids = {};
   document.querySelectorAll('[data-provider]').forEach(select => {
     const kind = select.dataset.provider,
       cur = n.providers[kind];
     if (select.value === 'orbit') {
       if (cur.type !== 'orbit') seedvis[kind] = false;
       if (cur.type === 'web') web[kind] = false;
+      if (cur.type === 'gvids') gvids[kind] = false;
       return;
     }
     if (select.value === 'web') {
@@ -128,10 +142,20 @@ export function readProviderSettings(n) {
         seedvis[kind] = false;
         web[kind] = true;
       }
+      if (cur.type === 'gvids') gvids[kind] = false;
       return;
     }
-    // Seedvis: leaving a web source clears its flag.
+    if (select.value === 'gvids') {
+      if (cur.type !== 'gvids') {
+        seedvis[kind] = false;
+        gvids[kind] = true;
+      }
+      if (cur.type === 'web') web[kind] = false;
+      return;
+    }
+    // Seedvis: leaving a browser source clears its flag.
     if (cur.type === 'web') web[kind] = false;
+    if (cur.type === 'gvids') gvids[kind] = false;
     const next = {
       model: document.querySelector(`[data-sv-model="${kind}"]`).value,
       aspectRatio: document.querySelector(`[data-sv-aspect="${kind}"]`).value,
@@ -145,7 +169,7 @@ export function readProviderSettings(n) {
     )
       seedvis[kind] = next;
   });
-  return { seedvis, web };
+  return { seedvis, web, gvids };
 }
 function showSeedvis(o) {
   seedvisStatus = o;
@@ -371,20 +395,55 @@ export function paintDefaults() {
   const d = store.state?.defaults || {};
   if (document.activeElement !== img) img.value = d.image || 'seedvis';
   if (document.activeElement !== vid) vid.value = d.video || 'seedvis';
+  // The default Seedvis model per kind: a new node uses it when its source is Seedvis, so the
+  // picker is shown only then. Options come from the catalog; models the account cannot use are
+  // flagged (so the default is not silently set to a model that will not run).
+  const cat = store.state?.seedvisCatalog || { image: [], video: [] };
+  const defModel = store.state?.seedvisDefaults || {};
+  const available = seedvisStatus?.available;
+  for (const [kind, srcSel, want, rowId, selId] of [
+    ['image', img, d.imageModel, 'defaultImageModelRow', 'defaultImageModel'],
+    ['video', vid, d.videoModel, 'defaultVideoModelRow', 'defaultVideoModel'],
+  ]) {
+    const sel = $('#' + selId),
+      row = $('#' + rowId);
+    if (!sel || !row) continue;
+    const models = cat[kind] || [];
+    sel.innerHTML = models
+      .map(
+        m =>
+          `<option value="${esc(m.id)}">${esc(m.name)}${available && !available.includes(m.id) ? ' (tài khoản chưa dùng được)' : ''}</option>`,
+      )
+      .join('');
+    if (document.activeElement !== sel)
+      sel.value = models.some(m => m.id === want)
+        ? want
+        : defModel[kind]?.model || models[0]?.id || '';
+    row.hidden = srcSel.value !== 'seedvis';
+  }
   const hint = $('#defaultsHint');
   if (hint)
     hint.textContent =
-      img.value === 'web'
-        ? 'Ảnh mặc định tạo bằng ChatGPT — cần bật worker extension (xem phần ChatGPT).'
-        : img.value === 'orbit' || vid.value === 'orbit'
-          ? 'Nguồn Orbit vẫn cần chọn kịch bản + nick trong Cài đặt Orbit của từng node.'
-          : '';
+      vid.value === 'gvids'
+        ? 'Video mặc định tạo bằng Google Vids — cần bật worker Google Vids trong extension và mở sẵn một tài liệu Google Vids.'
+        : img.value === 'web'
+          ? 'Ảnh mặc định tạo bằng ChatGPT — cần bật worker extension (xem phần ChatGPT).'
+          : img.value === 'orbit' || vid.value === 'orbit'
+            ? 'Nguồn Orbit vẫn cần chọn kịch bản + nick trong Cài đặt Orbit của từng node.'
+            : '';
 }
 async function saveDefaults() {
   try {
     await api('/api/project', {
       method: 'PATCH',
-      body: { defaults: { image: $('#defaultImage').value, video: $('#defaultVideo').value } },
+      body: {
+        defaults: {
+          image: $('#defaultImage').value,
+          video: $('#defaultVideo').value,
+          imageModel: $('#defaultImageModel')?.value || '',
+          videoModel: $('#defaultVideoModel')?.value || '',
+        },
+      },
     });
     await refresh();
     toast('Đã lưu nguồn mặc định');
@@ -392,8 +451,8 @@ async function saveDefaults() {
     toast(e.message, true);
   }
 }
-if ($('#defaultImage')) $('#defaultImage').onchange = saveDefaults;
-if ($('#defaultVideo')) $('#defaultVideo').onchange = saveDefaults;
+for (const id of ['#defaultImage', '#defaultVideo', '#defaultImageModel', '#defaultVideoModel'])
+  if ($(id)) $(id).onchange = saveDefaults;
 
 // The ChatGPT extension worker token (read once; it does not change). Shown so the user can
 // copy it into the browser extension.
