@@ -72,14 +72,13 @@ assets (mảng gộp, phân biệt bằng role):
                prompt:"<model sheet TURNAROUND 3 góc như nguyên tắc 2>" }
   scene:     { key:"scene_x", role:"scene", name, lighting_profile,
                prompt:"<neo không gian tổng, 1 dòng>",
-               reverse_angles:{ a:"<english: máy ở đâu cho GÓC A/qua vai A>", b:"<english: GÓC B/qua vai B>" },
                conversation:{ place:"<english: câu mở; ảnh 1 là cảnh toàn trống người>",
                               two_shot:"<english: máy đặt đâu cho trung cảnh>",
                               left:{ anchor, background, light }, right:{ anchor, background, light } } }  // chỉ bối cảnh có đối thoại
-  // MỖI bối cảnh TỰ có 3 ảnh tham chiếu đồng bộ: 1 CẢNH TOÀN (từ "prompt") + GÓC A + GÓC B (tool
-  // dựng từ cảnh toàn nên cùng không gian/ánh sáng). Không cần khai gì vẫn có A/B; khai
-  // "reverse_angles":{a,b} để tả máy cho khớp cảnh (render đẹp hơn A/B mặc định). Chỉ bỏ A/B khi
-  // thật sự không cần bằng "reverse_angles":false.
+  // MỖI bối cảnh = MỘT ảnh "model sheet" gồm 3 cỡ cảnh trong 1 ảnh (CẢNH TOÀN + cận A + cận B),
+  // render MỘT lần (như model sheet nhân vật). Mặc định vậy, không cần khai gì. Chỉ khai
+  // "reverse_angles":false khi muốn chỉ cảnh toàn (insert/flashback). Muốn mỗi góc là một ảnh
+  // RỜI (node riêng, render riêng) cho shot qua vai thì khai "reverse_angles":{a,b}.
   prop:      { key:"prop_x", kind:"item", name, prompt:"<CHỈ MÔ TẢ vật dụng. Tool tự dựng model sheet 3 góc, nền xám, không người>", continuity_note:"<giữ nhất quán>" }
 
 wardrobe (mảng riêng — CHỈ khi đổi đồ): mỗi look KHÁC đồ chính = ĐÚNG MỘT node costume

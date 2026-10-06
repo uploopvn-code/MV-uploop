@@ -53,10 +53,10 @@ dựng node. KHÔNG viết gì ngoài khối JSON.
    kind:"item" với prompt macro/hero + "continuity_note". Shot nào dùng thì để key trong "uses" và
    nhắc @prop_key trong videoPrompt.
 
-6) BỐI CẢNH = CẢNH TOÀN + 2 GÓC A/B — mỗi bối cảnh TỰ có 3 ảnh tham chiếu đồng bộ: 1 CẢNH TOÀN (từ
-   "prompt") + GÓC A + GÓC B (tool dựng từ cảnh toàn nên cùng không gian/ánh sáng). Không khai gì
-   vẫn có A/B; khai "reverse_angles":{a,b} để tả máy cho khớp cảnh; "reverse_angles":false để bỏ
-   (vd một insert/flashback không cần góc đối thoại).
+6) BỐI CẢNH = 3 CỠ CẢNH TRONG 1 ẢNH — mỗi bối cảnh là MỘT ảnh "model sheet" gồm 3 cỡ cảnh (CẢNH
+   TOÀN + cận A + cận B) trong cùng 1 ảnh, render MỘT lần (như model sheet nhân vật). Mặc định vậy,
+   không cần khai gì. Khai "reverse_angles":false khi chỉ cần cảnh toàn (insert/flashback). Chỉ khi
+   muốn mỗi góc là một ảnh RỜI (node riêng) cho shot qua vai mới khai "reverse_angles":{a,b}.
 
 7) SLOW-BURN THEO 5 BEAT + ĐƯỜNG CONG CẢM XÚC + LIÊN TỤC — mỗi shot gắn "beat" (setup →
    tension_rising → confrontation → reveal → aftermath) và "emotional_value" (-5..+5, CÓ lên có
@@ -94,8 +94,8 @@ assets (mảng gộp, phân biệt bằng role):
     expression_matrix:{ suppressed, suspicious, collapse, triumph }(plan),
     prompt:"<model sheet TURNAROUND 3 góc + disclaimer như nguyên tắc 2>" }
   scene:     { key:"scene_x", role:"scene", name, lighting_profile,
-    prompt:"<neo kiến trúc/không gian tổng, 1 dòng>",
-    reverse_angles:{ a:"<english: máy cho GÓC A>", b:"<english: GÓC B>" },  // tùy chọn (hoặc false)
+    prompt:"<neo kiến trúc/không gian tổng, 1 dòng>",   // → ảnh 3 cỡ cảnh trong 1 (toàn + cận A + cận B)
+    // "reverse_angles":false nếu chỉ cần cảnh toàn (insert/flashback); {a,b} nếu muốn góc rời (node riêng)
     conversation:{ place:"<english: ảnh 1 là cảnh toàn trống người>",
                    two_shot:"<english: máy đặt đâu cho trung đôi>",
                    left:{ anchor, background, light }, right:{ anchor, background, light } } }  // chỉ nơi có thoại
@@ -200,10 +200,6 @@ hơn ví dụ; điền đủ nhân vật/bối cảnh/trang phục/vật dụng 
       "prompt": "Character model sheet turnaround of a 62yo Vietnamese man, silver combed-back hair, deep nasolabial lines, gold-rimmed glasses, wearing a charcoal cardigan over a white shirt, portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling any celebrity, public figure or existing model; any resemblance is purely coincidental." },
     { "key": "scene_study", "role": "scene", "name": "Phòng làm việc", "lighting_profile": "Đèn bàn ấm, cửa sổ chiều muộn",
       "prompt": "Old mahogany study, floor-to-ceiling bookshelves, a large desk, warm late-afternoon light through tall windows.",
-      "reverse_angles": {
-        "a": "over Hân's shoulder from the window side onto Khải behind the desk",
-        "b": "reverse over Khải's shoulder from behind the desk onto Hân standing at the bookshelves"
-      },
       "conversation": {
         "place": "The mahogany study from image 1, warm late-afternoon light.",
         "two_shot": "from the doorway taking in both the desk and the bookshelves",

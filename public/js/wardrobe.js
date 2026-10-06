@@ -25,8 +25,8 @@ const SHEET_COPY = {
       'Bỏ trống thì tool vẫn dựng model sheet nhưng để model tự nghĩ ra người — <b>tên node không được đưa vào prompt</b> (tên thật khiến model video dễ từ chối cảnh vì tưởng người có thật).',
   },
   scene: {
-    title: '③ Bối cảnh — cảnh toàn',
-    hint: 'Tool dựng sẵn prompt: <b>một ảnh toàn cảnh trống người</b>, ngang mắt, đủ rộng để thấy cả không gian — làm gốc cho các node góc máy render theo.',
+    title: '③ Bối cảnh — 3 cỡ cảnh / 1 ảnh',
+    hint: 'Tool dựng sẵn prompt: <b>một ảnh gồm 3 cỡ cảnh</b> — cảnh toàn + cận góc A + cận góc B của cùng một không gian trống người — render một lần (như model sheet nhân vật). Chỉ cần gõ mô tả địa điểm.',
     placeholder:
       'a Victorian study, oak panelling, a desk by the tall window, rain outside, late afternoon',
     empty:

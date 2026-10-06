@@ -404,21 +404,19 @@ export function buildGraph(bp) {
       ? str(a.of || a.master || a.parent, 100) || sceneUses.find(k => sceneKeys.has(k)) || ''
       : '';
     if (ofKey) angleOf[key] = ofKey;
-    // Dialogue locations (drama/film) get their wide establishing plate PLUS two opposing
-    // A/B angle plates by default — both rendered from the wide, so the space, dressing and
-    // light stay in sync. reverse_angles can carry { a: '…', b: '…' } written for this very
-    // place — the concrete form renders far better than the generic A/B — while
-    // reverse_angles:false (or 'none' / 'off') opts a scene out. A derived angle (it has an
-    // "of") never spawns its own A/B. Music/other blueprints keep the explicit opt-in: a
-    // single stage rarely wants over-the-shoulder dialogue angles.
+    // A plain location shows all THREE shot sizes — wide + close A + close B — in ONE
+    // reference image (a location model sheet, like the character turnaround), rendered once
+    // (`sheet3`). reverse_angles:{ a, b } (or true) instead splits them into SEPARATE angle
+    // plates, each its own node/render, for over-the-shoulder coverage shots that wire one
+    // side; reverse_angles:false (or 'none' / 'off') keeps just the plain wide (for an insert
+    // or flashback). A derived angle (it has an "of") is always its own single view.
     const rev = a.reverse_angles ?? a.angles;
     const wantsReverse = rev === true || rev === 'ab' || (rev && typeof rev === 'object');
-    const defaultReverse = isDrama && rev !== false && rev !== 'none' && rev !== 'off';
-    // An explicit opt-out is remembered on the node so a Bible export can round-trip it:
-    // without it, re-ingesting a Bible (which has no angle children for an opted-out scene)
-    // would let the default fire again and re-add the A/B the author removed.
     const optOutAngles = isScene && !ofKey && (rev === false || rev === 'none' || rev === 'off');
-    if (isScene && !ofKey && (wantsReverse || defaultReverse)) {
+    // The 3-in-1 sheet is the default for a plain scene; a Bible round-trips the opt-out via
+    // `noAngles` (it carries no angle children to suppress the sheet otherwise).
+    const sheet3 = isScene && !ofKey && !wantsReverse && !optOutAngles;
+    if (isScene && !ofKey && wantsReverse) {
       reverse.add(key);
       if (rev && typeof rev === 'object')
         reverseText[key] = { a: str(rev.a, 2000), b: str(rev.b, 2000) };
@@ -436,15 +434,27 @@ export function buildGraph(bp) {
     nodes.push({
       id,
       zone: isWardrobe || isItem ? 'wardrobe' : isChar ? 'character' : 'design',
-      role: isWardrobe ? 'wardrobe' : isItem ? 'prop' : isChar ? 'character' : undefined,
+      // A master scene carries role:'scene' so the tool owns its reference sheet (prompts.mjs
+      // keys the location sheet off role==='scene', and the inspector lets its desc be edited);
+      // a derived view takes role:'angle' via the ofKey spread below.
+      role: isWardrobe
+        ? 'wardrobe'
+        : isItem
+          ? 'prop'
+          : isChar
+            ? 'character'
+            : isScene && !ofKey
+              ? 'scene'
+              : undefined,
       assetKey: key, // stable id across sequences → lets the project reuse its image
       name: str(a.name || key, 100),
-      // An item's / outfit's blueprint prompt describes the object or garment, so it becomes
-      // the description the server wraps in its own reference sheet (a prop turnaround, or a
-      // headless-mannequin outfit turnaround) instead of replacing that sheet — so clothing and
-      // props always come out as clean mannequin/object references. Everything else keeps its prompt.
-      prompt: isItem || isWardrobe ? '' : str(a.prompt),
-      ...(isItem ? { desc: str(a.prompt, 2000) } : {}),
+      // An item's / outfit's / location's blueprint prompt describes the object, garment or
+      // place, so it becomes the DESCRIPTION the server wraps in its own reference sheet (a
+      // prop turnaround, a headless-mannequin outfit turnaround, or a 3-view location sheet)
+      // instead of replacing that sheet — so props, clothing and scenes always come out as the
+      // tool's clean references. A derived angle (isScene && ofKey) keeps its own prompt.
+      prompt: isItem || isWardrobe || (isScene && !ofKey) ? '' : str(a.prompt),
+      ...(isItem || (isScene && !ofKey) ? { desc: str(a.prompt, 2000) } : {}),
       // Physical anchors identify the person to the video model (the prompt's "@key" tags
       // mean nothing to it): the server lists them per reference image, in order.
       ...(isChar && arr(a.physical_anchors).length
@@ -462,6 +472,7 @@ export function buildGraph(bp) {
       // Where the two speakers stand in this location, and the light on each side: a merged
       // scene builds every one of its camera setups from it.
       ...(stagingOf(a.conversation) ? { staging: stagingOf(a.conversation) } : {}),
+      ...(sheet3 ? { sheet3: true } : {}),
       ...(optOutAngles ? { noAngles: true } : {}),
       ...(ofKey ? { role: 'angle', ofKey, angle: str(a.angle || a.prompt, 2000) } : {}),
       ...(isWardrobe
@@ -536,6 +547,11 @@ export function buildGraph(bp) {
     if (master && !['character', 'wardrobe', 'prop'].includes(master.role)) {
       edges.push({ source: master.id, target: node.id });
       angleMaster[node.id] = master.id;
+      // A scene that has its own separate angle plates is no longer the 3-in-1 sheet: it is a
+      // plain wide, and each derived angle renders from that clean wide (not from a sheet). This
+      // also round-trips an opt-in: a Bible exports the angles as `of` children, and re-ingesting
+      // them drops the master back to a plain wide here instead of letting it default to a sheet.
+      if (master.sheet3) delete master.sheet3;
     } else {
       warnings.push(
         `Bối cảnh "${k}": "of" trỏ tới "${of}" không phải bối cảnh trong Bible — giữ như bối cảnh thường.`,

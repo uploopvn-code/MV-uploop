@@ -576,12 +576,13 @@ assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
   assert.deepEqual(refs('S5'), ['ann', 'scene_hall_b'], 'explicit side');
 }
 
-// A drama/film location gets its wide establishing plate PLUS two synchronized A/B angle
-// plates by DEFAULT — no reverse_angles needed — so every dialogue scene comes with 3 refs.
-// reverse_angles:false opts a scene out; a music blueprint keeps the explicit opt-in.
+// A location is ONE reference node by default: its single image is a 3-view location sheet
+// (wide + close A + close B in one image), the way a character is one turnaround sheet — no
+// separate angle nodes, one render. reverse_angles:{a,b} opts into SEPARATE angle plates
+// (each its own node/render); reverse_angles:false keeps just the plain wide (insert/flashback).
 {
   const g = buildGraph({
-    project: { title: 'Default angles' },
+    project: { title: 'Scene sheets' },
     assets: [
       { key: 'ann', role: 'character', code: 'NV1', name: 'Ann', prompt: 'p' },
       { key: 'scene_hall', role: 'scene', name: 'Sảnh', prompt: 'wide hall' },
@@ -592,26 +593,63 @@ assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
         prompt: 'wide alley',
         reverse_angles: false,
       },
+      {
+        key: 'scene_room',
+        role: 'scene',
+        name: 'Phòng',
+        prompt: 'wide room',
+        reverse_angles: { a: 'over A', b: 'over B' },
+      },
       { key: 'prop_key', role: 'prop', name: 'Chìa khóa', prompt: 'brass key macro' },
     ],
     shots: [{ name: 'S1', duration: 6, uses: ['ann', 'scene_hall'], videoPrompt: 'Veo: @ann.' }],
   });
   const byKey = k => g.nodes.find(n => n.assetKey === k);
-  const hallA = byKey('scene_hall_a'),
-    hallB = byKey('scene_hall_b');
-  assert.ok(hallA && hallB, 'a drama scene gets A/B angle plates with no reverse_angles declared');
-  assert.equal(hallA.role, 'angle');
-  assert.equal(hallA.ofKey, 'scene_hall', 'the A angle is a derived view of its scene');
-  assert.deepEqual(
-    g.edges.filter(e => e.target === hallA.id).map(e => e.source),
-    [byKey('scene_hall').id],
-    'A/B are rendered from the wide so the space stays in sync',
+  // Default scene: one node, the 3-in-1 sheet, no separate A/B nodes. The tool owns the sheet,
+  // so the blueprint text becomes the location description.
+  const hall = byKey('scene_hall');
+  assert.equal(hall.sheet3, true, 'a plain scene renders the 3-in-1 location sheet');
+  assert.equal(hall.prompt, '', 'the tool owns the scene sheet; the blueprint text moves to desc');
+  assert.equal(hall.desc, 'wide hall', 'the blueprint prompt is kept as the location description');
+  assert.ok(!byKey('scene_hall_a') && !byKey('scene_hall_b'), 'no separate angle nodes by default');
+  // reverse_angles:false → plain wide, still one node, still no A/B nodes.
+  const alley = byKey('scene_alley');
+  assert.ok(
+    !alley.sheet3 && alley.noAngles,
+    'reverse_angles:false → plain wide, not the 3-in-1 sheet',
   );
   assert.ok(
     !byKey('scene_alley_a') && !byKey('scene_alley_b'),
-    'reverse_angles:false opts a scene out of the default A/B',
+    'opted-out scene has no angle nodes',
   );
-  // The prop lands in the Trang phục & vật dụng column as a 3-angle object sheet, not a scene.
+  // reverse_angles:{a,b} → the power-user path: SEPARATE angle plates (own node/render).
+  const room = byKey('scene_room');
+  assert.ok(!room.sheet3, 'a scene with explicit reverse_angles is not the 3-in-1 sheet');
+  assert.ok(
+    byKey('scene_room_a') && byKey('scene_room_b'),
+    'reverse_angles:{a,b} makes separate angle plates',
+  );
+  assert.equal(byKey('scene_room_a').role, 'angle');
+  // A reverse_angles scene round-trips through the Bible WITHOUT the master flipping to the
+  // 3-in-1 sheet: its angle plates export as `of` children and re-ingest keeps it a plain wide.
+  const bible = buildBible({ name: g.name, theme: g.theme, nodes: g.nodes, edges: g.edges });
+  const g2 = buildGraph([
+    bible,
+    {
+      project: { title: 'Ep2' },
+      shots: [{ name: 'T', duration: 6, uses: ['ann', 'scene_room'], videoPrompt: 'v' }],
+    },
+  ]);
+  const r2 = g2.nodes.find(n => n.assetKey === 'scene_room');
+  assert.ok(
+    !r2.sheet3,
+    'a reverse_angles scene stays a plain wide (not the sheet) after a round-trip',
+  );
+  assert.ok(
+    g2.nodes.some(n => n.role === 'angle' && n.ofKey === 'scene_room'),
+    'and keeps its separate angle plates',
+  );
+  // Prop still lands in the wardrobe column as a 3-angle object sheet.
   assert.equal(
     byKey('prop_key').zone,
     'wardrobe',
@@ -620,8 +658,7 @@ assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
   assert.equal(byKey('prop_key').role, 'prop');
   assert.ok(!byKey('prop_key_a'), 'a prop never spawns scene angles');
 }
-// A music blueprint scene does NOT get automatic A/B angles (over-the-shoulder dialogue
-// angles do not fit a single MV stage); the explicit opt-in still works.
+// A music blueprint scene is also one 3-in-1 sheet node — no separate angle nodes.
 {
   const g = buildGraph({
     project: { name: 'MV', theme: 'music' },
@@ -629,17 +666,20 @@ assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
     shots: [{ name: 'S1', duration: 8, uses: ['stage'], videoPrompt: 'v' }],
   });
   const byKey = k => g.nodes.find(n => n.assetKey === k);
-  assert.ok(!byKey('stage_a') && !byKey('stage_b'), 'music scenes keep the explicit A/B opt-in');
+  assert.ok(
+    !byKey('stage_a') && !byKey('stage_b'),
+    'a scene never auto-spawns separate angle nodes',
+  );
 }
-// Bible round-trip: buildBible → re-ingest with a fresh sequence must preserve (a) the
-// drama classification (project.title, so scenes default to A/B again), (b) an explicit
-// reverse_angles:false opt-out, and (c) a prop as a prop — not silently flip any of them.
+// Bible round-trip: buildBible → re-ingest with a fresh sequence preserves the scene mode
+// (default 3-in-1 sheet vs reverse_angles:false plain wide), the drama classification
+// (project.title), and a prop as a prop.
 {
   const g = buildGraph({
     project: { title: 'Phim X' },
     assets: [
       { key: 'man', role: 'character', code: 'NV1', name: 'Nam', prompt: 'p' },
-      { key: 'scene_room', role: 'scene', name: 'Phòng', prompt: 'wide room' },
+      { key: 'scene_studio', role: 'scene', name: 'Phòng', prompt: 'wide room' },
       {
         key: 'scene_road',
         role: 'scene',
@@ -649,13 +689,19 @@ assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
       },
       { key: 'prop_ring', role: 'prop', name: 'Nhẫn', prompt: 'gold ring macro' },
     ],
-    shots: [{ name: 'S1', duration: 6, uses: ['man', 'scene_room'], videoPrompt: 'Veo: @man.' }],
+    shots: [{ name: 'S1', duration: 6, uses: ['man', 'scene_studio'], videoPrompt: 'Veo: @man.' }],
   });
   const bible = buildBible({ name: g.name, theme: g.theme, nodes: g.nodes, edges: g.edges });
   assert.equal(bible.project.title, 'Phim X', 'a film Bible keeps project.title (stays drama)');
   assert.ok(!bible.project.name, 'and does not also carry project.name');
   const bRoad = bible.assets.find(a => a.key === 'scene_road');
-  assert.equal(bRoad.reverse_angles, false, 'the A/B opt-out is serialized into the Bible');
+  assert.equal(bRoad.reverse_angles, false, 'the plain-wide opt-out is serialized into the Bible');
+  const bStudio = bible.assets.find(a => a.key === 'scene_studio');
+  assert.equal(bStudio.prompt, 'wide room', 'the scene description round-trips via desc');
+  assert.ok(
+    bStudio.reverse_angles === undefined,
+    'a default 3-in-1 scene carries no reverse_angles',
+  );
   assert.ok(
     bible.assets.some(a => a.role === 'prop' && a.key === 'prop_ring'),
     'the prop round-trips as a prop asset',
@@ -665,23 +711,21 @@ assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
     bible,
     {
       project: { title: 'Tập 2' },
-      shots: [{ name: 'T1', duration: 6, uses: ['man', 'scene_room'], videoPrompt: 'v' }],
+      shots: [{ name: 'T1', duration: 6, uses: ['man', 'scene_studio'], videoPrompt: 'v' }],
     },
   ]);
   const k2 = k => g2.nodes.find(n => n.assetKey === k);
+  assert.equal(k2('scene_studio').sheet3, true, 're-ingested default scene stays the 3-in-1 sheet');
+  assert.ok(!k2('scene_studio_a'), 'and does not sprout separate angle nodes');
   assert.ok(
-    k2('scene_room_a') && k2('scene_room_b'),
-    're-ingested drama scene regains default A/B',
-  );
-  assert.ok(
-    !k2('scene_road_a') && !k2('scene_road_b'),
-    'the opted-out scene stays opted out after a round-trip',
+    k2('scene_road').noAngles && !k2('scene_road').sheet3,
+    'the opted-out scene stays plain wide after a round-trip',
   );
   assert.equal(k2('prop_ring').role, 'prop', 'the prop is still a prop after a round-trip');
   assert.equal(k2('prop_ring').zone, 'wardrobe', 'and still in the Trang phục & vật dụng column');
 }
-// A music project round-trips as music: buildBible emits project.name, so re-ingesting does
-// NOT flip it to drama and its scenes do not sprout A/B angles.
+// A music project round-trips as music: buildBible emits project.name (not title), so
+// re-ingesting does not flip it to drama.
 {
   const g = buildGraph({
     project: { name: 'MV2', theme: 'music' },
@@ -701,7 +745,7 @@ assert.equal(parseBlueprint(wrapped).project.name, 'Test MV');
   const k2 = k => g2.nodes.find(n => n.assetKey === k);
   assert.ok(
     !k2('stage_a') && !k2('stage_b'),
-    'a round-tripped music scene stays free of A/B angles',
+    'a round-tripped music scene has no separate angle nodes',
   );
 }
 
@@ -1335,13 +1379,42 @@ try {
     'drama-long prop sits in the Trang phục & vật dụng column (3-angle object sheet)',
   );
   const lByKey = k => ln.find(n => n.assetKey === k);
+  const study = lByKey('scene_study');
+  assert.equal(study.sheet3, true, 'the main dialogue scene is one 3-in-1 location sheet');
   assert.ok(
-    lByKey('scene_study_a') && lByKey('scene_study_b'),
-    'the main dialogue scene gets its A/B angle plates',
+    !lByKey('scene_study_a') && !lByKey('scene_study_b'),
+    'and does not spawn separate nodes',
+  );
+  // The scene actually RENDERS the 3-in-1 location sheet (not the generic fallback that would
+  // leak the project's character/stage fields) and keeps its own location description.
+  assert.equal(
+    study.role,
+    'scene',
+    'a master scene carries role:"scene" so the tool owns its sheet',
+  );
+  assert.match(
+    study.resolvedPrompts.image,
+    /Location model sheet[\s\S]*three camera views of it in ONE image/,
+    'the scene image prompt is the 3-view location sheet',
+  );
+  assert.match(
+    study.resolvedPrompts.image,
+    /mahogany study/,
+    'and carries its own location description',
   );
   assert.ok(
-    !lByKey('scene_garden_a') && !lByKey('scene_garden_b'),
-    'the flashback scene opts out of A/B (reverse_angles:false)',
+    !/Lead character|Era-appropriate costume/.test(study.resolvedPrompts.image),
+    'the scene does not leak the project character/wardrobe template fields',
+  );
+  const garden = lByKey('scene_garden');
+  assert.ok(
+    garden.noAngles && !garden.sheet3,
+    'the flashback scene is a plain wide (reverse_angles:false), not the 3-in-1 sheet',
+  );
+  assert.match(
+    garden.resolvedPrompts.image,
+    /Master wide establishing shot of the location/,
+    'the opted-out flashback renders the plain wide',
   );
 
   // Save a user template, confirm it lists, delete it; a built-in cannot be deleted.
