@@ -19,6 +19,30 @@ const FRAMING = { ots_a: 'qua vai A', ots_b: 'qua vai B', two_shot: 'trung đôi
 export function inspectMerged(n) {
   const id = n.id,
     info = n.merged;
+  // The video model this clip renders with. A merged scene films its 2–3 frames in one clip, so
+  // any Seedvis video model that takes that many reference images works (Veo 3.1, Omni Flash,
+  // Seedance). The picker lets the user switch off the default; the server validates the choice.
+  const vm = n.providers?.video || {};
+  const seedvis = vm.type === 'seedvis';
+  const vcat = store.state.seedvisCatalog?.video || [];
+  const vmodel = vcat.find(x => x.id === vm.model) || {};
+  const modelLabel = seedvis ? vm.modelName || vmodel.name || vm.model : '';
+  const modelPicker = seedvis
+    ? `<div class="two"><label>Model<select id="mergedModel">${vcat
+        .map(
+          x =>
+            `<option value="${esc(x.id)}" ${x.id === vm.model ? 'selected' : ''}>${esc(x.name)}</option>`,
+        )
+        .join('')}</select></label><label>Tỉ lệ khung<select id="mergedAspect">${(
+        vmodel.aspect || ['16:9']
+      )
+        .map(
+          a =>
+            `<option value="${esc(a)}" ${a === vm.aspectRatio ? 'selected' : ''}>${esc(a)}</option>`,
+        )
+        .join('')}</select></label></div>` +
+      `<p class="field-hint">Gửi ${info.maxFrames} ảnh khung vào một clip (model nhận tối đa ${vmodel.maxImages || 3}). Veo dễ qua kiểm duyệt với mặt người thật; Omni Flash / Seedance có thể bị bộ lọc từ chối ảnh chân dung.</p>`
+    : `<p class="note">Phân cảnh ghép quay bằng Seedvis — đặt nguồn video = Seedvis (mặc định project hoặc cho node) để chọn model.</p>`;
   const frames = info.frames
     .map(
       f =>
@@ -36,13 +60,14 @@ export function inspectMerged(n) {
     `<section class="inspector-section"><h3>Các khung, theo thứ tự cắt</h3><ol class="seedance-shots">${frames || '<li>Chưa có khung nào nối vào.</li>'}</ol>` +
     `<p class="field-hint">Một clip Veo ${info.seconds} giây, tối đa ${info.maxFrames} khung; thời gian mỗi khung chia theo số từ của câu thoại. Thêm hoặc bớt khung: nối hoặc cắt dây từ khung (cột ⑥) vào phân cảnh này. Tạo ảnh ở từng khung trước.</p>` +
     `<div class="actions"><button class="button" id="openStaging">🎬 Dàn dựng 2D (đặt máy, trái/phải, mô tả)</button></div></section>` +
-    `<section class="inspector-section"><h3>Gửi Veo</h3>` +
+    `<section class="inspector-section"><h3>Gửi video${modelLabel ? ' · ' + esc(modelLabel) : ''}</h3>` +
+    modelPicker +
     `<label>Prompt <span class="field-hint">tự dựng từ các khung; sửa tay rồi Lưu nếu cần</span><textarea id="mergedPrompt" rows="14">${esc(n.resolvedPrompts.video)}</textarea></label>` +
     `<div class="prompt-tools"><button id="copyMergedPrompt">Sao chép prompt</button><button id="resetMergedPrompt">Dùng prompt tự dựng</button></div>` +
     videoResults(n) +
     `<label>Số phiên bản<select id="nodeVideoVersions"><option value="1">1 bản</option><option value="2">2 bản</option><option value="3">3 bản</option><option value="4">4 bản</option></select></label>` +
     `<p class="field-hint">Mỗi bản thành một node video riêng ở cột ⑧ Video, cùng hàng với phân cảnh.</p>` +
-    `<div class="actions"><button class="button primary" id="generateMerged" ${info.problem ? 'disabled' : ''}>Tạo video Veo</button></div></section>` +
+    `<div class="actions"><button class="button primary" id="generateMerged" ${info.problem ? 'disabled' : ''}>Tạo video${modelLabel ? ' · ' + esc(modelLabel) : ''}</button></div></section>` +
     `<section class="inspector-section"><button class="button wide" id="saveMerged">Lưu chỉnh sửa</button><button class="button wide danger" id="deleteNode">Xóa phân cảnh này</button></section>`;
   const save = async () => {
     const b = { id };
@@ -92,6 +117,28 @@ export function inspectMerged(n) {
     reopen();
     toast('Đã lưu');
   });
+  // Switch the clip's video model / aspect: keep any prompt edit, then rebuild so the aspect
+  // options follow the new model.
+  const applyModel = run(async () => {
+    await save();
+    store.state = await api('/api/node', {
+      method: 'PATCH',
+      body: {
+        id,
+        seedvis: {
+          video: {
+            model: $('#mergedModel').value,
+            aspectRatio: $('#mergedAspect').value,
+            upscale: null,
+          },
+        },
+      },
+    });
+    render();
+    reopen();
+  });
+  if ($('#mergedModel')) $('#mergedModel').onchange = applyModel;
+  if ($('#mergedAspect')) $('#mergedAspect').onchange = applyModel;
   $('#generateMerged').onclick = run(async () => {
     // a render that may already be paid for: only on purpose
     const force =

@@ -1541,6 +1541,24 @@ try {
   assert.equal(mergedOf(r.data).merged.warning, '');
   assert.equal(mergedOf(r.data).merged.problem, '');
 
+  // A merged scene can render with any Seedvis video model, not only Veo: switch it to Omni
+  // Flash and the next render goes out as that model, with the frames in Omni Flash's own
+  // "images" field and no duration (Omni Flash takes none).
+  await api('/api/node', 'PATCH', {
+    id: mergedNode.id,
+    seedvis: { video: { model: 'Omni-Flash', aspectRatio: '16:9', upscale: null } },
+  });
+  submits = [];
+  r = await api('/api/jobs', 'POST', { nodeId: mergedNode.id, kind: 'video' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  ({ s, j } = await settle(r.data.job.id));
+  assert.equal(j.status, 'completed', j.error);
+  const omniSent = submits.find(x => x.body.model === 'Omni-Flash');
+  assert.ok(omniSent, 'a merged scene can render with Omni Flash, not only Veo');
+  assert.equal(omniSent.body.mode, 'multi-image-to-video');
+  assert.equal(omniSent.body.images.length, 3, 'the frames go in Omni Flash’s images field');
+  assert.ok(!('duration' in omniSent.body), 'Omni Flash sends no duration field');
+
   // The key never reaches the browser state.
   assert.ok(!JSON.stringify((await api('/api/state')).data).includes(KEY));
   const projRoot = path.join(dir, 'projects');
