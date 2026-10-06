@@ -409,14 +409,14 @@ try {
   assert.equal(wd.imageInputs, 0, 'so it can render before the character is done');
   assert.match(
     wd.resolvedPrompts.image,
-    /Costume reference sheet[\s\S]*burgundy velvet suit, with silver microphone[\s\S]*mannequin/,
-    'costume prompt describes the outfit only (the look node does the try-on)',
+    /Outfit reference sheet[\s\S]*burgundy velvet suit, with silver microphone[\s\S]*headless mannequin[\s\S]*front, side and back/,
+    'costume prompt: a headless-mannequin 3-view turnaround of the outfit only',
   );
   assert.ok(!/evening outfit/.test(wd.resolvedPrompts.image), 'no template wardrobe leakage');
   // Editing the fields regenerates the prompt; the zone numbers on its own.
   rr = await api('/api/node', 'PATCH', { id: wd.id, outfit: 'white silk gown' });
   assert.equal(rr.status, 200);
-  assert.match(node(rr.data, wd.id).resolvedPrompts.image, /try-on: white silk gown/);
+  assert.match(node(rr.data, wd.id).resolvedPrompts.image, /one single costume: white silk gown/);
   assert.deepEqual(
     rr.data.nodes.filter(n => n.zone === 'wardrobe').map(n => n.seq),
     [1],

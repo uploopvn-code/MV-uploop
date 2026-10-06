@@ -312,8 +312,11 @@ const spec = buildGraph({
 const sp = n => spec.nodes.find(x => x.name === n);
 assert.equal(sp('Julian — đồ tang').zone, 'wardrobe');
 assert.equal(sp('Julian — đồ tang').role, 'wardrobe');
+// The blueprint's garment text becomes the node's `outfit` description (the tool renders it as
+// a headless-mannequin sheet), and its own `prompt` is cleared so that sheet always wins.
+assert.equal(sp('Julian — đồ tang').prompt, '');
 assert.equal(
-  sp('Julian — đồ tang').prompt,
+  sp('Julian — đồ tang').outfit,
   'Same man as the reference, now in a black mourning suit.',
 );
 assert.equal(sp('Julian — đồ tang').charId, sp('Julian').id, 'costume → character from "for"');

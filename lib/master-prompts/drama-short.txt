@@ -37,7 +37,8 @@ cao hơn mọi mức mặc định trong hướng dẫn. Nếu input KHÔNG ghi 
 
 4) TRANG PHỤC ĐẦY ĐỦ THEO TỪNG BỐI CẢNH — look mặc định nằm trong model sheet nhân vật (cảnh dùng
    look chính → shot trỏ thẳng nhân vật). Khi một nhân vật ĐỔI ĐỒ ở một bối cảnh khác, KHÔNG nhân
-   bản nhân vật — tạo ở mảng "wardrobe": một node "outfit" (bộ đồ trên ma-nơ-canh không đầu) +
+   bản nhân vật — tạo ở mảng "wardrobe": một node "outfit" (CHỈ mô tả bộ đồ; tool tự dựng ảnh
+   MA-NƠ-CANH không đầu/mặt, 3 góc trước/nghiêng/sau, nền trắng-xám nổi bật bộ đồ) +
    một node "worn" ("<NV> đã mặc bộ đó", uses = [nhân vật, outfit]); shot ở cảnh đó trỏ "uses" vào
    node "worn" (KHÔNG kèm nhân vật gốc). Mỗi người trong một cảnh chỉ một look.
 
@@ -72,10 +73,10 @@ assets (mảng gộp, phân biệt bằng role):
                conversation:{ place:"<english: câu mở; ảnh 1 là cảnh toàn trống người>",
                               two_shot:"<english: máy đặt đâu cho trung cảnh>",
                               left:{ anchor, background, light }, right:{ anchor, background, light } } }  // chỉ bối cảnh có đối thoại
-  prop:      { key:"prop_x", role:"prop", name, prompt:"<macro/hero shot>", continuity_note:"<giữ nhất quán>" }
+  prop:      { key:"prop_x", role:"prop", name, prompt:"<CHỈ MÔ TẢ vật dụng. Tool tự dựng model sheet 3 góc, nền xám, không người>", continuity_note:"<giữ nhất quán>" }
 
 wardrobe (mảng riêng — CHỈ khi có đổi đồ):
-  { key:"outfit_<nv>_<look>", kind:"outfit", for:"<key nhân vật>", prompt:"<bộ đồ trên ma-nơ-canh không đầu>" }
+  { key:"outfit_<nv>_<look>", kind:"outfit", for:"<key nhân vật>", prompt:"<CHỈ MÔ TẢ bộ đồ: màu + chất liệu + kiểu + phụ kiện. Tool tự dựng model sheet MA-NƠ-CANH không đầu/mặt, 3 góc (trước/nghiêng/sau), nền trắng-xám>" }
   { key:"costume_<nv>_<look>", kind:"worn", for:"<key nhân vật>", wears:"<key outfit>",
     uses:["<nhân vật>","<outfit>"], prompt:"<render nhân vật MẶC bộ đồ, khóa mặt từ nhân vật>", back_view:"<tùy chọn>" }
 
@@ -170,7 +171,7 @@ trang phục/vật dụng được nhắc, và nhiều cụm ghép hơn ví dụ
   ],
   "wardrobe": [
     { "key": "outfit_mio_home", "kind": "outfit", "for": "mio",
-      "prompt": "A soft cream knit cardigan over a white dress on a headless mannequin, studio gray background, cinematic 35mm." },
+      "prompt": "a soft cream knit cardigan over a white A-line dress, delicate knit texture, subtle pearl buttons" },
     { "key": "costume_mio_home", "kind": "worn", "for": "mio", "wears": "outfit_mio_home",
       "uses": ["mio", "outfit_mio_home"],
       "prompt": "Render the same girl (locked face and hair from the character reference) now wearing a soft cream knit cardigan over a white dress, full body, solid gray background, cinematic 35mm photorealistic.",

@@ -427,10 +427,11 @@ export function buildGraph(bp) {
       role: isWardrobe ? 'wardrobe' : isItem ? 'prop' : isChar ? 'character' : undefined,
       assetKey: key, // stable id across sequences → lets the project reuse its image
       name: str(a.name || key, 100),
-      // An item's blueprint prompt ("wax-sealed will macro") describes the object, so it
-      // becomes the description the server wraps in a prop model sheet — one hero view plus
-      // two turned views — instead of replacing that sheet. Everything else keeps its prompt.
-      prompt: isItem ? '' : str(a.prompt),
+      // An item's / outfit's blueprint prompt describes the object or garment, so it becomes
+      // the description the server wraps in its own reference sheet (a prop turnaround, or a
+      // headless-mannequin outfit turnaround) instead of replacing that sheet — so clothing and
+      // props always come out as clean mannequin/object references. Everything else keeps its prompt.
+      prompt: isItem || isWardrobe ? '' : str(a.prompt),
       ...(isItem ? { desc: str(a.prompt, 2000) } : {}),
       // Physical anchors identify the person to the video model (the prompt's "@key" tags
       // mean nothing to it): the server lists them per reference image, in order.
@@ -450,7 +451,9 @@ export function buildGraph(bp) {
       // scene builds every one of its camera setups from it.
       ...(stagingOf(a.conversation) ? { staging: stagingOf(a.conversation) } : {}),
       ...(ofKey ? { role: 'angle', ofKey, angle: str(a.angle || a.prompt, 2000) } : {}),
-      ...(isWardrobe ? { outfit: str(a.outfit || a.wardrobe, 2000), items: str(items, 2000) } : {}),
+      ...(isWardrobe
+        ? { outfit: str(a.outfit || a.wardrobe || a.prompt, 2000), items: str(items, 2000) }
+        : {}),
       videoPrompt: '',
       image: null,
       video: null,

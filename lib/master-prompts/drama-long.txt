@@ -40,10 +40,10 @@ assets (mảng gộp, phân biệt bằng role):
     uses:["scene_x"], name, prompt:"<cùng địa điểm, góc khác>" })
 
 wardrobe (mảng riêng, song song assets — chỉ khi có look KHÁC trang phục chính):
-  outfit: { key:"outfit_<ten>", kind:"outfit", for:"<key nhân vật>", prompt:"<bộ đồ trên ma-nơ-canh không đầu>" }
+  outfit: { key:"outfit_<ten>", kind:"outfit", for:"<key nhân vật>", prompt:"<CHỈ MÔ TẢ bộ đồ: màu + chất liệu + kiểu + phụ kiện. Tool tự dựng ảnh MA-NƠ-CANH không đầu/mặt, 3 góc, nền trắng-xám>" }
   worn:   { key:"costume_<ten>", kind:"worn", for:"<key nhân vật>", wears:"<key outfit>",
             uses:["<nhân vật>","<outfit>"], prompt:"<render nhân vật MẶC bộ đồ>", back_view:"<tùy chọn>" }
-  item:   { key:"prop_<ten>", kind:"item", name, prompt:"<macro/hero shot>", continuity_note }
+  item:   { key:"prop_<ten>", kind:"item", name, prompt:"<CHỈ MÔ TẢ vật dụng. Tool tự dựng model sheet 3 góc, nền xám, không người>", continuity_note }
 
 cameras: [ { key, name, config } ]  // tối thiểu: establishing, OTS, reaction/macro, slow push-in reveal, low-angle/dutch cao trào
 
