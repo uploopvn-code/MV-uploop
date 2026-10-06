@@ -182,3 +182,55 @@ export function projectTemplate(theme) {
     worker: null,
   };
 }
+
+// --- User templates: a reusable skeleton saved from a project, cloned into a new one ---
+const EMPTY_FIELDS = {
+  identity: '',
+  wardrobe: '',
+  instrument: '',
+  stage: '',
+  lighting: '',
+  bpm: '',
+};
+// A template keeps the node/edge/field skeleton without any rendered media: produced clips
+// (terminal nodes) are dropped and every reference image/video is cleared, so a project cloned
+// from it starts fresh but with all the prompts, settings and wiring in place.
+function skeletonNode(n) {
+  const c = structuredClone(n);
+  c.image = null;
+  c.video = null;
+  delete c.stale;
+  delete c.videoStale;
+  delete c.lastVersion;
+  delete c.seq;
+  return c;
+}
+export function templateFromProject(d, name) {
+  const nodes = d.nodes.filter(n => !n.terminal).map(skeletonNode);
+  const keep = new Set(nodes.map(n => n.id));
+  const edges = (d.edges || []).filter(e => keep.has(e.source) && keep.has(e.target));
+  return {
+    name: String(name || d.name || 'Template').slice(0, 100),
+    theme: themes.some(t => t.id === d.theme) ? d.theme : 'custom',
+    fields: { ...EMPTY_FIELDS, ...(d.fields || {}) },
+    nodes,
+    edges,
+  };
+}
+// A fresh project object cloned from a saved template (clones its nodes/edges so the stored
+// template file is never mutated).
+export function projectFromTemplate(tpl) {
+  return {
+    name: tpl.name || 'Project mới',
+    theme: themes.some(t => t.id === tpl.theme) ? tpl.theme : 'custom',
+    revision: 1,
+    website: '',
+    audio: null,
+    audioDuration: null,
+    fields: { ...EMPTY_FIELDS, ...(tpl.fields || {}) },
+    nodes: structuredClone(tpl.nodes || []),
+    edges: structuredClone(tpl.edges || []),
+    jobs: [],
+    worker: null,
+  };
+}

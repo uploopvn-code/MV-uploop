@@ -62,7 +62,7 @@ export const catalog = {
       name: 'Seedance 2.0 Fast',
       note: 'Seedance kiểm duyệt chặt và thường từ chối ảnh có người thật; nên dùng Veo cho ca sĩ.',
       imageField: 'reference_images',
-      maxImages: 10,
+      maxImages: 9, // ByteDance: Seedance 2.0 takes at most 9 reference images
       countMax: 8,
       aspect: ['16:9', '9:16', '1:1', '3:4', '4:3', '21:9'],
       durations: [5, 10, 15],
@@ -100,15 +100,16 @@ export function validateSeedvisBinding(kind, b) {
   return { model: m.id, modelName: m.name, aspectRatio, upscale };
 }
 
-// Seedvis accepts a fixed set of durations per model; use the closest one.
-export function videoDuration(model, seconds) {
+// Seedvis accepts a fixed set of durations per model; we always ask for the LONGEST one
+// (Veo 3.1: 8s). A shot is cut to length in the edit, and the extra head and tail give
+// room for that; a clip that ends exactly on the beat cannot be trimmed.
+export function videoDuration(model) {
   const m = modelOf('video', model);
   if (!m?.durations) return null;
-  const s = Number(seconds) || 8;
-  return m.durations.reduce((a, b) => (Math.abs(b - s) < Math.abs(a - s) ? b : a));
+  return Math.max(...m.durations);
 }
 
-export function buildRequest(kind, binding, prompt, images, durationSeconds, count = 1) {
+export function buildRequest(kind, binding, prompt, images, count = 1) {
   const m = modelOf(kind, binding.model);
   if (!m) throw new Error('Model Seedvis không còn hỗ trợ: ' + binding.model);
   if (kind === 'image') {
@@ -172,7 +173,11 @@ export function buildRequest(kind, binding, prompt, images, durationSeconds, cou
     }
   } else body.mode = 'text-to-video';
   if (m.durations) {
-    const d = videoDuration(m.id, durationSeconds);
+    // The longest the model takes (room to trim), unless the job asks for a length it offers
+    // (a Seedance group: its shots' total, rounded up to the next step).
+    const d = m.durations.includes(Number(binding.duration))
+      ? Number(binding.duration)
+      : videoDuration(m.id);
     body.duration = m.durationSuffix ? d + m.durationSuffix : d;
   }
   if (m.id === 'Veo-3.1') body.upscale_video = binding.upscale || 'none';
@@ -303,7 +308,16 @@ export function createSeedvis(dataDir) {
         headers: sameHost ? { Authorization: 'Bearer ' + key() } : {},
         signal: AbortSignal.timeout(600000),
       });
-      if (!r.ok) throw new Error('Không tải được file kết quả Seedvis (HTTP ' + r.status + ').');
+      if (!r.ok)
+        throw Object.assign(
+          new Error(
+            [403, 404, 410].includes(r.status)
+              ? 'Seedvis đã làm xong nhưng file kết quả đã hết hạn lưu (HTTP ' + r.status + ').'
+              : 'Không tải được file kết quả Seedvis (HTTP ' + r.status + ').',
+          ),
+          // an expired file will not come back: a plain failure, so the shot can be filmed again
+          { definite: [403, 404, 410].includes(r.status) },
+        );
       if (Number(r.headers.get('content-length')) > MAX_BYTES)
         throw new Error('File kết quả lớn hơn 100 MB.');
       bytes = Buffer.from(await r.arrayBuffer());
@@ -353,6 +367,14 @@ export function createSeedvis(dataDir) {
             q,
         );
       } catch (e) {
+        // Seedvis has no such job (long gone, or never made): nothing is running, so it is a
+        // plain failure — the shot can be filmed again.
+        if (e.status === 404 || e.status === 410) {
+          e.definite = true;
+          e.message =
+            'Seedvis không còn tác vụ này (không tồn tại hoặc đã quá hạn lưu). ' + e.message;
+          throw e;
+        }
         if (e.status && e.status !== 429 && e.status < 500) throw e;
         failures++;
         onProgress('Mất kết nối Seedvis, thử đọc lại trạng thái (' + failures + ')');
@@ -380,20 +402,36 @@ export function createSeedvis(dataDir) {
   }
 
   async function run(job, images, onProgress, onSave) {
-    const { endpoint, body } = buildRequest(
-      job.kind,
-      job.payload.seedvis,
-      job.payload.prompt,
-      images,
-      job.payload.timing?.duration,
-      job.payload.count || 1,
-    );
+    let request;
+    try {
+      request = buildRequest(
+        job.kind,
+        job.payload.seedvis,
+        job.payload.prompt,
+        images,
+        job.payload.count || 1,
+      );
+    } catch (e) {
+      // Refused before anything was sent (e.g. too many reference images): a plain failure,
+      // not "check Seedvis" — there is nothing pending there.
+      e.definite = true;
+      throw e;
+    }
+    const { endpoint, body } = request;
     onProgress('Đang gửi yêu cầu tới Seedvis · ' + job.payload.seedvis.modelName);
     let json;
+    let maybeSent = false; // an earlier attempt ended with no clear answer
     for (let attempt = 1; ; attempt++) {
-      // Cancelled before the request even left: abort, nothing to collect upstream.
-      if (job.cancelRequested)
+      if (job.cancelRequested) {
+        // Stopped while a lost reply leaves it unknown whether Seedvis took the request: not
+        // "never sent" — it is re-sent later under the same key, never as a new request.
+        if (maybeSent)
+          throw new Error(
+            'Đã dừng khi chưa rõ Seedvis đã nhận yêu cầu chưa (mất phản hồi). "✚ Tạo video còn thiếu" gửi lại cùng mã chống trùng, không tạo trùng.',
+          );
+        // Cancelled before the request even left: abort, nothing to collect upstream.
         throw Object.assign(new Error('Đã dừng theo yêu cầu.'), { aborted: true, definite: true });
+      }
       try {
         // Same Idempotency-Key on every retry: Seedvis returns the same job, no second charge.
         json = await call(endpoint, {
@@ -409,10 +447,25 @@ export function createSeedvis(dataDir) {
         const queueFull =
           e.status === 422 && /queue|concurren|limit|capacity|too many/i.test(e.message || '');
         const transient = !e.status || e.status === 429 || e.status === 503 || queueFull;
+        // no status, or a 5xx other than 503 server_busy: Seedvis may have taken it
+        if (!e.status || (e.status >= 500 && e.status !== 503)) maybeSent = job.maybeSent = true;
         const maxAttempts = queueFull ? 12 : 4;
         if (!transient || attempt >= maxAttempts) {
           // A clear 4xx means Seedvis created nothing; a network error leaves it uncertain.
-          if (e.status && e.status < 500) e.definite = true;
+          // Except 409 idempotency_conflict: Seedvis already HAS a job under this key (sent
+          // earlier with another body) — making a new one could pay for the shot twice.
+          if (e.status === 409) {
+            e.conflict = true;
+            e.message =
+              'Seedvis đã có một tác vụ với mã này (gửi trước đó). Kiểm tra lịch sử trên seedvis.com trước khi tạo lại. ' +
+              e.message;
+          } else if (queueFull) {
+            // Still full after every retry. 422 on the create call means Seedvis made
+            // nothing, so the job goes back in the queue to be sent later instead of
+            // failing: a busy account is a reason to wait, never a lost run.
+            e.requeue = true;
+            e.definite = true; // nothing is pending remotely
+          } else if (e.status && e.status < 500) e.definite = true;
           throw e;
         }
         onProgress(
