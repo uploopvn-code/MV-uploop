@@ -28,6 +28,12 @@
           ><button class="button" id="newProject">＋ Project</button
           ><button
             class="button"
+            id="openWindow"
+            title="Mở một project khác trong cửa sổ riêng để làm song song"
+          >
+            ⧉ Cửa sổ mới</button
+          ><button
+            class="button"
             id="backupProject"
             title="Lưu project này ra file .mvproj.json để sao lưu"
           >
@@ -57,21 +63,57 @@
               ><button id="zoomIn" class="button" aria-label="Phóng to">＋</button>
             </div>
             <button id="fitCanvas" class="button">Vừa khung</button>
-            <button id="arrangeZones" class="button" title="Xếp node vào 3 khu vực theo thứ tự">
+            <button id="arrangeZones" class="button" title="Xếp node vào các khu vực theo thứ tự">
               ⬓ Xếp khu vực
             </button>
             <div class="side-sep"></div>
             <div class="side-title">Thêm node</div>
             <button id="addNode" class="button">＋ Node ảnh</button>
+            <button
+              id="addCharacter"
+              class="button"
+              title="Model sheet nhân vật: chân dung + 3 góc toàn thân. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
+            >
+              ＋ Nhân vật
+            </button>
+            <button
+              id="addProp"
+              class="button"
+              title="Model sheet vật dụng: 1 góc chính + 2 góc xoay trong một ảnh. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
+            >
+              ＋ Vật dụng
+            </button>
+            <button
+              id="addScene"
+              class="button"
+              title="Cảnh toàn trống người, làm gốc cho các node góc máy. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
+            >
+              ＋ Bối cảnh
+            </button>
+            <button
+              id="addWardrobe"
+              class="button"
+              title="Một bộ trang phục + vật dụng của một nhân vật cho một bối cảnh. Mở node nhân vật để thêm bộ đã nối sẵn."
+            >
+              ＋ Trang phục
+            </button>
             <button id="addStyle" class="button">＋ Style</button>
             <button id="addCamera" class="button">＋ Máy quay</button>
+            <button
+              id="addAudio"
+              class="button"
+              title="Node âm thanh: nhạc nền + tiếng hiện trường, chèn vào prompt của mọi shot nối ra"
+            >
+              ＋ Âm thanh
+            </button>
             <div class="side-sep"></div>
             <div class="side-title">Tạo ảnh nhanh theo khu</div>
             <label
               >Khu vực<select id="imageZone" aria-label="Khu vực tạo ảnh">
                 <option value="character">① Nhân vật</option>
-                <option value="design">② Bối cảnh</option>
-                <option value="production">④ Khung hình shot</option>
+                <option value="wardrobe">② Trang phục & vật dụng</option>
+                <option value="design">③ Bối cảnh</option>
+                <option value="production">⑥ Khung hình shot</option>
               </select></label
             >
             <button id="autoImageStart" class="button primary">▶ Tạo ảnh khu vực</button>
@@ -100,6 +142,13 @@
             <button id="autoVideoStop" class="button">Dừng tạo video</button>
             <button id="autoVideoRetry" class="button" hidden>↻ Chạy lại video lỗi</button>
             <button id="autoVideoMissing" class="button" hidden>✚ Tạo video còn thiếu</button>
+            <button
+              id="seedanceGroups"
+              class="button"
+              title="Gộp các shot liên tiếp (tối đa 30 giây, cùng bối cảnh) thành nhóm, mỗi nhóm một lần render Seedance với ảnh storyboard"
+            >
+              🧩 Chia nhóm Seedance
+            </button>
             <p id="autoStatus" class="field-hint"></p>
             <p id="autoVideoStatus" class="field-hint"></p>
             <div class="side-sep"></div>
@@ -112,10 +161,10 @@
           </aside>
         </div>
         <p id="connectHint" class="field-hint">
-          Kéo dây từ Out sang In · Bấm vào dây rồi bấm × (hoặc phím Delete) để xóa · Kéo thanh tên
-          để di chuyển node · Kéo nền để pan · Lăn chuột để zoom.
+          Kéo dây từ Out sang In · Bấm vào dây rồi bấm × (hoặc phím Delete) để xóa · Mở một node để
+          xem và gỡ từng đầu vào của nó · Kéo thanh tên để di chuyển node · Kéo nền để pan · Lăn
+          chuột để zoom.
         </p>
-        <div id="edgeList" class="edge-list"></div>
         <div class="track" id="timelineTrack" hidden></div>
       </section>
       <section id="queue" class="view" hidden>
@@ -147,42 +196,142 @@
       </section>
       <section id="director" class="view" hidden>
         <div class="section-heading">
-          <h2>Đạo diễn · dựng sơ đồ tự động</h2>
+          <h2>Đạo diễn AI · từ ý tưởng đến sơ đồ</h2>
           <p>
-            Master prompt sinh ra toàn bộ asset (ca sĩ, nhạc công, sân khấu), style, cỡ máy và
-            storyboard; công cụ tự tạo node và nối dây. Bạn chỉ việc chạy ảnh/video hoặc sửa prompt.
+            Bốn bước tuần tự: <strong>ý tưởng → kịch bản</strong> ·
+            <strong>chọn kiểu blueprint</strong> · <strong>lên blueprint</strong> ·
+            <strong>dựng sơ đồ</strong>. Mỗi bước xem và sửa trước khi đi tiếp; bật "Tự động hoàn
+            toàn" ở bước 1 để chạy liền cả bốn bước.
           </p>
         </div>
-        <div class="settings-panel">
-          <h3>1. Master prompt <span id="masterBadge" class="muted"></span></h3>
+
+        <!-- BƯỚC 1 — Ý tưởng → Kịch bản -->
+        <div class="settings-panel director-step">
+          <h3><span class="step-no">1</span> Ý tưởng → Kịch bản</h3>
           <p class="muted">
-            Chép và dán vào ChatGPT/Claude kèm bài hát (hoặc dùng mục 3 để tự động). Model phải trả
-            về khối JSON blueprint theo mẫu ở cuối prompt. Bạn có thể sửa và lưu riêng cho project
-            này.
+            Nhập ý tưởng / logline / lời; Đạo diễn AI viết thành kịch bản để bạn duyệt. Chạy
+            <strong>qua extension ChatGPT web</strong> (không cần API key — dùng phiên ChatGPT bạn
+            đang đăng nhập) hoặc bằng <strong>API key</strong> (OpenAI-compatible).
           </p>
-          <textarea id="masterPrompt" rows="10"></textarea>
+          <div class="two">
+            <label
+              >Tên phim / bài hát<input id="projTitle" placeholder="Ví dụ: Giả Nghèo / tên bài hát"
+            /></label>
+            <label
+              >Loại nội dung<select id="projType">
+                <option value="drama">Phim / Drama</option>
+                <option value="mv">MV ca nhạc</option>
+              </select></label
+            >
+          </div>
+          <div id="dramaMeta">
+            <label
+              >Thời lượng mục tiêu (phút)<input
+                id="projMinutes"
+                type="number"
+                min="0"
+                step="0.5"
+                placeholder="vd 3"
+            /></label>
+          </div>
+          <div id="mvMeta" hidden>
+            <label
+              >Link bài hát<input id="projSong" placeholder="YouTube / Spotify / link mp3"
+            /></label>
+            <div class="actions">
+              <label class="button"
+                >🎵 Chọn file mp3<input type="file" id="projSongFile" accept="audio/*" hidden
+              /></label>
+              <span id="projSongInfo" class="field-hint"></span>
+            </div>
+            <p class="field-hint">
+              Thời lượng MV được <strong>phân tích theo bài hát</strong> (đọc từ file mp3), dùng để
+              chia phân cảnh ở bước sau.
+            </p>
+          </div>
+          <p id="metaHint" class="field-hint"></p>
+          <label class="muted inline-check">
+            <input type="checkbox" id="agentViaWeb" /> Chạy qua extension (ChatGPT web — không cần
+            API key) <span id="agentWebStatus" class="field-hint"></span>
+          </label>
+          <details id="agentApiConfig">
+            <summary class="muted">Hoặc dùng API key (OpenAI-compatible) — bấm để cấu hình</summary>
+            <p id="directorLLMStatus" class="muted"></p>
+            <div class="two">
+              <label
+                >Base URL<input id="llmBaseUrl" placeholder="https://api.openai.com/v1"
+              /></label>
+              <label>Model<input id="llmModel" placeholder="gpt-4o-mini" /></label>
+            </div>
+            <label
+              >API key<input id="llmKey" type="password" placeholder="Dán API key LLM"
+            /></label>
+            <div class="actions"><button id="saveLLM" class="button">Lưu cấu hình</button></div>
+          </details>
+          <label
+            >Ý tưởng / logline / bài hát / lời<textarea
+              id="directorIdea"
+              rows="3"
+              placeholder="Ví dụ: Drama ngắn, con gái chủ tịch giả nghèo đi học bị khinh và cái kết…"
+            ></textarea>
+          </label>
+          <label class="muted inline-check">
+            <input type="checkbox" id="agentAuto" /> Tự động hoàn toàn (chạy liền cả 4 bước: ý tưởng
+            → kịch bản → blueprint → dựng)
+          </label>
           <div class="actions">
-            <button id="copyMaster" class="button">📋 Chép</button>
+            <button id="agentScript" class="button primary">① Viết kịch bản</button>
+          </div>
+          <label id="agentScriptWrap" hidden
+            >Kịch bản (xem, sửa rồi sang bước 3)<textarea id="agentScriptText" rows="10"></textarea>
+          </label>
+        </div>
+
+        <!-- BƯỚC 2 — Chọn master prompt (kiểu blueprint) -->
+        <div class="settings-panel director-step">
+          <h3>
+            <span class="step-no">2</span> Chọn master prompt (kiểu blueprint)
+            <span id="masterBadge" class="muted"></span>
+          </h3>
+          <p class="muted">
+            Master prompt quyết định blueprint ra kiểu nào. Chọn một mẫu (MV, Drama ngắn, Phim drama
+            dài…) là áp dụng ngay cho project. Có thể xem/sửa chi tiết, hoặc sửa xong
+            <strong>⭐ Lưu thành mẫu</strong> để tái dùng cho project khác.
+          </p>
+          <label
+            >Mẫu theo chủ đề<select id="masterTemplate">
+              <option value="">— Giữ nguyên —</option>
+            </select></label
+          >
+          <div class="actions">
             <button id="saveMaster" class="button primary">💾 Lưu cho project</button>
+            <button id="saveMasterTemplate" class="button">⭐ Lưu thành mẫu</button>
+            <button id="delMasterTemplate" class="button" hidden>🗑 Xóa mẫu này</button>
             <button id="resetMaster" class="button">↩ Dùng mặc định</button>
           </div>
+          <details>
+            <summary class="muted">Xem / sửa nội dung master prompt</summary>
+            <textarea id="masterPrompt" rows="10"></textarea>
+            <div class="actions">
+              <button id="copyMaster" class="button">📋 Chép</button>
+            </div>
+          </details>
         </div>
-        <div class="settings-panel">
-          <h3>2. Dán blueprint (JSON) rồi dựng</h3>
+
+        <!-- BƯỚC 3 — Lên Blueprint -->
+        <div class="settings-panel director-step">
+          <h3><span class="step-no">3</span> Lên Blueprint</h3>
           <p class="muted">
-            Dán khối JSON kết quả vào đây. Nhận cả blueprint <strong>nhạc</strong> và blueprint
-            <strong>phim/drama Google VEO</strong> (từ skill drama-veo-blueprint): tự nhận nhân vật,
-            bối cảnh, đạo cụ và nối hình tham chiếu vào từng shot.
-            <strong>Dựng sơ đồ sẽ thay toàn bộ node của project đang mở</strong> — nên tạo một
-            Project mới cho mỗi phim/bài hát.
+            Từ kịch bản (bước 1) + master prompt (bước 2), Đạo diễn AI sinh khối JSON blueprint —
+            bạn xem/sửa ở ô bên dưới. Hoặc tự dán JSON, hay
+            <strong>chọn file</strong> (phim dài: cả <code>bible.json</code> và
+            <code>seq-XX.json</code> cùng lúc). Nhận cả blueprint nhạc lẫn phim/drama VEO (nhân vật,
+            trang phục, bối cảnh, máy quay, style, cụm đối thoại…).
           </p>
-          <textarea
-            id="blueprintInput"
-            rows="8"
-            placeholder='{ "assets": [...], "cameras": [...], "shots": [...] }'
-          ></textarea>
           <div class="actions">
-            <button id="buildGraph" class="button primary">✦ Dựng sơ đồ</button>
+            <button id="agentBlueprint" class="button primary" disabled>
+              ② Lên blueprint (AI)
+            </button>
             <label
               class="button"
               title="Chọn file .json (phim dài: chọn cả bible.json và seq-XX.json)"
@@ -194,34 +343,58 @@
                 hidden
             /></label>
           </div>
-          <p class="field-hint">
-            Phim dài: chọn <strong>cả bible.json và seq-XX.json</strong> cùng lúc — tool tự gộp nhân
-            vật/bối cảnh từ bible với các shot của phân đoạn.
-          </p>
+          <p id="agentSummary" class="field-hint"></p>
+          <textarea
+            id="blueprintInput"
+            rows="8"
+            placeholder='{ "assets": [...], "cameras": [...], "shots": [...] }'
+          ></textarea>
         </div>
-        <div class="settings-panel">
-          <h3>3. Tự động qua API (tuỳ chọn)</h3>
+
+        <!-- BƯỚC 4 — Dựng sơ đồ -->
+        <div class="settings-panel director-step">
+          <h3><span class="step-no">4</span> Dựng sơ đồ</h3>
           <p class="muted">
-            Nhập API key một endpoint tương thích OpenAI (OpenAI, hoặc gateway của bạn). Bấm chạy là
-            công cụ tự gọi master prompt rồi dựng sơ đồ. Thử nghiệm — nếu lỗi, dùng cách dán tay ở
-            mục 2.
+            <strong>Dựng sơ đồ sẽ thay toàn bộ node của project đang mở</strong> — nên tạo một
+            Project mới cho mỗi phân đoạn/bài hát. Ảnh nhân vật / bối cảnh / trang phục cùng key đã
+            render ở project khác của cùng phim (cùng <code>film.title</code>) được tự lấy lại; chỉ
+            node mới phải render.
           </p>
-          <p id="directorLLMStatus" class="muted"></p>
-          <div class="two">
-            <label>Base URL<input id="llmBaseUrl" placeholder="https://api.openai.com/v1" /></label>
-            <label>Model<input id="llmModel" placeholder="gpt-4o-mini" /></label>
-          </div>
-          <label>API key<input id="llmKey" type="password" placeholder="Dán API key LLM" /></label>
-          <div class="actions"><button id="saveLLM" class="button">Lưu cấu hình</button></div>
-          <label
-            >Bài hát / lời / link<textarea
-              id="directorSong"
-              rows="3"
-              placeholder="BẮT ĐẦU: Tên bài hát hoặc dán lời…"
-            ></textarea>
-          </label>
           <div class="actions">
-            <button id="runAuto" class="button primary">⚡ Chạy tự động &amp; dựng</button>
+            <button id="buildGraph" class="button primary">✦ Dựng sơ đồ</button>
+            <button
+              id="exportSrt"
+              class="button"
+              title="Xuất phụ đề .srt từ thoại (lyric) + thời lượng của các shot trong storyboard; lưu luôn vào thư mục làm việc nếu có"
+            >
+              📝 Xuất phụ đề (.srt)
+            </button>
+            <label class="muted inline-check">
+              <input type="checkbox" id="srtNames" /> giữ tên người nói
+            </label>
+          </div>
+          <div class="actions">
+            <button
+              id="pullAssets"
+              class="button"
+              title="Lấy ảnh nhân vật / bối cảnh / trang phục cùng key đã render ở project khác của phim này (theo film.title trong Bible) cho các node còn trống"
+            >
+              ↻ Lấy ảnh có sẵn từ project khác
+            </button>
+            <button
+              id="importFolder"
+              class="button"
+              title="Chép ảnh tham chiếu (thu-vien/…) từ một thư mục khác vào thư mục làm việc của project này và gắn vào node cùng key"
+            >
+              📥 Nhập ảnh tham chiếu từ thư mục…
+            </button>
+            <button
+              id="clearAssets"
+              class="button"
+              title="Bỏ ảnh đang gắn ở node nhân vật / trang phục / bối cảnh để render lại từ đầu (file đã xuất ra thư mục làm việc vẫn còn)"
+            >
+              🧹 Bỏ ảnh tham chiếu đang gắn
+            </button>
           </div>
         </div>
       </section>
@@ -239,6 +412,26 @@
           <div>API local<small>Hàng đợi & trạng thái</small></div>
           <b>→</b>
           <div>Seedvis API / Orbit<small>Tạo ảnh / video</small></div>
+        </div>
+        <div class="settings-panel">
+          <h3>Nguồn mặc định của project</h3>
+          <p class="muted">
+            Node mới (chưa tự chọn nguồn) sẽ dùng nguồn này. Mở từng node → Nguồn tạo để đổi riêng.
+            Lựa chọn này cũng được <strong>dùng làm mặc định cho các project mới</strong> tạo sau.
+          </p>
+          <label
+            >Tạo ảnh<select id="defaultImage">
+              <option value="seedvis">Seedvis API</option>
+              <option value="web">ChatGPT (extension)</option>
+              <option value="orbit">Orbit (kịch bản web)</option>
+            </select></label
+          ><label
+            >Tạo video<select id="defaultVideo">
+              <option value="seedvis">Seedvis API</option>
+              <option value="orbit">Orbit (kịch bản web)</option>
+            </select></label
+          >
+          <p class="muted" id="defaultsHint"></p>
         </div>
         <div class="settings-panel">
           <h3>Seedvis API · tạo ảnh &amp; video</h3>
@@ -268,6 +461,23 @@
           <p class="muted">
             Node chưa cấu hình Orbit sẽ dùng Seedvis. Mở node → Nguồn tạo để chọn model cho ảnh và
             video.
+          </p>
+        </div>
+        <div class="settings-panel">
+          <h3>ChatGPT (extension) · tạo ảnh</h3>
+          <p class="muted">
+            Tạo ảnh bằng phiên ChatGPT của bạn qua extension trình duyệt (thư mục
+            <code>extension/</code>, xem README để cài). Dán token dưới đây vào popup extension.
+          </p>
+          <label>Worker token<input id="workerToken" type="text" readonly value="" /></label>
+          <div class="actions">
+            <button id="copyWorkerToken" class="button">Sao chép token</button>
+          </div>
+          <p class="muted">
+            Trong popup extension: dán <code id="workerUrl">http://127.0.0.1:7788</code> + token →
+            Kiểm tra kết nối (cửa sổ nào cũng được — extension tự tìm các cửa sổ còn lại) → đăng
+            nhập ChatGPT → đặt số luồng → Bật worker. Muốn cả project dùng ChatGPT: đặt "Nguồn mặc
+            định · Tạo ảnh = ChatGPT (extension)" ở trên.
           </p>
         </div>
         <div class="settings-panel">
@@ -309,7 +519,7 @@
           <div class="connection-status" id="connectionStatus"></div>
           <details>
             <summary>Dành cho người nối kịch bản</summary>
-            <p>API: <code>http://127.0.0.1:7788</code></p>
+            <p>API: <code id="workerApiUrl">http://127.0.0.1:7788</code></p>
             <p>
               Worker nhận job qua <code>POST /api/worker/claim</code>, cập nhật heartbeat và trả
               file qua <code>POST /api/worker/complete</code>. Có sẵn cầu nối
@@ -326,6 +536,6 @@
     <div id="overlay" hidden></div>
     <aside id="inspector" hidden></aside>
     <div id="toast" role="status"></div>
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="/js/main.js"></script>
   </body>
 </html>

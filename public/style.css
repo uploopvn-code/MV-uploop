@@ -290,6 +290,26 @@ button {
 .node.terminal {
   border-color: #6aa0e0;
 }
+/* ‹ n/N › on a clip card: the other versions of the same source */
+.stack-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.stack-btn {
+  background: #20242b;
+  color: inherit;
+  border: 1px solid #3a4250;
+  border-radius: 6px;
+  padding: 0 7px;
+  line-height: 18px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.stack-btn:hover {
+  border-color: #6aa0e0;
+  color: #fff;
+}
 .button.danger {
   border-color: #a65;
   color: #ffb4a6;
@@ -611,8 +631,8 @@ code {
 }
 .reference-chips {
   display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 6px;
   margin: 14px 0;
 }
 .reference-chips span {
@@ -621,6 +641,114 @@ code {
   border-radius: 5px;
   padding: 5px 8px;
   font-size: 10px;
+}
+/* A reference: its thumbnail, its place in the order sent, its Orbit variable. */
+.ref-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #171b21;
+  border: 1px solid #3a4930;
+  border-radius: 7px;
+  padding: 4px 4px 4px 5px;
+}
+.ref-chip:hover {
+  border-color: #6f8c57;
+}
+.ref-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #b2ca9f;
+  font-size: 10px;
+  cursor: pointer;
+}
+.ref-cut {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: none;
+  color: #7c8796;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ref-cut:hover {
+  color: #ff9e9e;
+  border-color: #6b3a3a;
+  background: #2a1c1c;
+}
+/* The video output marker sits under the image OUT port. */
+.port.video-out {
+  border-color: #4a3f6b;
+  color: #b9a7e6;
+}
+.port.video-out[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.video-results {
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.video-result video {
+  width: 100%;
+  border-radius: 8px;
+  background: #000;
+}
+.ref-icon {
+  width: 34px;
+  text-align: center;
+  font-size: 15px;
+  flex: none;
+}
+.ref-blank {
+  width: 56px;
+  height: 34px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: #0d1014;
+  color: #6b7480;
+  font-size: 9px;
+  text-align: center;
+}
+.ref-chip img {
+  /* Fixed height, width follows the file: the thumbnail keeps the original ratio
+     (16:9 scene plates stay wide, 9:16 model sheets stay tall). */
+  height: 56px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  border-radius: 5px;
+  background: #0d1014;
+  flex: none;
+}
+.ref-chip .ref-name {
+  flex: 1;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  color: #d4e3c6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-chip code {
+  flex: none;
+  opacity: 0.75;
 }
 .two {
   display: grid;
@@ -640,6 +768,13 @@ code {
   font-size: 11px;
   line-height: 1.6;
   margin: 16px 0;
+}
+/* Seedance group: its shots in timeline order. */
+.seedance-shots {
+  margin: 6px 0 8px;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 1.7;
 }
 .actions {
   display: flex;
@@ -938,17 +1073,6 @@ h4 {
   background: #c5ed89;
   color: #101216;
 }
-.edge-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 15px 0;
-}
-.edge-list button {
-  font-size: 11px;
-  padding: 7px;
-}
-
 .graph-scroll {
   flex: 1;
   height: 100%;
@@ -1007,10 +1131,51 @@ h4 {
   font-size: 10px;
   color: #c5ed89;
   left: 0;
-  content: 'IN';
+  white-space: nowrap;
+  content: attr(data-label);
 }
 .graph-node [data-port-out]:after {
-  content: 'OUT';
+  left: auto;
+  right: 0;
+}
+/* Second input of an image / shot node: style + camera text, below the image input. */
+.graph-node [data-port-kind='setting'] {
+  top: 26px;
+  border-color: #6aa0e0;
+}
+.graph-node [data-port-kind='setting']:after {
+  color: #9ecbff;
+}
+/* "Change only this" box under the inspector preview. */
+.edit-image {
+  margin: 0 0 18px;
+  padding: 12px;
+  border: 1px solid #3a4930;
+  border-radius: 9px;
+  background: #161a1f;
+}
+.edit-image .actions {
+  margin-top: 8px;
+}
+/* A clip node's single input: where its video arrives from the shot. */
+.graph-node .port.video-in {
+  border-color: #9a86d6;
+}
+.graph-node .port.video-in:after {
+  color: #c9b6ff;
+}
+/* Second output: the clips this node produced, below the image output. Its label hangs on
+   the right so it never lands on the image label. */
+.graph-node .port.video-out {
+  top: 26px;
+  right: -14px;
+  cursor: pointer;
+}
+.graph-node .port.video-out:after {
+  color: #c9b6ff;
+  top: 6px;
+  left: auto;
+  right: 34px;
 }
 .port.hover-target {
   background: #fff;
@@ -1162,11 +1327,47 @@ h4 {
   background: linear-gradient(180deg, rgba(120, 150, 220, 0.06), transparent 200px);
 }
 .zone-band:nth-child(2) {
-  background: linear-gradient(180deg, rgba(197, 237, 137, 0.06), transparent 200px);
+  background: linear-gradient(180deg, rgba(232, 160, 205, 0.07), transparent 200px);
 }
 .zone-band:nth-child(3) {
+  background: linear-gradient(180deg, rgba(197, 237, 137, 0.06), transparent 200px);
+}
+.zone-band:nth-child(4) {
   background: linear-gradient(180deg, rgba(106, 160, 224, 0.06), transparent 200px);
+}
+.zone-band:nth-child(5) {
+  background: linear-gradient(180deg, rgba(226, 192, 120, 0.06), transparent 200px);
+}
+.zone-band:last-child {
   border-right: none;
+}
+/* Danh sách bộ trang phục trong node nhân vật */
+.wardrobe-list {
+  margin: 6px 0 10px;
+  padding-left: 18px;
+}
+.wardrobe-list li {
+  margin: 3px 0;
+}
+.window-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.window-actions {
+  display: flex;
+  gap: 6px;
+}
+.wardrobe-list .link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #9ecbff;
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
 }
 .zone-label {
   position: absolute;
@@ -1281,4 +1482,139 @@ h4 {
   margin: 0;
   padding: 10px;
   background: #0d0f13;
+}
+
+/* 2D staging editor for a merged scene */
+.stage-plate {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #1a1d22 center / cover no-repeat;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 10px 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+.stage-plate.empty {
+  background: linear-gradient(#20242b, #14161b);
+}
+.stage-empty-note {
+  position: absolute;
+  inset: auto 0 8px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.stage-marker.char {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 4px 9px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: #10160a;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: grab;
+  white-space: nowrap;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.55);
+}
+.stage-marker.char:active {
+  cursor: grabbing;
+}
+.stage-cam {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1px 6px;
+  pointer-events: none;
+}
+.stage-frames {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stage-frames li {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.stage-frame-head {
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+.stage-framing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.button.small {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.stage-framing .button.active {
+  background: var(--accent);
+  color: #10160a;
+}
+.stage-side {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 9px;
+  min-width: 0;
+}
+.stage-side legend {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0 4px;
+}
+.field-sm {
+  display: block;
+  font-size: 12px;
+  margin: 5px 0;
+}
+.field-sm input {
+  width: 100%;
+}
+
+/* Director tab — sequential numbered steps */
+.director-step h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #10160a;
+  font-weight: 700;
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+.director-step details {
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.director-step summary {
+  cursor: pointer;
+  padding: 2px 0;
+}
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
