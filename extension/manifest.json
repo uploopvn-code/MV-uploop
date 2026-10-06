@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Drama Tool · ChatGPT Worker",
+  "version": "0.2.3",
+  "description": "Nhận job từ Drama Tool: tạo ảnh và chạy Đạo diễn AI (kịch bản/blueprint) trên ChatGPT bằng phiên đăng nhập của bạn.",
+  "permissions": ["storage", "alarms", "tabs", "scripting"],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://*.oaiusercontent.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Drama Tool ChatGPT Worker"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["content-chatgpt.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
