@@ -118,7 +118,7 @@
     say('gửi');
     await clickSend(editor);
     say('chờ ChatGPT trả lời…');
-    const text = await waitForReply(before, 240000);
+    const text = await waitForReply(before, 600000, say);
     return { text };
   }
   // The assistant reply's rendered text. ChatGPT's 2026 build dropped data-message-author-role
@@ -150,28 +150,47 @@
     return '';
   };
   const replyCount = () => document.querySelectorAll(REPLY_SELS[0]).length;
-  // The new build has no stable Stop button, so completion is judged by the reply text holding
-  // steady for ~2.8s after it has appeared and differs from whatever was on screen before sending
-  // (a fresh chat starts empty). Returns partial text on timeout rather than nothing.
-  async function waitForReply(before, timeout) {
+  // Is ChatGPT still generating? (A stop button, or a streaming indicator.) Selectors vary across
+  // builds; if none ever match we simply fall back to text-stability. Reasoning models ("Analyzed",
+  // "Worked for 2m") think for a long time before streaming, and stream large answers for a while —
+  // so we must NOT take the text while this is true.
+  const isStreaming = () =>
+    !!document.querySelector(
+      'button[data-testid="stop-button"], button[aria-label*="Stop" i], button[aria-label*="Dừng" i], [data-state="streaming"], [class*="result-streaming"], [class*="is-streaming"]',
+    );
+  // Completion = a NEW reply (differs from before sending), ChatGPT no longer streaming, and the
+  // text held steady for ~3s. Because reasoning models can think for minutes then stream a big
+  // answer, the timeout is generous and progress is reported. Partial text is returned on timeout
+  // rather than nothing.
+  async function waitForReply(before, timeout, say) {
     const t0 = Date.now();
     let last = '',
       stableSince = 0,
-      grew = false;
+      grew = false,
+      beat = 0;
     const isNew = t => !!t && t !== before.text;
     while (Date.now() - t0 < timeout) {
+      const streaming = isStreaming();
       const t = replyText();
-      if (isNew(t)) {
-        grew = true;
-        if (t === last) {
-          if (!stableSince) stableSince = Date.now();
-          else if (Date.now() - stableSince > 2800) return t; // stopped growing → done
-        } else {
-          last = t;
-          stableSince = 0;
-        }
+      if (isNew(t)) grew = true;
+      if (isNew(t) && !streaming && t === last) {
+        if (!stableSince) stableSince = Date.now();
+        else if (Date.now() - stableSince > 3000) return t; // steady 3s and not streaming → done
+      } else {
+        // still streaming, still growing, or no answer yet: keep waiting
+        last = t;
+        stableSince = 0;
       }
-      await sleep(500);
+      if (say && Date.now() - beat > 10000) {
+        beat = Date.now();
+        say(
+          'ChatGPT đang soạn… ' +
+            Math.round((Date.now() - t0) / 1000) +
+            's' +
+            (grew ? ' (' + last.length + ' ký tự)' : ''),
+        );
+      }
+      await sleep(700);
     }
     if (grew && last) return last; // timed out mid-answer: hand back what we have
     throw new Error(

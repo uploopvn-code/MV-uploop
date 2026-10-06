@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Drama Tool · ChatGPT Worker",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Nhận job từ Drama Tool: tạo ảnh và chạy Đạo diễn AI (kịch bản/blueprint) trên ChatGPT bằng phiên đăng nhập của bạn.",
   "permissions": ["storage", "alarms", "tabs", "scripting"],
   "host_permissions": [
