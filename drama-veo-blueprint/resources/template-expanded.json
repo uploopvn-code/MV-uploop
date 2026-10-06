@@ -1,0 +1,390 @@
+{
+  "project": {
+    "title": "Bẫy Ngầm Thượng Lưu (The Gilded Trap)",
+    "country_setting": "Việt Nam (Biệt thự tân cổ điển Thảo Điền)",
+    "genre": "Domestic Psychological Thriller / Marital Deception",
+    "duration_seconds": 43,
+    "logline": "Trong căn biệt thự cô lập giữa đêm mưa, người vợ doanh nhân sắc sảo từng bước dồn người chồng tài chính vào chân tường bằng những lời thoại ẩn ý ngay tại bàn ăn kỷ niệm ngày cưới — cho tới khi cô lật ra lá bài đã khóa chặt mọi lối thoát của anh.",
+    "thematic_core": "Sự phản bội sau tấm bình phong danh giá; đòn trừng phạt tâm lý lạnh lùng thay cho tiếng gào thét.",
+    "dramatic_question": "Người vợ có vạch mặt và khuất phục được chồng ngay trong bữa tối này không?",
+    "beat_sheet": {
+      "setup": "Bữa tối kỷ niệm trang trọng; vẻ ngoài hoàn hảo nhưng có một vết nứt mơ hồ trong không khí.",
+      "tension_rising": "Người vợ thả những câu hỏi dò xét; người chồng cố giữ bình tĩnh nhưng để lộ dấu hiệu hoảng.",
+      "confrontation": "Vợ chất vấn trực diện về chiếc thẻ phòng khách sạn; chồng mất kiểm soát, lùi về quầy rượu.",
+      "reveal": "Vợ hé lộ cô đã biết từ lâu và đã nhắn tin giúp anh — mọi đường lui đã bị phong tỏa.",
+      "aftermath": "Chồng gục xuống trong im lặng; vợ bước lên cầu thang, bỏ lại một câu kết lạnh."
+    },
+    "pacing_profile": "Slow-burn dồn nén; căng thẳng leo chậm ở Setup–Tension rồi nổ dứt khoát ở Confrontation, lạnh buốt ở Reveal, để lại khoảng lặng ở Aftermath.",
+    "aspect_ratio": "16:9",
+    "target_platform": "Google VEO"
+  },
+  "assets": [
+    {
+      "key": "wife",
+      "role": "character",
+      "name": "Bảo Quyên (Người vợ — Chủ tịch chuỗi thời trang cao cấp)",
+      "voice_profile": {
+        "gender": "Female",
+        "age_sound": "Late 30s",
+        "timbre": "Trầm, mượt mà nhưng sắc lạnh, sang trọng",
+        "accent": "Standard Northern Vietnamese Elite (giọng Hà Nội chuẩn, đài từ quý phái)",
+        "pacing": "Chậm rãi, nhả chữ dứt khoát, không cao giọng nhưng đầy uy lực",
+        "emotional_baseline": "Sự khinh miệt kìm nén sau nụ cười lịch thiệp"
+      },
+      "prompt": "Character model sheet turnaround of a 36yo elegant Vietnamese woman, sharp aristocratic facial features, piercing dark eyes, hair styled in a low sleek bun, wearing a tailored emerald velvet halter evening dress, pearl and diamond earrings, portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent look, cinematic 35mm photorealistic.",
+      "physical_anchors": [
+        "piercing dark almond eyes",
+        "low sleek black bun",
+        "pearl-and-diamond earrings",
+        "sharp jawline",
+        "a single beauty mark below left eye"
+      ],
+      "expression_matrix": {
+        "composed_control": "serene aristocratic poise, chin lightly resting on laced fingers, unblinking calm",
+        "suspicious": "cold slow side-eye, one brow subtly raised, lips still",
+        "triumph": "a subtle lethal smirk at the corner of her mouth, eyes glinting",
+        "veiled_contempt": "polite closed-mouth smile that never reaches the eyes"
+      },
+      "wardrobe_lock": "Tailored emerald velvet halter evening gown with pearl-and-diamond earrings (do not re-describe in shots).",
+      "relationship": "Vợ của Minh Khang; nắm quyền tài chính và thông tin, luôn ở thế thượng phong trong phim này.",
+      "code": "NV1",
+      "identity_label": "the woman with the sleek black bob",
+      "back_view": "her sleek black bob and the bare nape above a dark silk collar"
+    },
+    {
+      "key": "husband",
+      "role": "character",
+      "name": "Minh Khang (Người chồng — Giám đốc quỹ đầu tư)",
+      "voice_profile": {
+        "gender": "Male",
+        "age_sound": "Early 40s",
+        "timbre": "Trầm khàn, hơi thở đứt quãng khi căng thẳng",
+        "accent": "Standard Northern Vietnamese Corporate",
+        "pacing": "Gấp gáp cố tỏ ra bình tĩnh, hay ngập ngừng nuốt nước bọt",
+        "emotional_baseline": "Cơn hoảng loạn tột độ cố che đậy dưới vẻ lịch lãm"
+      },
+      "prompt": "Character model sheet turnaround of a 40yo handsome Vietnamese businessman, slicked-back dark hair slightly damp with sweat at temples, wearing a tailored navy three-piece suit without tie, gold signet ring on finger, portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent look, cinematic 35mm photorealistic.",
+      "physical_anchors": [
+        "slicked-back dark hair damp at temples",
+        "clean-shaven square face",
+        "gold signet ring on right hand",
+        "navy three-piece suit without tie"
+      ],
+      "expression_matrix": {
+        "forced_calm": "a stiff affectionate smile, eyes slightly too wide, swallowing frequently",
+        "panic_hidden": "shallow rapid breathing, throat gulping dryly, eyes darting",
+        "collapse": "shoulders sinking, jaw slack, color draining from face, hollow stare",
+        "defensive": "jaw tightening, a nervous laugh cut short, hand gripping the chair"
+      },
+      "wardrobe_lock": "Tailored navy three-piece suit without tie, gold signet ring (do not re-describe in shots).",
+      "relationship": "Chồng của Bảo Quyên; đang che giấu ngoại tình, liên tục ở thế phòng thủ và tụt dốc.",
+      "code": "NV2",
+      "identity_label": "the man in the charcoal suit",
+      "back_view": "his short dark hair and the charcoal suit shoulder"
+    },
+    {
+      "key": "scene_master_wide",
+      "role": "scene",
+      "name": "Biệt thự — Toàn cảnh Phòng khách & Bàn ăn",
+      "prompt": "Master wide establishing shot of an opulent neoclassical villa interior at rainy night, long black marble dining table at center, curved floating marble staircase in background right, dark wood wine bar on left, floor-to-ceiling glass doors with rain streaming down, a single low warm chandelier overhead, cinematic 35mm.",
+      "lighting_profile": "Một đèn chùm hổ phách thấp làm nguồn sáng chính; phần còn lại chìm trong slate tối; ánh chớp xanh lạnh thi thoảng hắt qua cửa kính mưa."
+    },
+    {
+      "key": "scene_sub_table",
+      "role": "scene",
+      "name": "Tiểu cảnh — Cận cảnh Bàn ăn Đối thoại",
+      "prompt": "Medium-close interior shot focusing strictly on the black polished marble dining table area, two high-back emerald velvet chairs opposing each other, fine silver cutlery, crystal wine glasses, dramatic overhead amber pendant casting direct pools of light, dark bokeh background, cinematic 35mm.",
+      "lighting_profile": "Đèn thả hổ phách rọi thẳng từ trên, tạo pool sáng trên mặt bàn và bóng gắt dưới gò má; nền tối.",
+      "conversation": {
+        "place": "The dining table from image 1, the same evening.",
+        "two_shot": "from the kitchen island side of the room",
+        "left": {
+          "anchor": "seated at the end of the stone table nearest the tall windows",
+          "background": "the rain-streaked floor-to-ceiling windows and the city lights",
+          "light": "warm amber chandelier light on his face, cool rain light on his shoulder"
+        },
+        "right": {
+          "anchor": "seated across the table, the chandelier directly above",
+          "background": "the dark marble kitchen island and the wine shelf",
+          "light": "amber key light pooling on her face, a catchlight in her dark pupils"
+        }
+      }
+    },
+    {
+      "key": "scene_sub_stairs",
+      "role": "scene",
+      "name": "Tiểu cảnh — Chân Cầu thang Cẩm thạch",
+      "prompt": "Atmospheric shot focusing on the base of a curved white marble staircase, brass architectural handrail, dark moody vertical shadows slicing across the steps, warm recessed step lighting, heavy chiaroscuro contrast, cinematic 35mm.",
+      "lighting_profile": "Đèn âm bậc ấm hắt lên; bóng dọc như song sắt cắt ngang bậc thang."
+    },
+    {
+      "key": "scene_sub_bar",
+      "role": "scene",
+      "name": "Tiểu cảnh — Quầy Rượu & Mặt Kính",
+      "prompt": "Close-up interior of a dark walnut wine bar island, mirrored rear wall reflecting ambient amber lights, rows of crystal decanters, dark moody surface with whiskey glasses, cold reflective atmosphere, cinematic 35mm.",
+      "lighting_profile": "Đèn tủ rượu hắt ngược lạnh; mặt gương phản chiếu amber, đổ bóng silhouette khi nhân vật cúi xuống."
+    },
+    {
+      "key": "prop_phone",
+      "role": "prop",
+      "name": "Điện thoại hiện tin nhắn ngoại tình",
+      "prompt": "Extreme macro hero shot of a dark titanium smartphone lying on black marble, screen glowing with a Telegram notification in Vietnamese: 'Tối nay anh về với em nhé?', faint water condensation on the surface, cinematic 35mm.",
+      "continuity_note": "Luôn là điện thoại titanium tối màu, màn khóa cùng hình nền; chỉ nội dung thông báo thay đổi theo shot."
+    },
+    {
+      "key": "prop_hotel_card",
+      "role": "prop",
+      "name": "Thẻ từ phòng khách sạn",
+      "prompt": "Macro shot of a matte black hotel keycard partially slipped from an inner suit pocket, embossed gold logo catching amber light, cinematic 35mm.",
+      "continuity_note": "Thẻ đen nhám logo vàng; xuất hiện trong túi áo vest và sau đó trên mặt bàn."
+    },
+    {
+      "key": "prop_wine_glass",
+      "role": "prop",
+      "name": "Ly rượu vang pha lê",
+      "prompt": "Close-up of a crystal wine glass half-filled with deep red wine on black marble, amber light refracting through the stem, cinematic 35mm.",
+      "continuity_note": "Cùng một kiểu ly pha lê xuyên suốt; mực rượu giảm dần theo tiến trình bữa ăn."
+    }
+  ],
+  "cameras": [
+    {
+      "key": "veo_truck_table",
+      "name": "Veo Table Truck Tension",
+      "config": "Slow lateral truck across the dining table, shallow depth of field, keeping both actors in razor-sharp focus."
+    },
+    {
+      "key": "veo_ots_husband",
+      "name": "Veo Over-Shoulder onto Husband",
+      "config": "Over the wife's shoulder framing the husband, slow creeping digital push-in."
+    },
+    {
+      "key": "veo_ots_wife",
+      "name": "Veo Over-Shoulder onto Wife",
+      "config": "Over the husband's shoulder framing the wife, locked over-the-shoulder with faint emotional vibration."
+    },
+    {
+      "key": "veo_macro_face",
+      "name": "Veo Micro Reaction Eyes",
+      "config": "Tight macro close-up on eye twitch, pupil constriction, sharp specular reflection in irises."
+    },
+    {
+      "key": "veo_push_reveal",
+      "name": "Veo Slow Push-in Reveal",
+      "config": "Very slow push-in toward the face, time stretched, breath held, for the moment of realization."
+    },
+    {
+      "key": "veo_stairs_low",
+      "name": "Veo Stairs Low Angle",
+      "config": "Ominous low-angle pedestal move from the foot of the stairs looking up, vertical stair shadows framing the subject like prison bars."
+    },
+    {
+      "key": "veo_bar_silhouette",
+      "name": "Veo Bar Cold Backlight",
+      "config": "Close macro at the wine bar with cold backlight from the liquor display, subtle handheld emotional vibration."
+    }
+  ],
+  "shots": [
+    {
+      "name": "Shot 01 — Bữa tối trên mặt đá lạnh",
+      "start": 0,
+      "duration": 7,
+      "beat": "setup",
+      "emotional_value": -1,
+      "uses": [
+        "wife",
+        "husband",
+        "scene_sub_table",
+        "prop_wine_glass",
+        "veo_truck_table",
+        "style_main",
+        "aud_dinner_tension"
+      ],
+      "camera": "veo_truck_table",
+      "axis_180": "@NV2 đầu bàn nhìn trái→phải; @NV1 đối diện nhìn phải→trái",
+      "blocking": "@NV2 ngồi đầu bàn; @NV1 ngồi đối diện, lưng thẳng, cắt thịt lặng lẽ dưới đèn thả hổ phách. Khoảng cách bàn dài tạo cảm giác lạnh nhạt.",
+      "dialogue": "Minh Khang: \"Hôm nay công việc ở tập đoàn bận quá, anh suýt nữa trễ bữa tối kỷ niệm.\"",
+      "audio_delivery": "Giọng vui gượng (forced_calm), có độ căng, nuốt khan ngay sau khi dứt câu.",
+      "internal_subtext": "Chồng thăm dò xem vợ có nghi ngờ việc mình vừa rời khách sạn lúc 7 giờ tối.",
+      "videoPrompt": "Veo Video Prompt: Compose connected reference subjects seamlessly. @NV2 at the head of the table and @NV1 opposite in @scene_sub_table, a long cold distance between them. @NV2 attempts a stiff affectionate smile, nervously adjusting a cufflink, swallowing, speaking with forced joviality, mouth articulates perfectly: \"Hôm nay công việc ở tập đoàn bận quá, anh suýt nữa trễ bữa tối kỷ niệm.\". @NV1 slices steak without lifting her gaze, utter chilling poise. Camera: slow lateral truck across the table, shallow depth of field. Lighting & Physics: overhead amber pendant casting stark shadows under the brow, @prop_wine_glass refracting amber, silver cutlery glinting coldly, 16:9, cinematic 35mm, photorealistic, no text, no artifacts, fictional characters only, no resemblance to any real person or celebrity.",
+      "transition_to_next": "Cut thẳng sang cận vợ khi cô ngẩng lên.",
+      "style": "style_main",
+      "audio": "aud_dinner_tension"
+    },
+    {
+      "name": "Shot 02 — Câu hỏi dò xét và vết nứt (cụm đối thoại)",
+      "start": 7,
+      "duration": 8,
+      "beat": "tension_rising",
+      "emotional_value": 0,
+      "uses": [
+        "husband",
+        "wife",
+        "scene_sub_table",
+        "style_main",
+        "aud_dinner_tension"
+      ],
+      "style": "style_main",
+      "audio": "aud_dinner_tension",
+      "sides": {
+        "left": "husband",
+        "right": "wife"
+      },
+      "setups": [
+        {
+          "framing": "ots_a",
+          "dialogue": "Bảo Quyên: \"Khách sạn anh họp, phòng view sông đẹp không?\"",
+          "audio_delivery": "low, smooth, composed, dropped as if by chance"
+        },
+        {
+          "framing": "ots_b",
+          "dialogue": "Minh Khang: \"Ờ... phòng họp thôi, anh có để ý đâu.\"",
+          "audio_delivery": "a half-beat late, too light, a swallow before the last word"
+        }
+      ],
+      "axis_180": "@husband bên trái nhìn phải→trái; @wife bên phải nhìn trái→phải",
+      "internal_subtext": "Vợ gài bẫy; chồng trượt chân ở chữ 'khách sạn'.",
+      "transition_to_next": "Cắt sang macro ánh mắt vợ."
+    },
+    {
+      "name": "Shot 04 — Ánh mắt khóa mục tiêu",
+      "start": 15,
+      "duration": 5,
+      "beat": "tension_rising",
+      "emotional_value": 3,
+      "uses": [
+        "wife",
+        "scene_sub_table",
+        "veo_macro_face",
+        "style_main",
+        "aud_dinner_tension"
+      ],
+      "camera": "veo_macro_face",
+      "axis_180": "@NV1 nhìn phải→trái, giữ trục",
+      "blocking": "Macro vào mắt @NV1; đồng tử hơi co, một bên khóe miệng động đậy.",
+      "dialogue": "[Bảo Quyên im lặng, chỉ nhướn một bên mày]",
+      "audio_delivery": "Không thoại; tiếng mưa và tiếng dao nĩa chạm đĩa nổi lên.",
+      "internal_subtext": "Vợ đã xác nhận chồng nói dối; bắt đầu khép bẫy.",
+      "videoPrompt": "Veo Video Prompt: Compose connected reference subjects seamlessly. Tight macro on @NV1's eyes in @scene_sub_table, a cold slow side-eye, one brow subtly raised, pupils minutely constricting, the corner of her mouth twitching toward a lethal smirk. Camera: tight macro close-up, razor focus on the irises. Lighting & Physics: single amber catchlight gleaming in dark pupils, half the face sinking into noir shadow, rain ambience, 16:9, cinematic 35mm, photorealistic, no text, no artifacts, fictional characters only, no resemblance to any real person or celebrity.",
+      "transition_to_next": "Hard cut vào cao trào chất vấn.",
+      "style": "style_main",
+      "audio": "aud_dinner_tension"
+    },
+    {
+      "name": "Shot 05 — Lời chất vấn dưới đèn chùm",
+      "start": 20,
+      "duration": 5,
+      "beat": "confrontation",
+      "emotional_value": 4,
+      "uses": [
+        "wife",
+        "prop_hotel_card",
+        "scene_sub_table",
+        "veo_ots_husband",
+        "style_main",
+        "aud_dinner_tension"
+      ],
+      "camera": "veo_ots_husband",
+      "axis_180": "Máy sau vai @NV2; @NV1 nhìn phải→trái, đẩy thẳng vào anh",
+      "blocking": "@NV1 đặt @prop_hotel_card lên mặt bàn giữa hai người, trượt nhẹ về phía chồng. Thế áp đảo.",
+      "dialogue": "Bảo Quyên: \"Bận đến mức... quên cả tháo chiếc thẻ phòng khách sạn trong túi áo vest sao anh?\"",
+      "audio_delivery": "Bình tĩnh chết người (composed_control), thì thầm mượt, không nâng âm lượng.",
+      "internal_subtext": "Màn kịch của anh kết thúc tại đây.",
+      "videoPrompt": "Veo Video Prompt: Compose connected reference subjects seamlessly. @NV1 across @scene_sub_table over the husband's defensive shoulder, sliding @prop_hotel_card onto the marble between them. She speaks with chilling aristocratic composure, mouth articulates: \"Bận đến mức... quên cả tháo chiếc thẻ phòng khách sạn trong túi áo vest sao anh?\". A subtle lethal smirk touches the corner of her lips. Camera: slow creeping push-in over the shoulder. Lighting & Physics: chiaroscuro key cutting half her face into deep noir, the black keycard's gold logo catching amber light, 16:9, cinematic 35mm, photorealistic, no text, no artifacts, fictional characters only, no resemblance to any real person or celebrity.",
+      "transition_to_next": "Hard cut on action khi chồng bật dậy.",
+      "style": "style_main",
+      "audio": "aud_dinner_tension"
+    },
+    {
+      "name": "Shot 06 — Cơn hoảng loạn ở quầy rượu",
+      "start": 25,
+      "duration": 6,
+      "beat": "confrontation",
+      "emotional_value": 5,
+      "uses": [
+        "husband",
+        "scene_sub_bar",
+        "veo_bar_silhouette",
+        "style_main",
+        "aud_dinner_tension"
+      ],
+      "camera": "veo_bar_silhouette",
+      "axis_180": "@NV2 quay lưng lại bàn, mặt phản chiếu trong gương",
+      "blocking": "@NV2 bật dậy đi vội sang @scene_sub_bar, hai tay chống chặt xuống mặt đá để khỏi khuỵu.",
+      "dialogue": "[Minh Khang thở dốc, nuốt khan, mắt đảo liên tục]",
+      "audio_delivery": "Thở nông gấp (panic_hidden), hơi thở nghẹn trong cổ, im lặng tê liệt.",
+      "internal_subtext": "Cô ta đã lục áo mình... Tại sao cô ta biết?",
+      "videoPrompt": "Veo Video Prompt: Compose connected reference subjects seamlessly. Close-up on @NV2 gripping the edge of the dark island in @scene_sub_bar, his warped reflection in the rear mirror. Sweat beads along his jaw, his throat violently contracting in a dry gulp, eyes darting in sheer panic. Camera: tight macro on the face with subtle handheld emotional vibration. Lighting & Physics: cold backlight from the liquor display throwing his face into panicked silhouette, a crystal decanter trembling faintly from his hand, 16:9, cinematic 35mm, photorealistic, no text, no artifacts, fictional characters only, no resemblance to any real person or celebrity.",
+      "transition_to_next": "Dissolve chậm sang vợ ở chân cầu thang.",
+      "style": "style_main",
+      "audio": "aud_dinner_tension"
+    },
+    {
+      "name": "Shot 07 — Lưỡi dao cuối cùng bên cầu thang",
+      "start": 31,
+      "duration": 7,
+      "beat": "reveal",
+      "emotional_value": 3,
+      "uses": [
+        "wife",
+        "prop_phone",
+        "scene_sub_stairs",
+        "veo_stairs_low",
+        "style_main",
+        "aud_reveal"
+      ],
+      "camera": "veo_stairs_low",
+      "axis_180": "Góc thấp nhìn lên @NV1; ánh mắt cô hạ xuống nhìn chồng (ngoài khung)",
+      "blocking": "@NV1 bước tới tựa tay vịn ở @scene_sub_stairs, tay cầm @prop_phone đang phát sáng, đứng cao hơn chồng.",
+      "dialogue": "Bảo Quyên: \"Đừng lo. Em đã nhắn lại giúp anh rồi... bảo cô ta đừng đợi nữa.\"",
+      "audio_delivery": "Du dương nhẹ, thanh thản đến rợn người (triumph), ngập tràn chiến thắng.",
+      "internal_subtext": "Mọi tài sản, danh dự và lối thoát của anh đã bị tôi phong tỏa hoàn toàn.",
+      "videoPrompt": "Veo Video Prompt: Compose connected reference subjects seamlessly. Low angle looking up at @NV1 standing composed at the foot of @scene_sub_stairs, one hand on the brass handrail, the other holding the glowing @prop_phone showing a Telegram screen. She speaks with serene ruthlessness, mouth articulates: \"Đừng lo. Em đã nhắn lại giúp anh rồi... bảo cô ta đừng đợi nữa.\". Camera: ominous low-angle pedestal move, vertical stair shadows framing her like prison bars, very slow. Lighting & Physics: warm step lights washing up from below, cold blue phone glow on her skin, 16:9, cinematic 35mm, photorealistic, no text, no artifacts, fictional characters only, no resemblance to any real person or celebrity.",
+      "transition_to_next": "Slow push-in sang gương mặt chồng gục xuống.",
+      "style": "style_main",
+      "audio": "aud_reveal"
+    },
+    {
+      "name": "Shot 08 — Khoảng lặng sụp đổ",
+      "start": 38,
+      "duration": 5,
+      "beat": "aftermath",
+      "emotional_value": -3,
+      "uses": [
+        "husband",
+        "scene_sub_bar",
+        "veo_push_reveal",
+        "style_main",
+        "aud_dinner_tension"
+      ],
+      "camera": "veo_push_reveal",
+      "axis_180": "@NV2 nhìn vô định xuống mặt quầy, không còn giao tiếp mắt",
+      "blocking": "@NV2 buông thõng vai bên quầy rượu, ánh mắt trống rỗng; máy đẩy chậm vào mặt rồi dừng.",
+      "dialogue": "[Im lặng; chỉ tiếng mưa và tiếng bước chân vợ xa dần lên cầu thang]",
+      "audio_delivery": "Không thoại; nhịp thở chậm lại, một hơi thở run dài thoát ra.",
+      "internal_subtext": "Hết đường. Cuộc hôn nhân và sự nghiệp đều nằm trong tay cô ấy.",
+      "videoPrompt": "Veo Video Prompt: Compose connected reference subjects seamlessly. @NV2 sagging at @scene_sub_bar, shoulders sinking, jaw slack, color draining from his face, a hollow stare down at the marble. Footsteps recede up the stairs behind him. Camera: very slow push-in toward his face, then holding still. Lighting & Physics: cold backlight fading, a single long trembling breath visible, rain streaking the glass beyond, 16:9, cinematic 35mm, photorealistic, no text, no artifacts, fictional characters only, no resemblance to any real person or celebrity.",
+      "transition_to_next": "Fade to black.",
+      "style": "style_main",
+      "audio": "aud_dinner_tension"
+    }
+  ],
+  "styles": [
+    {
+      "key": "style_main",
+      "name": "Gilded Trap Noir",
+      "prompt": "Cinematic 35mm anamorphic, Kodak 5219, moody high-contrast lighting, desaturated deep slate with warm amber chandelier accents, heavy chiaroscuro shadow play, photorealistic, no CGI, no text."
+    }
+  ],
+  "audio": [
+    {
+      "key": "aud_dinner_tension",
+      "name": "Bữa tối căng thẳng",
+      "prompt": "very low sustained cello drone under heavy rain on glass, distant thunder, cutlery on porcelain, a clock ticking in another room; no melody, no percussion, no crowd chatter"
+    },
+    {
+      "key": "aud_reveal",
+      "name": "Khoảnh khắc lộ mặt",
+      "prompt": "music cuts to silence on the reveal, then one low piano note decaying; only breathing, rain and the hum of the room; no strings, no swell, no voice-over"
+    }
+  ]
+}

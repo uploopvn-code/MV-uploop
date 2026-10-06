@@ -5,3 +5,6 @@ node_modules/
 # Local Claude Code tooling and archives (not part of the app).
 .claude/
 *.rar
+# Python bytecode cache (from the drama-veo-blueprint skill scripts).
+__pycache__/
+*.pyc
