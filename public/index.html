@@ -159,6 +159,25 @@
               <button id="autoImageStart" class="button primary">▶ Tạo ảnh khu vực</button>
               <p id="autoImageStatus" class="field-hint"></p>
               <div class="side-sep"></div>
+              <div class="side-title">Tạo video nhanh theo khu</div>
+              <label
+                >Khu vực<select id="videoZone" aria-label="Khu vực tạo video">
+                  <option value="production">⑥ Sản xuất (phủ cảnh)</option>
+                  <option value="merged">⑦ Phân cảnh ghép</option>
+                  <option value="lipsync">⑪ Hát nhép (lip-sync)</option>
+                </select></label
+              >
+              <label
+                >Tạo bằng<select id="videoProvider" aria-label="Nguồn tạo video">
+                  <option value="">Tất cả (theo cấu hình node)</option>
+                  <option value="seedvis">Seedvis API</option>
+                  <option value="musechat">Muse Chat</option>
+                  <option value="gvids">Google Vids</option>
+                </select></label
+              >
+              <button id="autoVideoZoneStart" class="button primary">▶ Tạo video khu vực</button>
+              <p id="autoVideoZoneStatus" class="field-hint"></p>
+              <div class="side-sep"></div>
               <div class="side-title">Tạo tự động</div>
               <label
                 >Chạy đến<select id="autoTarget" aria-label="Node đích chạy tự động">

@@ -53,6 +53,23 @@ $('#autoStop').onclick = async () => {
     toast(e.message, true);
   }
 };
+$('#autoVideoZoneStart').onclick = async () => {
+  try {
+    await capturesReady();
+    store.state = await api('/api/auto/video/zone/start', {
+      method: 'POST',
+      body: {
+        zone: $('#videoZone').value,
+        provider: $('#videoProvider').value || undefined,
+        versions: Number($('#videoVersions').value),
+      },
+    });
+    render();
+    toast('Đang tạo video đồng loạt cho khu vực đã chọn');
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
 $('#autoVideoStart').onclick = async () => {
   try {
     await capturesReady(); // a keyframe made on the way goes with its 3D capture
