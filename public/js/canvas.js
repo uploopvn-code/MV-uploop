@@ -381,17 +381,23 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   deleteEdge(selectedEdge);
 });
-$('#fullscreenToggle').onclick = () => {
-  const full = $('#graphArea').classList.toggle('full');
+const FULL_PREF_KEY = 'mv-canvas-full';
+function setFullscreen(full, persist = true) {
+  $('#graphArea').classList.toggle('full', full);
   $('#fullscreenToggle').textContent = full ? '⤢ Thu nhỏ' : '⛶ Toàn màn hình';
   $('#fullscreenToggle').setAttribute('aria-expanded', String(full));
   if (full) setToolsOpen(false);
+  if (persist) try { localStorage.setItem(FULL_PREF_KEY, full ? '1' : '0'); } catch {}
+}
+let startFull = true;
+try { const v = localStorage.getItem(FULL_PREF_KEY); if (v !== null) startFull = v === '1'; } catch {}
+setFullscreen(startFull, false);
+$('#fullscreenToggle').onclick = () => {
+  setFullscreen(!$('#graphArea').classList.contains('full'));
 };
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && $('#graphArea').classList.contains('full')) {
-    $('#graphArea').classList.remove('full');
-    $('#fullscreenToggle').textContent = '⛶ Toàn màn hình';
-    $('#fullscreenToggle').setAttribute('aria-expanded', 'false');
+    setFullscreen(false);
   }
 });
 

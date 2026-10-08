@@ -21,6 +21,10 @@ refreshSeedvis().catch(() => {});
 refreshWorkerInfo().catch(() => {});
 try {
   await refresh();
+  requestAnimationFrame(() => {
+    const fit = document.getElementById('fitCanvas');
+    if (fit) fit.click();
+  });
 } catch (e) {
   // Don't leave a blank page: show what went wrong and how to recover.
   document.body.insertAdjacentHTML(
