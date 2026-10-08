@@ -8,3 +8,4 @@ node_modules/
 # Python bytecode cache (from the drama-veo-blueprint skill scripts).
 __pycache__/
 *.pyc
+mv_shotlist_tools.zip

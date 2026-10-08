@@ -4,7 +4,14 @@
 // starts the render.
 import { store } from './store.js';
 import { $, api, copy, esc, toast } from './core.js';
-import { closeInspector, deleteNode, lockInspectorIfBusy, videoResults } from './inspector.js';
+import {
+  closeInspector,
+  deleteNode,
+  lockInspectorIfBusy,
+  normalizeInspectorLayout,
+  openInspector,
+  videoResults,
+} from './inspector.js';
 import { refresh, render, view } from './render.js';
 
 const PANEL_W = 640,
@@ -108,6 +115,7 @@ export function inspectGroup(n) {
     .join('');
   $('#inspector').innerHTML =
     `<div class="inspector-head"><h2>🧩 ${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div>` +
+    '<div class="inspector-scroll">' +
     `<div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Storyboard ${esc(n.name)}">` : 'Storyboard sẽ hiện ở đây'}</div>` +
     (info.problem ? `<div class="note">${esc(info.problem)}</div>` : '') +
     (info.uncertain
@@ -125,7 +133,9 @@ export function inspectGroup(n) {
     videoResults(n) +
     `<label>Số phiên bản<select id="nodeVideoVersions"><option value="1">1 bản</option><option value="2">2 bản</option><option value="3">3 bản</option><option value="4">4 bản</option></select></label>` +
     `<div class="actions"><button class="button primary" id="generateGroup" ${info.problem ? 'disabled' : ''}>Tạo video Seedance</button></div></section>` +
-    `<section class="inspector-section"><button class="button wide" id="saveGroup">Lưu chỉnh sửa</button><button class="button wide danger" id="deleteNode">Xóa nhóm này</button></section>`;
+    `<section class="inspector-footer"><button class="button wide" id="saveGroup">Lưu chỉnh sửa</button><button class="button wide danger" id="deleteNode">Xóa nhóm này</button></section></div>`;
+  openInspector('seedance');
+  normalizeInspectorLayout();
   const save = async () => {
     const b = { id };
     if ($('#groupName').value !== n.name) b.name = $('#groupName').value;
@@ -197,11 +207,12 @@ export function inspectGroup(n) {
   lockInspectorIfBusy(); // read-only while the queue runs, like every other node
 }
 
-// Toolbar: split the shots that are in no group yet, then compose each new group's storyboard
-// when its shots all have their keyframes.
-$('#seedanceGroups').onclick = async () => {
+// Toolbar: split the shots that are in no group yet (resplit=false), or re-split the whole
+// timeline after dropping the groups no render was spent on (resplit=true), then compose each
+// new group's storyboard when its shots all have their keyframes.
+async function splitGroups(resplit) {
   try {
-    const r = await api('/api/seedance/groups', { method: 'POST', body: {} });
+    const r = await api('/api/seedance/groups', { method: 'POST', body: { resplit } });
     store.state = r;
     render();
     let built = 0;
@@ -222,4 +233,14 @@ $('#seedanceGroups').onclick = async () => {
   } catch (e) {
     toast(e.message, true);
   }
+}
+$('#seedanceGroups').onclick = () => splitGroups(false);
+$('#seedanceResplit').onclick = () => {
+  if (
+    confirm(
+      'Chia lại sẽ XÓA các nhóm Seedance chưa render rồi chia lại toàn bộ shot cho đầy 30 giây. ' +
+        'Nhóm đã có video được giữ nguyên. Tiếp tục?',
+    )
+  )
+    splitGroups(true);
 };

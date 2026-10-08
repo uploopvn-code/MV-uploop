@@ -222,7 +222,15 @@ $('#clearAssets').onclick = async () => {
       x.image &&
       !x.terminal &&
       x.kind !== 'setting' &&
-      !['production', 'merged', 'output', 'seedance', 'seedance-video'].includes(x.zone),
+      ![
+        'production',
+        'merged',
+        'output',
+        'seedance',
+        'seedance-video',
+        'lipsync',
+        'lipsync-video',
+      ].includes(x.zone),
   ).length;
   if (!n) return toast('Không có ảnh tham chiếu nào đang gắn', true);
   if (
@@ -264,30 +272,56 @@ $('#saveLLM').onclick = async () => {
     toast(e.message, true);
   }
 };
-// Download the project's subtitles as an .srt file (built server-side from the shots' lyrics).
+// Saves a file a route builds (the .srt track, a stream's manifest), named by the route.
+async function saveFromRoute(route, fallbackName, errorText) {
+  const r = await fetch(route);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || errorText);
+  const blob = await r.blob();
+  const cd = r.headers.get('Content-Disposition')?.match(/filename\*=UTF-8''([^;]+)/)?.[1];
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cd ? decodeURIComponent(cd) : fallbackName;
+  a.click();
+  URL.revokeObjectURL(url);
+  return r.headers;
+}
+// Download the project's subtitles as an .srt file: the sung lines of luồng B (⑪) when the takes
+// are cut, else the lyrics on luồng A's shots (⑥). The route says which lane it used.
 $('#exportSrt').onclick = async () => {
   const names = $('#srtNames').checked ? '1' : '0';
   try {
-    const r = await fetch('/api/director/subtitles.srt?names=' + names);
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Lỗi xuất phụ đề');
-    const blob = await r.blob();
-    const name =
-      (r.headers.get('Content-Disposition')?.match(/filename\*=UTF-8''([^;]+)/)?.[1] &&
-        decodeURIComponent(
-          r.headers.get('Content-Disposition').match(/filename\*=UTF-8''([^;]+)/)[1],
-        )) ||
-      'phu-de.srt';
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('Đã xuất phụ đề' + ($('#srtNames').checked ? ' (giữ tên người nói)' : ''));
+    const h = await saveFromRoute(
+      '/api/director/subtitles.srt?names=' + names,
+      'phu-de.srt',
+      'Lỗi xuất phụ đề',
+    );
+    toast(
+      'Đã xuất phụ đề từ ' +
+        (h.get('X-Srt-Stream') === 'B' ? 'luồng B (câu hát nhép)' : 'luồng A (phủ cảnh)') +
+        ($('#srtNames').checked ? ' · giữ tên người nói' : ''),
+    );
   } catch (e) {
     toast(e.message, true);
   }
 };
+// One manifest per stream: the sheet an NLE reads to lay luồng A and luồng B over each other.
+for (const [stream, sel] of [
+  ['A', '#exportManifestA'],
+  ['B', '#exportManifestB'],
+])
+  $(sel).onclick = async () => {
+    try {
+      const h = await saveFromRoute(
+        '/api/director/manifest.csv?stream=' + stream,
+        'luong-' + stream + '.csv',
+        'Lỗi xuất bảng kê',
+      );
+      toast(`Đã xuất bảng kê luồng ${stream} · ${h.get('X-Manifest-Rows') || '?'} dòng`);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
 
 // --- Production meta: title + type + duration (film) / song (MV) ---
 // For an MV, the song's length is read in the browser from the chosen mp3 (no upload), and used

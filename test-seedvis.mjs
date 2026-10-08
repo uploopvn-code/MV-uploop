@@ -1121,7 +1121,7 @@ try {
   assert.equal(branchesOf(r.data).length, branchesBefore + 2, 'one version node removed');
 
   // --- Seedance groups: consecutive shots filmed in ONE Seedance render, from a storyboard.
-  // A fresh project: scene → wide, medium, close (5 s each); stage → S4, S5 (5 s), S6 (23 s).
+  // A fresh project: scene → wide, medium (10 s), close (5 s); stage → S4, S5 (10 s), S6 (23 s).
   r = await api('/api/projects', 'POST', {
     name: 'Seedance',
     theme: 'music',
@@ -1134,14 +1134,18 @@ try {
       mime: 'image/png',
       base64: png.toString('base64'),
     });
-  for (const id of ['wide', 'medium', 'close'])
-    await api('/api/node', 'PATCH', { id, duration: 5 });
+  for (const [id, duration] of [
+    ['wide', 10],
+    ['medium', 10],
+    ['close', 5],
+  ])
+    await api('/api/node', 'PATCH', { id, duration });
   const S4 = await mkNode('S4'),
     S5 = await mkNode('S5'),
     S6 = await mkNode('S6');
   for (const [id, duration] of [
-    [S4, 5],
-    [S5, 5],
+    [S4, 10],
+    [S5, 10],
     [S6, 23],
   ])
     await api('/api/node', 'PATCH', { id, duration });
@@ -1152,8 +1156,10 @@ try {
   assert.equal(r.status, 200, JSON.stringify(r.data));
   r = await api('/api/seedance/groups', 'POST', {});
   assert.equal(r.status, 200, JSON.stringify(r.data));
-  // A group ends at a change of location (scene → stage) and before passing 30 s.
-  assert.equal(r.data.created.length, 3, 'scene shots · stage shots · the long one');
+  // A group fills toward 30 s across scene changes (scene + stage may share one render), and
+  // ends only before the next shot would pass 30 s: {wide,medium,close}=25 s, then {S4,S5}=20 s,
+  // then the 23 s S6 on its own.
+  assert.equal(r.data.created.length, 3, 'two 30 s-capped runs, then the long shot');
   const groupOf = (s, id) => s.nodes.find(n => n.id === id);
   const membersOf = (s, id) =>
     s.edges.filter(e => e.target === id).map(e => groupOf(s, e.source).name);
@@ -1164,14 +1170,14 @@ try {
   let grp = groupOf(r.data, G1);
   assert.equal(grp.zone, 'seedance');
   assert.equal(grp.seedance.model, 'seedance_2.5');
-  assert.deepEqual([grp.seedance.total, grp.seedance.D], [15, 15]);
+  assert.deepEqual([grp.seedance.total, grp.seedance.D], [25, 25]);
   assert.deepEqual([groupOf(r.data, G3).seedance.total, groupOf(r.data, G3).seedance.D], [23, 25]);
   // The prompt: each shot keeps its own length, a hard cut at each timecode, the storyboard
   // is image 1, and the seconds left over are a still tail to trim.
   let gp = grp.resolvedPrompts.video;
-  assert.match(gp, /^Create a 15-second cinematic photorealistic video/);
+  assert.match(gp, /^Create a 25-second cinematic photorealistic video/);
   assert.match(gp, /Image 1 is the storyboard: panels 1–3/);
-  assert.match(gp, /Shot 1 \(0–5s\): .+\nShot 2 \(5–10s\): .+\nShot 3 \(10–15s\): /);
+  assert.match(gp, /Shot 1 \(0–10s\): .+\nShot 2 \(10–20s\): .+\nShot 3 \(20–25s\): /);
   assert.match(
     gp,
     /Image 3: the opening frame of shot 1/,
@@ -1199,13 +1205,13 @@ try {
   assert.equal(j.status, 'completed', j.error);
   const sentGroup = submits.at(-1).body;
   assert.equal(sentGroup.model, 'seedance_2.5');
-  assert.equal(sentGroup.duration, 15, 'the shots’ total, not the model maximum (30)');
+  assert.equal(sentGroup.duration, 25, 'the shots’ total, not the model maximum (30)');
   assert.equal(sentGroup.reference_images.length, 3, 'storyboard + scene + a keyframe');
   assert.match(sentGroup.reference_images[0].file_name, /^storyboard-/);
   assert.equal(sentGroup.prompt, gp);
   const gClip = s.nodes.find(n => n.terminal && n.source === G1);
   assert.ok(gClip?.video, 'the clip lands in the Video column, wired from the group');
-  assert.equal(gClip.duration, 15);
+  assert.equal(gClip.duration, 25);
   assert.equal(gClip.zone, 'seedance-video', 'a group clip goes to ⑩ Video Seedance, not ⑧ Video');
   // Shots wired into a group are its business: "✚" and "▶" never film them one by one.
   assert.deepEqual(s.missingVideo, [], 'no grouped shot counted as missing');
@@ -1308,6 +1314,114 @@ try {
     seedvis: { video: { model: 'seedance_2.0_fast', aspectRatio: '16:9' } },
   });
   assert.match(groupOf(r.data, G3).seedance.problem, /quá 15 giây/);
+
+  // "Chia lại": re-split the whole timeline but keep any group a render was spent on. G1 and G2
+  // have clips, so they survive; only the unrendered 23 s G3 is dropped and its S6 re-grouped.
+  const groupIds = (await api('/api/state')).data.nodes
+    .filter(n => n.zone === 'seedance')
+    .map(n => n.id);
+  assert.deepEqual(groupIds.sort(), [G1, G2, G3].sort(), 'three groups before re-split');
+  r = await api('/api/seedance/groups', 'POST', { resplit: true });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.created.length, 1, 'only the freed S6 is re-grouped');
+  const [G3b] = r.data.created;
+  assert.notEqual(G3b, G3, 'the unrendered group was dropped and replaced');
+  assert.ok(
+    r.data.nodes.some(n => n.id === G1),
+    'rendered G1 kept',
+  );
+  assert.ok(
+    r.data.nodes.some(n => n.id === G2),
+    'rendered G2 kept',
+  );
+  assert.ok(!r.data.nodes.some(n => n.id === G3), 'unrendered G3 dropped');
+  assert.deepEqual(membersOf(r.data, G3b), ['S6'], 'S6 re-grouped on its own');
+  assert.ok(
+    r.data.nodes.some(n => n.terminal && n.source === G1 && n.video),
+    'G1 keeps its clip',
+  );
+  assert.ok(
+    r.data.nodes.some(n => n.terminal && n.source === G2 && n.video),
+    'G2 keeps its clip',
+  );
+
+  // --- A group that cuts between locations: the prompt names each shot's own scene image, so
+  // Seedance films the right place at each cut (not "one continuous scene").
+  r = await api('/api/projects', 'POST', {
+    name: 'Đa cảnh',
+    theme: 'film',
+    exportDir: path.join(dir, 'multi-folder'),
+  });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  const sheetId = async name =>
+    (await api('/api/nodes', 'POST', { kind: 'scene', name })).data.nodes.find(n => n.name === name)
+      .id;
+  const SA = await sheetId('Phòng khách'),
+    SB = await sheetId('Ban công');
+  const shotId = async name =>
+    (await api('/api/nodes', 'POST', { name })).data.nodes.find(n => n.name === name).id;
+  const shotA = await shotId('Trong phòng'),
+    shotB = await shotId('Ngoài ban công');
+  for (const id of [SA, SB])
+    await api('/api/upload', 'POST', {
+      nodeId: id,
+      mime: 'image/png',
+      base64: png.toString('base64'),
+    });
+  for (const id of [shotA, shotB]) await api('/api/node', 'PATCH', { id, duration: 10 });
+  st = (await api('/api/state')).data;
+  r = await api('/api/edges', 'PUT', {
+    edges: [...st.edges, { source: SA, target: shotA }, { source: SB, target: shotB }],
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  // keyframes AFTER wiring, so the new scene input does not leave them stale
+  for (const id of [shotA, shotB])
+    await api('/api/upload', 'POST', {
+      nodeId: id,
+      mime: 'image/png',
+      base64: png.toString('base64'),
+    });
+  r = await api('/api/seedance/groups', 'POST', {});
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const MG = r.data.created.find(id => {
+    const mem = r.data.edges.filter(e => e.target === id).map(e => e.source);
+    return mem.includes(shotA) && mem.includes(shotB);
+  });
+  assert.ok(MG, 'the two scene shots share one render');
+  const mp = groupOf(r.data, MG).resolvedPrompts.video;
+  assert.match(mp, /consecutive shots may be set in different locations/);
+  const loc1 = mp.match(/Shot 1 \(0–10s\):[^\n]*? Location: image (\d+)\./);
+  const loc2 = mp.match(/Shot 2 \(10–20s\):[^\n]*? Location: image (\d+)\./);
+  assert.ok(loc1 && loc2, 'each shot names the image of its own location');
+  assert.notEqual(loc1[1], loc2[1], 'different scenes are cited as different images');
+
+  // Over Seedvis's 20 MB-per-image inline cap: the render fails for free (nothing sent), with a
+  // clear error, instead of being rejected after the credit is spent.
+  await api('/api/upload', 'POST', {
+    nodeId: MG,
+    mime: 'image/png',
+    base64: png.toString('base64'),
+  });
+  st = (await api('/api/state')).data;
+  const bigRef = path.join(
+    dir,
+    'projects',
+    st.activeProjectId,
+    'media',
+    st.nodes.find(n => n.id === SA).image.id,
+  );
+  fs.writeFileSync(bigRef, Buffer.alloc(21 * 1024 * 1024, 7)); // 21 MiB > the 20 MiB per-image cap
+  const submitsBeforeBig = submits.filter(x => x.body.model === 'seedance_2.5').length;
+  r = await api('/api/jobs', 'POST', { nodeId: MG, kind: 'video' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  ({ j } = await settle(r.data.job.id));
+  assert.equal(j.status, 'failed', j.error);
+  assert.match(j.error, /20 MB/);
+  assert.equal(
+    submits.filter(x => x.body.model === 'seedance_2.5').length,
+    submitsBeforeBig,
+    'nothing sent when an image is over the size cap',
+  );
 
   // --- Merged scenes: one shot written as 2–3 camera setups, filmed as ONE Veo clip.
   r = await api('/api/projects', 'POST', {
@@ -1568,7 +1682,7 @@ try {
     .join('');
   assert.ok(!projJson.includes(KEY));
   console.log(
-    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency (push max), zone image batch, auto-video versions+branch+rerun+delete, retry failed videos (latest job only), edit image + swap (staleness kept per image, shape kept, edit vs re-roll), clip after an edit stays flagged, old project: missing videos re-checked (polled or same Idempotency-Key) or filmed, never paid twice, refusal before sending is a plain failure, hidden/stopped/lost old jobs re-checked before any new render, Seedance groups (split by length + location, timeline + still tail, storyboard + refs, exact duration, staleness, column guard), merged scenes (setups → frame nodes + one Veo clip, still prompt per setup, 8 s split by line length, frames never filmed alone, column guard), deleted shot keeps its clip on the job, key not exposed',
+    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency (push max), zone image batch, auto-video versions+branch+rerun+delete, retry failed videos (latest job only), edit image + swap (staleness kept per image, shape kept, edit vs re-roll), clip after an edit stays flagged, old project: missing videos re-checked (polled or same Idempotency-Key) or filmed, never paid twice, refusal before sending is a plain failure, hidden/stopped/lost old jobs re-checked before any new render, Seedance groups (fill toward 30 s across scenes, capped by length + images, timeline + still tail, storyboard + refs, exact duration, multi-location prompt names the scene image per shot, over-size references fail for free, staleness, column guard, re-split keeps rendered groups), merged scenes (setups → frame nodes + one Veo clip, still prompt per setup, 8 s split by line length, frames never filmed alone, column guard), deleted shot keeps its clip on the job, key not exposed',
   );
 } finally {
   proc.kill();

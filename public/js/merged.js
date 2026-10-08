@@ -8,6 +8,8 @@ import {
   deleteNode,
   inspect,
   lockInspectorIfBusy,
+  normalizeInspectorLayout,
+  openInspector,
   videoResults,
 } from './inspector.js';
 import { refresh, render, view } from './render.js';
@@ -51,6 +53,7 @@ export function inspectMerged(n) {
     .join('');
   $('#inspector').innerHTML =
     `<div class="inspector-head"><h2>🎞 ${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div>` +
+    '<div class="inspector-scroll">' +
     (info.problem ? `<div class="note">${esc(info.problem)}</div>` : '') +
     (info.warning ? `<div class="note">${esc(info.warning)}</div>` : '') +
     (info.uncertain
@@ -68,7 +71,9 @@ export function inspectMerged(n) {
     `<label>Số phiên bản<select id="nodeVideoVersions"><option value="1">1 bản</option><option value="2">2 bản</option><option value="3">3 bản</option><option value="4">4 bản</option></select></label>` +
     `<p class="field-hint">Mỗi bản thành một node video riêng ở cột ⑧ Video, cùng hàng với phân cảnh.</p>` +
     `<div class="actions"><button class="button primary" id="generateMerged" ${info.problem ? 'disabled' : ''}>Tạo video${modelLabel ? ' · ' + esc(modelLabel) : ''}</button></div></section>` +
-    `<section class="inspector-section"><button class="button wide" id="saveMerged">Lưu chỉnh sửa</button><button class="button wide danger" id="deleteNode">Xóa phân cảnh này</button></section>`;
+    `<section class="inspector-footer"><button class="button wide" id="saveMerged">Lưu chỉnh sửa</button><button class="button wide danger" id="deleteNode">Xóa phân cảnh này</button></section></div>`;
+  openInspector('merged');
+  normalizeInspectorLayout();
   const save = async () => {
     const b = { id };
     if ($('#mergedName').value !== n.name) b.name = $('#mergedName').value;

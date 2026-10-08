@@ -9,6 +9,7 @@ import { shutdown } from './lib/windows.mjs';
 import { handle as connectionsRoutes } from './lib/routes/connections.mjs';
 import { handle as projectsRoutes } from './lib/routes/projects.mjs';
 import { handle as directorRoutes } from './lib/routes/director.mjs';
+import { handle as musicRoutes } from './lib/routes/music.mjs';
 import { handle as nodesRoutes } from './lib/routes/nodes.mjs';
 import { handle as assetsRoutes } from './lib/routes/assets.mjs';
 import { handle as jobsRoutes } from './lib/routes/jobs.mjs';
@@ -16,6 +17,7 @@ import { handle as autoRoutes } from './lib/routes/auto.mjs';
 import { handle as filesRoutes } from './lib/routes/files.mjs';
 import { handle as seedanceRoutes } from './lib/routes/seedance.mjs';
 import { handle as mergedRoutes } from './lib/routes/merged.mjs';
+import { handle as stage3dRoutes } from './lib/routes/stage3d.mjs';
 
 await initWorkspace();
 if (isChild)
@@ -31,12 +33,14 @@ const routes = [
   connectionsRoutes,
   projectsRoutes,
   directorRoutes,
+  musicRoutes,
   nodesRoutes,
   assetsRoutes,
   jobsRoutes,
   autoRoutes,
   seedanceRoutes,
   mergedRoutes,
+  stage3dRoutes,
   filesRoutes,
 ];
 const server = http.createServer(async (req, res) => {

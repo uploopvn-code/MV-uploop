@@ -73,7 +73,12 @@ export function providerSettings(n, shot) {
           kind === 'video'
             ? `<p class="field-hint" data-gvids-hint="${kind}" ${cur.type === 'gvids' ? '' : 'hidden'}>Tạo video bằng Google Vids qua extension: cài extension, đăng nhập Google, mở sẵn một tài liệu Google Vids, bật worker Google Vids. Gửi prompt${n.references.length ? ' + ' + n.references.length + ' ảnh làm nhân vật/ingredient' : ''} sang Google Vids, tự đặt 1080p rồi tải video về.</p>`
             : '';
-        return `<h4>${kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</h4><label>Dùng<select data-provider="${kind}"><option value="seedvis" ${cur.type === 'seedvis' ? 'selected' : ''}>Seedvis API</option>${webOpt}${gvidsOpt}<option value="orbit" ${cur.type === 'orbit' ? 'selected' : ''}>Orbit (kịch bản web)</option></select></label><div data-seedvis-fields="${kind}" ${cur.type === 'seedvis' ? '' : 'hidden'}>${seedvisFields(n, kind, sv)}</div>${webHint}${gvidsHint}`;
+        // Muse chat runs in the browser extension for image and video — one background tab per job.
+        const museOpt =
+          `<option value="musechat" ${cur.type === 'musechat' ? 'selected' : ''}>Muse chat (extension)</option>`;
+        const museHint =
+          `<p class="field-hint" data-musechat-hint="${kind}" ${cur.type === 'musechat' ? '' : 'hidden'}>Tạo ${kind === 'image' ? 'ảnh' : 'video'} bằng muse.ai qua extension: cài extension, đăng nhập muse.ai, bật worker Muse chat. Mỗi job mở một tab riêng rồi đóng; gửi prompt${n.references.length ? ' + ' + n.references.length + ' ảnh tham chiếu' : ''} sang Muse.</p>`;
+        return `<h4>${kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</h4><label>Dùng<select data-provider="${kind}"><option value="seedvis" ${cur.type === 'seedvis' ? 'selected' : ''}>Seedvis API</option>${webOpt}${gvidsOpt}${museOpt}<option value="orbit" ${cur.type === 'orbit' ? 'selected' : ''}>Orbit (kịch bản web)</option></select></label><div data-seedvis-fields="${kind}" ${cur.type === 'seedvis' ? '' : 'hidden'}>${seedvisFields(n, kind, sv)}</div>${webHint}${gvidsHint}${museHint}`;
       })
       .join('') +
     '</section>'
@@ -105,6 +110,8 @@ export function bindProviderSettings(n) {
       if (webHint) webHint.hidden = select.value !== 'web';
       const gvidsHint = document.querySelector(`[data-gvids-hint="${kind}"]`);
       if (gvidsHint) gvidsHint.hidden = select.value !== 'gvids';
+      const museHint = document.querySelector(`[data-musechat-hint="${kind}"]`);
+      if (museHint) museHint.hidden = select.value !== 'musechat';
       // Editing and several versions run on Seedvis only: follow the choice before it is saved.
       const edit = $('#editImage'),
         versions = $('#inspector #nodeVideoVersions');
@@ -120,14 +127,16 @@ export function bindProviderSettings(n) {
     bindFields(kind);
   });
 }
-// Only the kinds whose provider or Seedvis options changed are sent. Returns the seedvis, web
-// and gvids patches separately; the inspector PATCHes them as b.seedvis, b.web and b.gvids.
-// Switching to a browser source (orbit/web/gvids) sets seedvis[kind] = false so the server
-// routes it there.
+// Only the kinds whose provider or Seedvis options changed are sent. Returns the seedvis, web,
+// gvids and musechat patches separately; the inspector PATCHes them as b.seedvis, b.web,
+// b.gvids and b.musechat.
+// Switching to a browser source (orbit/web/gvids/musechat) sets seedvis[kind] = false so the
+// server routes it there.
 export function readProviderSettings(n) {
   const seedvis = {},
     web = {},
-    gvids = {};
+    gvids = {},
+    musechat = {};
   document.querySelectorAll('[data-provider]').forEach(select => {
     const kind = select.dataset.provider,
       cur = n.providers[kind];
@@ -135,6 +144,7 @@ export function readProviderSettings(n) {
       if (cur.type !== 'orbit') seedvis[kind] = false;
       if (cur.type === 'web') web[kind] = false;
       if (cur.type === 'gvids') gvids[kind] = false;
+      if (cur.type === 'musechat') musechat[kind] = false;
       return;
     }
     if (select.value === 'web') {
@@ -143,6 +153,7 @@ export function readProviderSettings(n) {
         web[kind] = true;
       }
       if (cur.type === 'gvids') gvids[kind] = false;
+      if (cur.type === 'musechat') musechat[kind] = false;
       return;
     }
     if (select.value === 'gvids') {
@@ -151,11 +162,22 @@ export function readProviderSettings(n) {
         gvids[kind] = true;
       }
       if (cur.type === 'web') web[kind] = false;
+      if (cur.type === 'musechat') musechat[kind] = false;
+      return;
+    }
+    if (select.value === 'musechat') {
+      if (cur.type !== 'musechat') {
+        seedvis[kind] = false;
+        musechat[kind] = true;
+      }
+      if (cur.type === 'web') web[kind] = false;
+      if (cur.type === 'gvids') gvids[kind] = false;
       return;
     }
     // Seedvis: leaving a browser source clears its flag.
     if (cur.type === 'web') web[kind] = false;
     if (cur.type === 'gvids') gvids[kind] = false;
+    if (cur.type === 'musechat') musechat[kind] = false;
     const next = {
       model: document.querySelector(`[data-sv-model="${kind}"]`).value,
       aspectRatio: document.querySelector(`[data-sv-aspect="${kind}"]`).value,
@@ -169,7 +191,7 @@ export function readProviderSettings(n) {
     )
       seedvis[kind] = next;
   });
-  return { seedvis, web, gvids };
+  return { seedvis, web, gvids, musechat };
 }
 function showSeedvis(o) {
   seedvisStatus = o;
@@ -429,13 +451,17 @@ export function paintDefaults() {
   const hint = $('#defaultsHint');
   if (hint)
     hint.textContent =
-      vid.value === 'gvids'
-        ? 'Video mặc định tạo bằng Google Vids — cần bật worker Google Vids trong extension và mở sẵn một tài liệu Google Vids.'
+      img.value === 'musechat'
+        ? 'Ảnh mặc định tạo bằng Muse chat — cần bật worker Muse chat trong extension và đăng nhập muse.ai.'
         : img.value === 'web'
           ? 'Ảnh mặc định tạo bằng ChatGPT — cần bật worker extension (xem phần ChatGPT).'
-          : img.value === 'orbit' || vid.value === 'orbit'
-            ? 'Nguồn Orbit vẫn cần chọn kịch bản + nick trong Cài đặt Orbit của từng node.'
-            : '';
+          : vid.value === 'gvids'
+            ? 'Video mặc định tạo bằng Google Vids — cần bật worker Google Vids trong extension và mở sẵn một tài liệu Google Vids.'
+            : vid.value === 'musechat'
+              ? 'Video mặc định tạo bằng Muse chat — cần bật worker Muse chat trong extension và đăng nhập muse.ai.'
+              : img.value === 'orbit' || vid.value === 'orbit'
+                ? 'Nguồn Orbit vẫn cần chọn kịch bản + nick trong Cài đặt Orbit của từng node.'
+                : '';
 }
 async function saveDefaults() {
   try {

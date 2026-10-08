@@ -2,9 +2,11 @@
 import { store } from './store.js';
 import { $, api, toast } from './core.js';
 import { render } from './render.js';
+import { capturesReady } from './stage-keeper.js';
 
 $('#autoStart').onclick = async () => {
   try {
+    await capturesReady(); // shots on a pinned stage go out with their 3D capture
     store.state = await api('/api/auto/start', {
       method: 'POST',
       body: { target: $('#autoTarget').value },
@@ -17,6 +19,7 @@ $('#autoStart').onclick = async () => {
 };
 $('#autoImageStart').onclick = async () => {
   try {
+    await capturesReady();
     store.state = await api('/api/auto/images/start', {
       method: 'POST',
       body: { zone: $('#imageZone').value },
@@ -52,6 +55,7 @@ $('#autoStop').onclick = async () => {
 };
 $('#autoVideoStart').onclick = async () => {
   try {
+    await capturesReady(); // a keyframe made on the way goes with its 3D capture
     store.state = await api('/api/auto/video/start', {
       method: 'POST',
       body: { target: $('#autoTarget').value, versions: Number($('#videoVersions').value) },
@@ -73,6 +77,7 @@ $('#autoVideoStop').onclick = async () => {
 };
 $('#autoVideoRetry').onclick = async () => {
   try {
+    await capturesReady(); // a keyframe made on the way goes with its 3D capture
     store.state = await api('/api/auto/video/retry', {
       method: 'POST',
       body: { versions: Number($('#videoVersions').value) },
@@ -87,6 +92,7 @@ const missingBtn = $('#autoVideoMissing');
 if (missingBtn)
   missingBtn.onclick = async () => {
     try {
+      await capturesReady(); // a keyframe made on the way goes with its 3D capture
       store.state = await api('/api/auto/video/missing', {
         method: 'POST',
         body: { versions: Number($('#videoVersions').value) },

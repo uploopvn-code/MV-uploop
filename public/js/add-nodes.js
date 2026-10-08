@@ -1,7 +1,7 @@
 // Toolbar actions that add nodes: shot, style/camera/audio, costume, look, angles.
 import { store } from './store.js';
 import { $, api, toast } from './core.js';
-import { inspect } from './inspector.js';
+import { inspect, openStage } from './inspector.js';
 import { render } from './render.js';
 
 $('#addNode').onclick = async () => {
@@ -37,6 +37,19 @@ async function addSheet(kind) {
 $('#addCharacter').onclick = () => addSheet('character');
 $('#addProp').onclick = () => addSheet('prop');
 $('#addScene').onclick = () => addSheet('scene');
+// A 3D stage node: made, then straight into the 3D editor to pin everyone.
+$('#addStage').onclick = async () => {
+  try {
+    store.state = await api('/api/nodes', { method: 'POST', body: { kind: 'stage' } });
+    render();
+    openStage(store.state.nodes.at(-1).id);
+    toast(
+      'Đã tạo node sân khấu 3D. Ghim vị trí, rồi nối node này vào các shot (hoặc vào bối cảnh của chúng).',
+    );
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
 async function addSetting(settingType) {
   try {
     store.state = await api('/api/nodes', {
@@ -52,6 +65,19 @@ async function addSetting(settingType) {
 $('#addStyle').onclick = () => addSetting('style');
 $('#addCamera').onclick = () => addSetting('camera');
 $('#addAudio').onclick = () => addSetting('audio');
+// A music node: paste a YouTube link / upload a song file, then analyze it into the parameters
+// the tool needs (structure, timing, bpm, suggested shots).
+export async function addMusic() {
+  try {
+    store.state = await api('/api/nodes', { method: 'POST', body: { kind: 'music' } });
+    render();
+    inspect(store.state.nodes.at(-1).id);
+    toast('Đã tạo node Nhạc (MUSIC). Dán link YouTube hoặc tải file nhạc, rồi bấm Phân tích.');
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+if ($('#addMusic')) $('#addMusic').onclick = () => addMusic();
 // A wardrobe node = one character in one costume (+ personal items) for a scene context.
 // From a character's inspector it is pre-wired to that character (face reference); from
 // the toolbar it is created loose and the user wires a character into it.

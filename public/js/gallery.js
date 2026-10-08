@@ -2,21 +2,36 @@
 import { store } from './store.js';
 import { $, api, dlUrl, downloadName, esc, paint, toast, triggerDownload } from './core.js';
 import { render } from './render.js';
+import { STREAM_LABEL, nodeStream, nodeTime } from './zones.js';
 
 export const gallerySel = new Set();
-// Every node that holds a video, grouped by its source node.
+// Every node that holds a video, grouped by its source node. Both streams end up here and their
+// numbers restart per column (⑥ #1 and ⑪ #1 both exist), so a group is labelled with its stream
+// and the lists are ordered by the second of the song they play at — the order they are edited in.
 function videoGroups() {
   const items = store.state.nodes.filter(n => n.video);
   const groups = new Map();
   for (const n of items) {
     const src = n.terminal ? store.state.nodes.find(x => x.id === n.source) : null;
     const key = n.terminal ? n.source || n.id : n.id;
+    const of = src || n; // the shot / take the clips came from
     const seq = n.terminal ? (src?.seq ?? n.sourceSeq) : n.seq;
     const name = n.terminal ? src?.name || n.sourceName || '(nguồn đã xóa)' : n.name;
-    if (!groups.has(key)) groups.set(key, { key, seq: seq || 0, name, items: [] });
+    if (!groups.has(key))
+      groups.set(key, {
+        key,
+        seq: seq || 0,
+        name,
+        stream: nodeStream(of),
+        at: nodeTime(of)?.[0] ?? Infinity,
+        items: [],
+      });
     groups.get(key).items.push(n);
   }
-  return [...groups.values()].sort((a, b) => a.seq - b.seq || a.name.localeCompare(b.name));
+  const rank = g => ({ A: 0, B: 1 })[g.stream] ?? 2; // luồng A, luồng B, then Seedance / assets
+  return [...groups.values()].sort(
+    (a, b) => rank(a) - rank(b) || a.at - b.at || a.seq - b.seq || a.name.localeCompare(b.name),
+  );
 }
 export function renderGallery() {
   const groups = videoGroups();
@@ -30,7 +45,7 @@ export function renderGallery() {
       ? groups
           .map(
             g =>
-              `<div class="gallery-group"><h3>${g.seq ? '#' + g.seq + ' ' : ''}${esc(g.name)} <small>${g.items.length} video</small></h3><div class="gallery-grid">${g.items
+              `<div class="gallery-group"><h3>${g.stream ? esc(STREAM_LABEL[g.stream]) + ' · ' : ''}${g.seq ? '#' + g.seq + ' ' : ''}${esc(g.name)} <small>${g.items.length} video${Number.isFinite(g.at) ? ' · từ giây ' + g.at.toFixed(2) : ''}</small></h3><div class="gallery-grid">${g.items
                 .map(
                   n =>
                     `<div class="gallery-item ${gallerySel.has(n.id) ? 'sel' : ''}" data-node="${n.id}"><label class="pick" title="Chọn"><input type="checkbox" data-pick="${n.id}" ${gallerySel.has(n.id) ? 'checked' : ''}></label><div class="preview video"><video muted playsinline preload="metadata" src="${esc(n.video.url)}"></video><span class="play-badge">▶</span></div><div class="gallery-meta"><strong>${esc(n.terminal ? 'v' + (n.version || 1) : n.name)}</strong><a class="text-button" href="${esc(dlUrl(n.video.url, downloadName(n)))}" download="${esc(downloadName(n))}" data-dl>↓ ${esc(downloadName(n))}</a></div></div>`,

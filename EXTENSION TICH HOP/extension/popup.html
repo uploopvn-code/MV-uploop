@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Drama Tool · Web Worker</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #6b7280;
+        --border: #d1d5db;
+        --accent: #10a37f;
+        --accent2: #3b82f6;
+        --accent3: #7c3aed;
+        --accentfg: #ffffff;
+        --danger: #dc2626;
+        --okbg: #ecfdf5;
+        --errbg: #fef2f2;
+        --card: #f9fafb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1f2023;
+          --fg: #f3f4f6;
+          --muted: #9ca3af;
+          --border: #3a3b3f;
+          --okbg: #0f2e24;
+          --errbg: #3a1d1d;
+          --card: #26272b;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        width: 348px;
+        margin: 0;
+        padding: 14px;
+        font:
+          13px/1.45 system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 2px;
+      }
+      p.sub {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      label {
+        display: block;
+        margin: 10px 0 4px;
+        font-weight: 600;
+      }
+      input[type='text'],
+      input[type='password'],
+      input[type='number'],
+      textarea {
+        width: 100%;
+        padding: 7px 8px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--bg);
+        color: var(--fg);
+        font: inherit;
+      }
+      textarea {
+        resize: vertical;
+        min-height: 54px;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 11px;
+        margin: 4px 0 0;
+      }
+      .card {
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--card);
+      }
+      .card h2 {
+        font-size: 13px;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      button {
+        flex: 1;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--fg);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        color: var(--accentfg);
+        border-color: var(--accent);
+      }
+      button.primary.vids {
+        background: var(--accent2);
+        border-color: var(--accent2);
+      }
+      button.primary.muse {
+        background: var(--accent3);
+        border-color: var(--accent3);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #status {
+        margin-top: 12px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: var(--okbg);
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      #status.err {
+        background: var(--errbg);
+      }
+      .state {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        margin: 2px 0;
+        font-size: 12px;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--muted);
+        flex: none;
+      }
+      .dot.on {
+        background: var(--accent);
+      }
+      .dot.on.vids {
+        background: var(--accent2);
+      }
+      .dot.on.muse {
+        background: var(--accent3);
+      }
+      details {
+        margin-top: 12px;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .mini {
+        width: 64px;
+        flex: none;
+      }
+      .inline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .inline label {
+        margin: 0;
+      }
+      #ver {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 1px 8px;
+        vertical-align: middle;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Drama Tool · Web Worker <span id="ver"></span></h1>
+    <p class="sub">
+      Ba worker bật/tắt riêng, chạy song song: ChatGPT (ảnh), Google Vids (video) và Muse
+      chat (video).
+    </p>
+
+    <label for="baseUrl">Địa chỉ Drama Tool</label>
+    <input id="baseUrl" type="text" placeholder="http://127.0.0.1:7788" />
+
+    <label for="token">Worker token (dùng chung cho cả ba)</label>
+    <input id="token" type="password" placeholder="Dán token từ worker-token.txt" />
+    <p class="hint">
+      Mở <code>worker-token.txt</code> trong thư mục dữ liệu (thường là
+      <code>C:\Users\&lt;bạn&gt;\MV-Director-data\worker-token.txt</code>) rồi dán vào đây.
+    </p>
+
+    <div class="row">
+      <button id="test">Kiểm tra kết nối</button>
+    </div>
+
+    <!-- ChatGPT worker -->
+    <div class="card">
+      <h2>🖼️ ChatGPT · tạo ảnh + Đạo diễn</h2>
+      <div class="state">
+        <span id="dotChatgpt" class="dot"></span><span id="stateChatgpt">Đang tắt</span>
+      </div>
+      <div class="inline">
+        <label for="concChatgpt">Số luồng</label>
+        <input id="concChatgpt" class="mini" type="number" min="1" max="6" step="1" />
+        <span class="hint" style="margin: 0">mỗi luồng một tab ChatGPT · nên để 1–2</span>
+      </div>
+      <div class="row">
+        <button id="toggleChatgpt" class="primary">Bật worker ChatGPT</button>
+      </div>
+      <p class="hint">Đăng nhập ChatGPT trong trình duyệt này trước khi bật.</p>
+    </div>
+
+    <!-- Google Vids worker -->
+    <div class="card">
+      <h2>🎬 Google Vids · tạo video</h2>
+      <div class="state">
+        <span id="dotVids" class="dot"></span><span id="stateVids">Đang tắt</span>
+      </div>
+      <div class="row">
+        <button id="openVids">Mở Google Vids</button>
+      </div>
+      <div class="row">
+        <button id="toggleVids" class="primary vids">Bật worker Google Vids</button>
+      </div>
+      <p class="hint">
+        Đăng nhập Google và <strong>mở sẵn một tài liệu Google Vids</strong> (một video), để tab đó
+        mở. Worker tự điền prompt, chọn 1080p, bấm Tạo và tải video về. Chạy tuần tự từng video.
+      </p>
+    </div>
+
+    <!-- Muse Chat worker -->
+    <div class="card">
+      <h2>🎥 Muse chat · tạo video</h2>
+      <div class="state">
+        <span id="dotMuseChat" class="dot"></span><span id="stateMuseChat">Đang tắt</span>
+      </div>
+      <p class="hint" style="margin: 6px 0 0">
+        Mỗi lệnh chạy trên một tab riêng. Chỉ tự đóng sau khi lưu video; giữ tab nếu lỗi.
+      </p>
+      <div class="row">
+        <button id="toggleMuseChat" class="primary muse">Bật worker Muse chat</button>
+      </div>
+      <p class="hint">
+        Đăng nhập muse.ai trong trình duyệt này trước khi bật. Tiến trình hiện ở góc dưới bên trái tab Muse và trong popup này.
+      </p>
+    </div>
+
+    <div id="status">Chưa có hoạt động.</div>
+
+    <details>
+      <summary>Nâng cao</summary>
+      <label for="prefix">Tiền tố prompt ảnh (ChatGPT)</label>
+      <textarea id="prefix"></textarea>
+      <p class="hint"><code>{aspect}</code> sẽ thay bằng tỉ lệ khung.</p>
+      <div class="inline">
+        <label for="concVids">Luồng Google Vids</label>
+        <input id="concVids" class="mini" type="number" min="1" max="2" step="1" />
+      </div>
+      <label for="workerName">Tên worker</label>
+      <input id="workerName" type="text" />
+    </details>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

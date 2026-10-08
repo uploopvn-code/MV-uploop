@@ -153,11 +153,48 @@ export function wardrobePanel(n) {
     n.kind !== 'setting' &&
     !n.terminal
   ) {
+    const st = n.stage3d;
+    const k = st?.performers?.length || 0;
+    // the nodes keeping this set's marks, and how their 3D captures stand
+    const users = store.state.nodes.filter(x => x.stagePin?.setId === n.id);
+    const framed = users.filter(x => x.stagePin.sig);
+    const waiting = framed.filter(x => x.stagePin.capture === 'missing').length;
+    const full = framed.filter(x => x.stagePin.capture === 'full').length;
+    const redo = users.filter(x => x.stale && x.image).length;
+    // a location whose marks come from a 3D stage node wired into it
+    const from = store.state.edges
+      .filter(e => e.target === n.id)
+      .map(e => byId(e.source))
+      .find(x => x?.stageOnly && x.stage3d?.performers?.length);
     return (
-      `<section class="inspector-section"><h3>◧ Góc máy</h3>` +
-      `<p class="field-hint">Node này là <b>cảnh toàn</b>. Mỗi góc khác (cận bàn, cầu thang, hai góc cận đối nghịch cho đối thoại) là một node góc máy render từ ảnh của node này, xếp ngay dưới. Tạo ảnh cảnh toàn trước, rồi tạo ảnh các góc (khu ③ chạy hai lượt).</p>` +
-      anglesBlock() +
-      `</section>`
+      `<section class="inspector-section"><h3>📌 Ghim vị trí trên sân khấu (3D)</h3>` +
+      (n.stageOnly
+        ? `<p class="field-hint">Node <b>sân khấu 3D</b>: chỉ giữ chỗ đứng và hướng mặt của từng người (không tạo ảnh). Ghim <b>một lần</b>, rồi nối node này vào các shot — hoặc vào bối cảnh của chúng: mọi node ở đó tự nhận đúng vị trí, kể cả node thêm sau, nhập lại CSV hay sửa tay. Cỡ cảnh, góc máy và ai ở giữa khung: tool tự tính theo từng node.</p>`
+        : `<p class="field-hint">Đặt chỗ đứng và hướng mặt của từng người <b>một lần</b> — hoặc nối một node <b>🧍 Sân khấu 3D</b> vào bối cảnh này. Mọi node quay ở đây tự nhận đúng vị trí, kể cả node thêm sau, nhập lại CSV hay sửa tay. Cỡ cảnh, góc máy và ai ở giữa khung: tool tự tính theo từng node.</p>`) +
+      (k
+        ? `<p class="field-hint">✓ Đã ghim <b>${k} người</b> · dùng cho <b>${users.length} node</b>${users.length > framed.length ? `: ${framed.length} theo vị trí, ${users.length - framed.length} cận đồ vật (không cần)` : ''}.` +
+          (framed.length
+            ? waiting
+              ? ` ⏳ ${waiting} node chưa có ảnh chụp 3D — tool đang tự chụp.`
+              : ` Ảnh chụp 3D: ${framed.length - full}/${framed.length} node đã có.`
+            : '') +
+          (full ? ` ${full} node đủ 10 ảnh tham chiếu — chỉ gửi câu vị trí.` : '') +
+          (redo ? ` ⚠ ${redo} node đã có ảnh cần tạo lại.` : '') +
+          `</p>` +
+          (st.capture
+            ? `<img class="s3d-set" src="${esc(st.capture.url)}" alt="Ảnh toàn cảnh 3D">`
+            : '')
+        : from
+          ? `<p class="field-hint">📌 Vị trí lấy từ node sân khấu 3D <b>${esc(from.name)}</b> nối vào đây.</p>`
+          : `<p class="field-hint">Chưa ghim.</p>`) +
+      `<div class="actions"><button type="button" class="button primary" id="openStage3d">${k ? '🧍 Sửa vị trí (mở 3D)' : '📌 Ghim vị trí (mở 3D)'}</button></div></section>` +
+      // (a 3D stage node has no picture to render angles from)
+      (n.stageOnly
+        ? ''
+        : `<section class="inspector-section"><h3>◧ Góc máy</h3>` +
+          `<p class="field-hint">Node này là <b>cảnh toàn</b>. Mỗi góc khác (cận bàn, cầu thang, hai góc cận đối nghịch cho đối thoại) là một node góc máy render từ ảnh của node này, xếp ngay dưới. Tạo ảnh cảnh toàn trước, rồi tạo ảnh các góc (khu ③ chạy hai lượt).</p>` +
+          anglesBlock() +
+          `</section>`)
     );
   }
   if (n.role === 'character' || n.zone === 'character') {

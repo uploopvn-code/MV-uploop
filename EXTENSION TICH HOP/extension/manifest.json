@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "Drama Tool · Web Worker (ChatGPT + Google Vids + Muse Chat)",
+  "version": "0.5.20",
+  "description": "Nhận job từ Drama Tool: tạo ảnh + chạy Đạo diễn AI trên ChatGPT, tạo video trên Google Vids và Muse chat — bằng phiên đăng nhập của bạn. Ba worker bật/tắt riêng, chạy song song.",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://*.oaiusercontent.com/*",
+    "https://docs.google.com/*",
+    "https://*.google.com/*",
+    "https://*.googleusercontent.com/*",
+    "https://muse.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Drama Tool Web Worker"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "content-chatgpt.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://docs.google.com/*"
+      ],
+      "js": [
+        "content-gvids-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://muse.ai/*"
+      ],
+      "js": [
+        "content-musechat-ui.js",
+        "content-musechat-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

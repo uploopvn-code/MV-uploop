@@ -74,6 +74,9 @@ export const catalog = {
       imageField: 'image',
       single: true,
       multi: { mode: 'multi-image-to-video', field: 'images' },
+      // video-to-video: one source video (+0–3 images); the result is as long as the source and
+      // keeps its audio — a still keyframe + the vocal of one sung line becomes that line lip-synced.
+      v2v: true,
       maxImages: 3,
       countMax: 4,
       aspect: ['16:9', '9:16'],
@@ -81,6 +84,8 @@ export const catalog = {
     },
   ],
 };
+// Can this video model take a source video (video-to-video)?
+export const takesVideo = model => !!catalog.video.find(m => m.id === model)?.v2v;
 export const defaultSeedvis = {
   image: { model: 'GEM_PIX_2', aspectRatio: '16:9', upscale: 'none' },
   video: { model: 'Veo-3.1', aspectRatio: '16:9', upscale: 'none' },
@@ -109,7 +114,7 @@ export function videoDuration(model) {
   return Math.max(...m.durations);
 }
 
-export function buildRequest(kind, binding, prompt, images, count = 1) {
+export function buildRequest(kind, binding, prompt, images, count = 1, video = null) {
   const m = modelOf(kind, binding.model);
   if (!m) throw new Error('Model Seedvis không còn hỗ trợ: ' + binding.model);
   if (kind === 'image') {
@@ -160,6 +165,17 @@ export function buildRequest(kind, binding, prompt, images, count = 1) {
     aspect_ratio: binding.aspectRatio,
     count: Math.max(1, Math.min(count, m.countMax || 1)),
   };
+  // A source video (e.g. a lip-sync take: keyframe + vocal): video-to-video, with any images as
+  // optional references. No duration — the result is exactly as long as the source.
+  if (video) {
+    if (!m.v2v) throw new Error(m.name + ' không nhận video đầu vào (video-to-video).');
+    if (images.length > m.maxImages)
+      throw new Error(m.name + ' nhận tối đa ' + m.maxImages + ' ảnh kèm video.');
+    body.mode = 'video-to-video';
+    body.video = video;
+    if (images.length) body.images = images;
+    return { endpoint: '/developer/generations', body };
+  }
   if (images.length) {
     const max = m.maxImages || 1;
     if (images.length > max) throw new Error(m.name + ' nhận tối đa ' + max + ' ảnh cho video.');
@@ -401,7 +417,7 @@ export function createSeedvis(dataDir) {
     return results;
   }
 
-  async function run(job, images, onProgress, onSave) {
+  async function run(job, images, onProgress, onSave, video = null) {
     let request;
     try {
       request = buildRequest(
@@ -410,6 +426,7 @@ export function createSeedvis(dataDir) {
         job.payload.prompt,
         images,
         job.payload.count || 1,
+        video,
       );
     } catch (e) {
       // Refused before anything was sent (e.g. too many reference images): a plain failure,

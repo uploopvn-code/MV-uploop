@@ -51,121 +51,168 @@
       </header>
       <section id="studio" class="view">
         <div class="graph-area" id="graphArea">
+          <div class="canvas-topbar">
+            <div class="canvas-context">
+              <span class="canvas-kicker">WORKFLOW / CANVAS</span>
+              <strong id="canvasProjectName">Live Concert đầu tiên</strong>
+              <span class="canvas-state" id="canvasState"><i class="canvas-state-dot"></i> Sẵn sàng</span>
+            </div>
+            <div class="canvas-top-actions">
+              <button id="toolsToggle" class="canvas-tool-button" type="button" aria-expanded="false" aria-controls="graphSide">
+                <span>☷</span> Công cụ
+              </button>
+              <button id="fullscreenToggle" class="canvas-tool-button" type="button">⛶ Toàn màn hình</button>
+            </div>
+          </div>
           <div class="graph-lock" id="graphLock" hidden>
             🔒 Hàng đợi đang chạy — workflow tạm khoá. Đợi xong hoặc bấm “Dừng” trước khi sửa.
           </div>
           <div class="graph-scroll"><div id="graphCanvas"></div></div>
-          <aside class="graph-side">
-            <button id="fullscreenToggle" class="button">⛶ Toàn màn hình</button>
-            <div class="side-zoom">
-              <button id="zoomOut" class="button" aria-label="Thu nhỏ">−</button
-              ><span id="zoomValue">100%</span
-              ><button id="zoomIn" class="button" aria-label="Phóng to">＋</button>
+          <div class="canvas-dock" aria-label="Điều khiển canvas">
+            <div class="dock-group dock-project-actions">
+              <button id="addNode" class="dock-button dock-add" type="button" title="Thêm node ảnh">＋</button>
+              <span class="dock-label">Thêm node</span>
             </div>
-            <button id="fitCanvas" class="button">Vừa khung</button>
-            <button id="arrangeZones" class="button" title="Xếp node vào các khu vực theo thứ tự">
-              ⬓ Xếp khu vực
-            </button>
-            <div class="side-sep"></div>
-            <div class="side-title">Thêm node</div>
-            <button id="addNode" class="button">＋ Node ảnh</button>
-            <button
-              id="addCharacter"
-              class="button"
-              title="Model sheet nhân vật: chân dung + 3 góc toàn thân. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
-            >
-              ＋ Nhân vật
-            </button>
-            <button
-              id="addProp"
-              class="button"
-              title="Model sheet vật dụng: 1 góc chính + 2 góc xoay trong một ảnh. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
-            >
-              ＋ Vật dụng
-            </button>
-            <button
-              id="addScene"
-              class="button"
-              title="Cảnh toàn trống người, làm gốc cho các node góc máy. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
-            >
-              ＋ Bối cảnh
-            </button>
-            <button
-              id="addWardrobe"
-              class="button"
-              title="Một bộ trang phục + vật dụng của một nhân vật cho một bối cảnh. Mở node nhân vật để thêm bộ đã nối sẵn."
-            >
-              ＋ Trang phục
-            </button>
-            <button id="addStyle" class="button">＋ Style</button>
-            <button id="addCamera" class="button">＋ Máy quay</button>
-            <button
-              id="addAudio"
-              class="button"
-              title="Node âm thanh: nhạc nền + tiếng hiện trường, chèn vào prompt của mọi shot nối ra"
-            >
-              ＋ Âm thanh
-            </button>
-            <div class="side-sep"></div>
-            <div class="side-title">Tạo ảnh nhanh theo khu</div>
-            <label
-              >Khu vực<select id="imageZone" aria-label="Khu vực tạo ảnh">
-                <option value="character">① Nhân vật</option>
-                <option value="wardrobe">② Trang phục & vật dụng</option>
-                <option value="design">③ Bối cảnh</option>
-                <option value="production">⑥ Khung hình shot</option>
-              </select></label
-            >
-            <button id="autoImageStart" class="button primary">▶ Tạo ảnh khu vực</button>
-            <p id="autoImageStatus" class="field-hint"></p>
-            <div class="side-sep"></div>
-            <div class="side-title">Tạo tự động</div>
-            <label
-              >Chạy đến<select id="autoTarget" aria-label="Node đích chạy tự động">
-                <option value="">Toàn bộ workflow</option>
-              </select></label
-            >
-            <button id="autoStart" class="button primary">▶ Tạo ảnh (chuỗi)</button>
-            <button id="autoStop" class="button">Dừng tạo ảnh</button>
-            <label
-              >Số phiên bản video<select
-                id="videoVersions"
-                aria-label="Số phiên bản video mỗi node"
+            <span class="dock-divider"></span>
+            <div class="dock-group dock-zoom">
+              <button id="zoomOut" class="dock-button" type="button" aria-label="Thu nhỏ">−</button>
+              <span id="zoomValue" class="dock-zoom-value">100%</span>
+              <button id="zoomIn" class="dock-button" type="button" aria-label="Phóng to">＋</button>
+            </div>
+            <span class="dock-divider"></span>
+            <button id="fitCanvas" class="dock-button dock-wide" type="button" title="Vừa khung">⌗ <span>Vừa khung</span></button>
+            <button id="arrangeZones" class="dock-button dock-wide" type="button" title="Xếp node vào các khu vực theo thứ tự">⌘ <span>Xếp khu vực</span></button>
+          </div>
+          <aside class="graph-side" id="graphSide" aria-label="Công cụ workflow">
+            <div class="side-head">
+              <div>
+                <span class="side-kicker">WORKFLOW TOOLS</span>
+                <strong>Điều khiển sản xuất</strong>
+              </div>
+              <button id="toolsClose" class="side-close" type="button" aria-label="Đóng công cụ">×</button>
+            </div>
+            <div class="side-scroll">
+              <div class="side-sep"></div>
+              <div class="side-title">Thêm node</div>
+              <button
+                id="addCharacter"
+                class="button"
+                title="Model sheet nhân vật: chân dung + 3 góc toàn thân. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
               >
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-              </select></label
-            >
-            <button id="autoVideoStart" class="button primary">▶ Tạo video</button>
-            <button id="autoVideoStop" class="button">Dừng tạo video</button>
-            <button id="autoVideoRetry" class="button" hidden>↻ Chạy lại video lỗi</button>
-            <button id="autoVideoMissing" class="button" hidden>✚ Tạo video còn thiếu</button>
-            <button
-              id="seedanceGroups"
-              class="button"
-              title="Gộp các shot liên tiếp (tối đa 30 giây, cùng bối cảnh) thành nhóm, mỗi nhóm một lần render Seedance với ảnh storyboard"
-            >
-              🧩 Chia nhóm Seedance
-            </button>
-            <p id="autoStatus" class="field-hint"></p>
-            <p id="autoVideoStatus" class="field-hint"></p>
-            <div class="side-sep"></div>
-            <label class="button upload-song"
-              >♫ <span id="songName">Thêm bài hát</span
-              ><input type="file" accept="audio/*" id="audioUpload" hidden
-            /></label>
-            <button class="text-button" id="editBrief">Chỉnh mô tả chung ↗</button>
-            <audio id="songPlayer" controls hidden></audio>
+                ＋ Nhân vật
+              </button>
+              <button
+                id="addProp"
+                class="button"
+                title="Model sheet vật dụng: 1 góc chính + 2 góc xoay trong một ảnh. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
+              >
+                ＋ Vật dụng
+              </button>
+              <button
+                id="addScene"
+                class="button"
+                title="Cảnh toàn trống người, làm gốc cho các node góc máy. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
+              >
+                ＋ Bối cảnh
+              </button>
+              <button
+                id="addStage"
+                class="button"
+                title="Sân khấu 3D: ghim chỗ đứng và hướng mặt của từng người một lần. Nối node này vào các shot (hoặc vào bối cảnh của chúng) — chúng tự nhận vị trí, cỡ cảnh và góc máy tool tự tính."
+              >
+                ＋ 🧍 Sân khấu 3D
+              </button>
+              <button
+                id="addWardrobe"
+                class="button"
+                title="Một bộ trang phục + vật dụng của một nhân vật cho một bối cảnh. Mở node nhân vật để thêm bộ đã nối sẵn."
+              >
+                ＋ Trang phục
+              </button>
+              <button id="addStyle" class="button">＋ Style</button>
+              <button id="addCamera" class="button">＋ Máy quay</button>
+              <button
+                id="addAudio"
+                class="button"
+                title="Node âm thanh: nhạc nền + tiếng hiện trường, chèn vào prompt của mọi shot nối ra"
+              >
+                ＋ Âm thanh
+              </button>
+              <button
+                id="addMusic"
+                class="button"
+                title="Node nhạc (MUSIC): dán link YouTube hoặc tải file nhạc, tool phân tích cấu trúc / thời lượng / nhịp / số shot cho storyboard"
+              >
+                ＋ Nhạc (MUSIC)
+              </button>
+              <div class="side-sep"></div>
+              <div class="side-title">Tạo ảnh nhanh theo khu</div>
+              <label
+                >Khu vực<select id="imageZone" aria-label="Khu vực tạo ảnh">
+                  <option value="character">① Nhân vật</option>
+                  <option value="wardrobe">② Trang phục & vật dụng</option>
+                  <option value="design">③ Bối cảnh</option>
+                  <option value="production">⑥ Khung hình luồng A (phủ cảnh)</option>
+                  <option value="lipsync">⑪ Khung take luồng B (hát nhép)</option>
+                </select></label
+              >
+              <button id="autoImageStart" class="button primary">▶ Tạo ảnh khu vực</button>
+              <p id="autoImageStatus" class="field-hint"></p>
+              <div class="side-sep"></div>
+              <div class="side-title">Tạo tự động</div>
+              <label
+                >Chạy đến<select id="autoTarget" aria-label="Node đích chạy tự động">
+                  <option value="">Toàn bộ workflow</option>
+                </select></label
+              >
+              <button id="autoStart" class="button primary">▶ Tạo ảnh (chuỗi)</button>
+              <button id="autoStop" class="button">Dừng tạo ảnh</button>
+              <label
+                >Số phiên bản video<select
+                  id="videoVersions"
+                  aria-label="Số phiên bản video mỗi node"
+                >
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select></label
+              >
+              <button id="autoVideoStart" class="button primary">▶ Tạo video</button>
+              <button id="autoVideoStop" class="button">Dừng tạo video</button>
+              <button id="autoVideoRetry" class="button" hidden>↻ Chạy lại video lỗi</button>
+              <button id="autoVideoMissing" class="button" hidden>✚ Tạo video còn thiếu</button>
+              <button
+                id="seedanceGroups"
+                class="button"
+                title="Gộp các shot liên tiếp (nhồi tới 30 giây, có thể gồm nhiều bối cảnh) thành nhóm, mỗi nhóm một lần render Seedance với ảnh storyboard"
+              >
+                🧩 Chia nhóm Seedance
+              </button>
+              <button
+                id="seedanceResplit"
+                class="button"
+                title="Xóa các nhóm Seedance chưa render rồi chia lại toàn bộ cho đầy 30 giây (giữ nguyên nhóm đã có video)"
+              >
+                ↻ Chia lại
+              </button>
+              <p id="autoStatus" class="field-hint"></p>
+              <p id="autoVideoStatus" class="field-hint"></p>
+              <div class="side-sep"></div>
+              <label class="button upload-song"
+                >♫ <span id="songName">Thêm bài hát</span
+                ><input type="file" accept="audio/*" id="audioUpload" hidden
+              /></label>
+              <button class="text-button" id="editBrief">Chỉnh mô tả chung ↗</button>
+              <audio id="songPlayer" controls hidden></audio>
+            </div>
           </aside>
         </div>
         <p id="connectHint" class="field-hint">
-          Kéo dây từ Out sang In · Bấm vào dây rồi bấm × (hoặc phím Delete) để xóa · Mở một node để
-          xem và gỡ từng đầu vào của nó · Kéo thanh tên để di chuyển node · Kéo nền để pan · Lăn
-          chuột để zoom.
+          Kéo dây từ Out sang In · Kéo node trong cột để sắp xếp. Muốn chuyển nhóm, kéo ngang vượt mép cột một đoạn rõ ràng · Bấm vào dây rồi bấm × (hoặc phím Delete) để xóa · Kéo nền để pan · Lăn chuột để zoom.
         </p>
-        <div class="track" id="timelineTrack" hidden></div>
+        <!-- Hai làn thời gian: làn A = phủ cảnh (⑥/⑧), làn B = câu hát nhép (⑪/⑫) -->
+        <div id="timelineTrack"></div>
       </section>
       <section id="queue" class="view" hidden>
         <div class="section-heading">
@@ -365,13 +412,34 @@
             <button
               id="exportSrt"
               class="button"
-              title="Xuất phụ đề .srt từ thoại (lyric) + thời lượng của các shot trong storyboard; lưu luôn vào thư mục làm việc nếu có"
+              title="Xuất phụ đề .srt từ các câu hát: lấy luồng B (⑪ câu hát nhép) nếu đã cắt take, nếu chưa thì lấy lời trên các shot luồng A (⑥). Mỗi dòng đặt đúng giây của nó; lưu luôn vào thư mục làm việc nếu có"
             >
               📝 Xuất phụ đề (.srt)
             </button>
             <label class="muted inline-check">
               <input type="checkbox" id="srtNames" /> giữ tên người nói
             </label>
+          </div>
+          <!-- Hai luồng để dựng: mỗi luồng một bảng kê mở được trong Premiere/Resolve -->
+          <div class="actions">
+            <button
+              id="exportManifestA"
+              class="button"
+              title="luong-A-phu-canh.csv — mỗi dòng là một shot phủ cảnh ở cột ⑥ ⑦: giây vào/ra, timecode 25 fps, cỡ cảnh, bối cảnh và ĐÚNG tên file clip đã tải về"
+            >
+              ⤓ Bảng kê luồng A (.csv)
+            </button>
+            <button
+              id="exportManifestB"
+              class="button"
+              title="luong-B-hat-nhep.csv — mỗi dòng là một take hát nhép ở cột ⑪: giây vào/ra, timecode 25 fps, câu hát và ĐÚNG tên file clip đã tải về"
+            >
+              ⤓ Bảng kê luồng B (.csv)
+            </button>
+            <span class="muted"
+              >Hai bảng kê chạy song song trên cùng một dòng thời gian: làn A phủ kín bài, làn B là
+              từng câu hát nhép.</span
+            >
           </div>
           <div class="actions">
             <button
@@ -423,6 +491,7 @@
             >Tạo ảnh<select id="defaultImage">
               <option value="seedvis">Seedvis API</option>
               <option value="web">ChatGPT (extension)</option>
+              <option value="musechat">Muse chat (extension)</option>
               <option value="orbit">Orbit (kịch bản web)</option>
             </select></label
           ><label id="defaultImageModelRow">Model ảnh<select id="defaultImageModel"></select></label
@@ -430,6 +499,7 @@
             >Tạo video<select id="defaultVideo">
               <option value="seedvis">Seedvis API</option>
               <option value="gvids">Google Vids (extension)</option>
+              <option value="musechat">Muse chat (extension)</option>
               <option value="orbit">Orbit (kịch bản web)</option>
             </select></label
           ><label id="defaultVideoModelRow"
@@ -500,6 +570,18 @@
           </p>
         </div>
         <div class="settings-panel">
+          <h3>Muse chat (extension) · tạo ảnh &amp; video</h3>
+          <p class="muted">
+            Tạo ảnh hoặc video qua web chat muse.ai bằng phiên đăng nhập của bạn — cùng extension và cùng
+            worker token ở ô trên. Mỗi job mở một tab riêng rồi đóng.
+          </p>
+          <p class="muted">
+            Trong popup extension: đăng nhập <strong>muse.ai</strong> → Bật
+            <strong>worker Muse chat</strong> → đặt node ảnh/video dùng "Muse chat (extension)", hoặc
+            đặt nguồn mặc định tương ứng ở trên. Ảnh được gắn vào node ảnh; video Muse thường khoảng 10 giây.
+          </p>
+        </div>
+        <div class="settings-panel">
           <h3>Orbit Hub</h3>
           <p>
             <a href="http://192.168.100.5:8080/" target="_blank" rel="noopener"
@@ -555,6 +637,14 @@
     <div id="overlay" hidden></div>
     <aside id="inspector" hidden></aside>
     <div id="toast" role="status"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/vendor/three/three.module.js",
+          "three/addons/": "/vendor/three/addons/"
+        }
+      }
+    </script>
     <script type="module" src="/js/main.js"></script>
   </body>
 </html>

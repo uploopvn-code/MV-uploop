@@ -30,14 +30,33 @@ let selectedEdge = null;
 // a few nodes can rewrite just those (see renderGraph): rebuilding the whole canvas
 // reloads every preview image and makes dragging stutter while jobs run.
 function nodeMarkup(n, p) {
-  return (
-    '<div class="graph-node" data-graph-id="' +
+  const focused = store.selected;
+  const related = focused &&
+    store.state.edges.some(e =>
+      (e.source === focused && e.target === n.id) ||
+      (e.target === focused && e.source === n.id),
+    );
+  const focusClass = focused
+    ? n.id === focused
+      ? ' selected'
+      : related
+        ? ' related'
+        : ' dimmed'
+    : '';
+  const open =
+    '<div class="graph-node' +
+    focusClass +
+    '" data-graph-id="' +
     n.id +
     '" style="left:' +
     p.x +
     'px;top:' +
     p.y +
-    'px">' +
+    'px">';
+  // A music node is a standalone data node: it holds a song + its analysis, wires to nothing.
+  if (n.kind === 'music') return open + card(n) + '<div class="ports"></div></div>';
+  return (
+    open +
     card(n) +
     '<div class="ports">' +
     // Image / shot nodes show two inputs: reference images, and style / camera text.
@@ -155,6 +174,20 @@ export function renderGraph() {
     canvas.__shell = shell;
   }
   drawn = nodes;
+  // Hovering a node temporarily brings its connected wires forward without changing the
+  // persisted graph or interrupting drag gestures.
+  canvas.onpointerover = e => {
+    const node = e.target.closest?.('[data-graph-id]');
+    if (!node) return;
+    const id = node.dataset.graphId;
+    canvas.querySelectorAll?.('.wire.hover-focus').forEach(path => path.classList.remove('hover-focus'));
+    canvas.querySelectorAll?.('.wire[data-edge-source="' + id + '"], .wire[data-edge-target="' + id + '"]')
+      .forEach(path => path.classList.add('hover-focus'));
+  };
+  canvas.onpointerout = e => {
+    if (e.target.closest?.('[data-graph-id]'))
+      canvas.querySelectorAll?.('.wire.hover-focus').forEach(path => path.classList.remove('hover-focus'));
+  };
   // ‹ › on a clip card: show another version of the same source, in the same place.
   document.querySelectorAll('[data-stack-prev],[data-stack-next]').forEach(b => {
     b.onclick = ev => {
@@ -351,11 +384,58 @@ document.addEventListener('keydown', e => {
 $('#fullscreenToggle').onclick = () => {
   const full = $('#graphArea').classList.toggle('full');
   $('#fullscreenToggle').textContent = full ? '⤢ Thu nhỏ' : '⛶ Toàn màn hình';
+  $('#fullscreenToggle').setAttribute('aria-expanded', String(full));
+  if (full) setToolsOpen(false);
 };
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && $('#graphArea').classList.contains('full') && $('#inspector').hidden) {
+  if (e.key === 'Escape' && $('#graphArea').classList.contains('full')) {
     $('#graphArea').classList.remove('full');
     $('#fullscreenToggle').textContent = '⛶ Toàn màn hình';
+    $('#fullscreenToggle').setAttribute('aria-expanded', 'false');
+  }
+});
+
+const TOOLS_PREF_KEY = 'mv-canvas-tools-open';
+const graphArea = $('#graphArea');
+const graphSide = $('#graphSide');
+const toolsToggle = $('#toolsToggle');
+const toolsClose = $('#toolsClose');
+function setToolsOpen(open, persist = true) {
+  if (!graphArea?.classList || !graphSide || !toolsToggle?.setAttribute) return;
+  graphArea.classList.toggle('tools-open', open);
+  toolsToggle.setAttribute('aria-expanded', String(open));
+  toolsToggle.classList?.toggle?.('active', open);
+  if (persist) {
+    try {
+      localStorage.setItem(TOOLS_PREF_KEY, open ? '1' : '0');
+    } catch {}
+  }
+}
+let toolsOpen = false;
+try {
+  toolsOpen = localStorage.getItem(TOOLS_PREF_KEY) === '1';
+} catch {}
+setToolsOpen(toolsOpen, false);
+toolsToggle?.addEventListener?.('click', () => setToolsOpen(!graphArea.classList.contains('tools-open')));
+toolsClose?.addEventListener?.('click', () => setToolsOpen(false));
+document.addEventListener(
+  'click',
+  e => {
+    if (!graphArea.classList.contains('tools-open')) return;
+    if (e.target.closest?.('[data-graph-id]')) setToolsOpen(false);
+  },
+  true,
+);
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !$('#inspector').hidden) return;
+  if (graphArea.classList.contains('tools-open')) {
+    setToolsOpen(false);
+    return;
+  }
+  if (store.selected) {
+    store.selected = null;
+    render();
   }
 });
 
@@ -424,13 +504,23 @@ function wiresMarkup(pos) {
     .map(e => {
       const key = e.source + '>' + e.target,
         d = edgePath(...wireEnds(e, pos));
+      const focusEdge = store.selected && (e.source === store.selected || e.target === store.selected);
       return (
         '<path class="wire-hit" data-edge="' +
         key +
+        '" data-edge-source="' +
+        esc(e.source) +
+        '" data-edge-target="' +
+        esc(e.target) +
         '" d="' +
         d +
         '"><title>Bấm để chọn dây, rồi bấm × hoặc Delete để xóa</title></path><path class="wire' +
         (selectedEdge === key ? ' selected' : '') +
+        (focusEdge ? ' focus' : '') +
+        '" data-edge-source="' +
+        esc(e.source) +
+        '" data-edge-target="' +
+        esc(e.target) +
         '" d="' +
         d +
         '"/>'
@@ -511,9 +601,11 @@ $('#arrangeZones').onclick = async () => {
   toast('Đã xếp node theo khu vực; shot đánh số lại theo mốc thời gian');
 };
 $('#fitCanvas').onclick = () => {
-  const ps = Object.keys(savedPositions).length
-    ? Object.values(savedPositions)
-    : Object.values(zoneLayout());
+  const visibleNodes = store.state.nodes.filter(
+    n => !n.terminal || shownClip(n.source)?.id === n.id,
+  );
+  const defaults = zoneLayout();
+  const ps = visibleNodes.map(n => savedPositions[n.id] || defaults[n.id]).filter(Boolean);
   if (!ps.length) return;
   const minX = Math.min(...ps.map(p => p.x)),
     minY = Math.min(...ps.map(p => p.y)),
@@ -565,7 +657,15 @@ viewport.addEventListener('pointerdown', e => {
     };
   } else if (node && e.target.closest('.node-top')) {
     const id = node.dataset.graphId;
-    gesture = { type: 'node', id, start: { ...savedPositions[id] } };
+    const state = store.state.nodes.find(n => n.id === id);
+    gesture = {
+      type: 'node',
+      id,
+      start: { ...savedPositions[id] },
+      zone: state?.zone,
+      targetZone: state?.zone,
+      crossed: false,
+    };
   } else if (!node || e.button === 1) {
     gesture = {
       type: 'pan',
@@ -584,7 +684,27 @@ viewport.addEventListener('pointermove', e => {
   if (Math.hypot(dx, dy) > 4) gesture.moved = true;
   if (!gesture.moved) return;
   if (gesture.type === 'node') {
-    const p = { x: gesture.start.x + dx / graphView.z, y: gesture.start.y + dy / graphView.z };
+    const node = store.state.nodes.find(n => n.id === gesture.id);
+    const rawX = gesture.start.x + dx / graphView.z;
+    const rawY = gesture.start.y + dy / graphView.z;
+    let x = rawX;
+    // Nodes stay in their column by default: a short drag clamps them to the zone edges.
+    if (node && !node.terminal && gesture.zone) {
+      const zoneIndex = ZONES.findIndex(z => z.id === gesture.zone);
+      const rawZoneIndex = Math.floor((rawX + 117) / ZONE_W);
+      const worldDx = rawX - gesture.start.x;
+      const crossed =
+        Math.abs(dx) > 80 && Math.abs(rawZoneIndex - zoneIndex) >= 1;
+      gesture.crossed ||= crossed;
+      const targetIndex = gesture.crossed
+        ? Math.max(0, Math.min(ZONES.length - 1, rawZoneIndex))
+        : zoneIndex;
+      gesture.targetZone = ZONES[targetIndex]?.id || gesture.zone;
+      x = Math.max(targetIndex * ZONE_W + 10, Math.min(rawX, (targetIndex + 1) * ZONE_W - 245));
+    } else {
+      gesture.targetZone = gesture.zone;
+    }
+    const p = { x, y: rawY };
     savedPositions[gesture.id] = p;
     const el = document.querySelector('[data-graph-id="' + gesture.id + '"]');
     el.style.left = p.x + 'px';
@@ -624,7 +744,10 @@ async function endGesture(e, cancel = false) {
   if (cancel && g.type === 'node') savedPositions[g.id] = g.start;
   if (cancel && g.type === 'pan') Object.assign(graphView, g.start);
   // A click (no drag) on a wire selects it; a click on empty canvas clears the selection.
-  if (!cancel && !g.moved && g.type === 'pan') selectedEdge = g.wire || null;
+  if (!cancel && !g.moved && g.type === 'pan') {
+    selectedEdge = g.wire || null;
+    if (!g.wire) store.selected = null;
+  }
   if (!cancel && g.moved && g.type === 'wire') {
     const hit = document
       .elementFromPoint(e.clientX, e.clientY)
@@ -650,11 +773,16 @@ async function endGesture(e, cancel = false) {
   if (!cancel && g.moved && g.type === 'node') {
     const node = store.state.nodes?.find(n => n.id === g.id);
     const pos = savedPositions[g.id];
-    if (node && pos && !node.terminal) {
+    if (node && pos) {
       const zi = Math.max(0, Math.min(ZONES.length - 1, Math.floor((pos.x + 117) / ZONE_W)));
       const newZone = ZONES[zi].id;
-      // the clip columns hold produced videos only: a node dropped there snaps back
-      if (!CLIP_ZONES.includes(newZone) && newZone !== node.zone) {
+      const intendedZone = g.targetZone || newZone;
+      const allowZoneMove = g.crossed && intendedZone !== node.zone;
+      const movedZone = allowZoneMove && intendedZone === newZone;
+      // Produced clip nodes stay in their output column and never change zones.
+      if (node.terminal || CLIP_ZONES.includes(newZone)) {
+        savedPositions[g.id] = g.start;
+      } else if (movedZone) {
         try {
           store.state = await api('/api/node', {
             method: 'PATCH',
@@ -662,6 +790,7 @@ async function endGesture(e, cancel = false) {
           });
           toast('Chuyển sang ' + ZONES[zi].label);
         } catch (err) {
+          savedPositions[g.id] = g.start;
           toast(err.message, true);
         }
       }

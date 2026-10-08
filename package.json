@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test.mjs && node test-graph.mjs && node test-runner.mjs && node test-output.mjs && node test-canvas.mjs && node test-seedvis.mjs && node test-projects.mjs && node test-director.mjs && node test-worker.mjs && node test-multiwin.mjs",
+    "test": "node test.mjs && node test-graph.mjs && node test-runner.mjs && node test-output.mjs && node test-canvas.mjs && node test-seedvis.mjs && node test-projects.mjs && node test-director.mjs && node test-music.mjs && node test-lipsync.mjs && node test-stage3d.mjs && node test-worker.mjs && node test-worker-recover.mjs && node test-gvids.mjs && node test-multiwin.mjs",
     "format": "npx --yes prettier@3 --write \"**/*.{mjs,js,css,html,json}\"",
     "format:check": "npx --yes prettier@3 --check \"**/*.{mjs,js,css,html,json}\""
   },

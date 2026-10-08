@@ -199,6 +199,9 @@ function skeletonNode(n) {
   const c = structuredClone(n);
   c.image = null;
   c.video = null;
+  // 3D stage captures are media of the old project: the marks stay, the pictures do not
+  delete c.layout;
+  if (c.stage3d) delete c.stage3d.capture;
   delete c.stale;
   delete c.videoStale;
   delete c.lastVersion;

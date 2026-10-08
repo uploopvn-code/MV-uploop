@@ -2,7 +2,7 @@
 import { store } from './store.js';
 import { $, api, esc, toast, triggerDownload } from './core.js';
 import { gallerySel } from './gallery.js';
-import { closeInspector } from './inspector.js';
+import { closeInspector, normalizeInspectorLayout, openInspector } from './inspector.js';
 import { render } from './render.js';
 
 const themeLabel = id => (store.state.themes || []).find(t => t.id === id)?.label || id;
@@ -294,8 +294,6 @@ if (importInput)
   };
 $('#editBrief').onclick = () => {
   store.selected = 'brief';
-  $('#overlay').hidden = false;
-  $('#inspector').hidden = false;
   const labels = {
     identity: 'Nhân vật',
     wardrobe: 'Trang phục',
@@ -305,19 +303,22 @@ $('#editBrief').onclick = () => {
     bpm: 'BPM đã xác nhận (tùy chọn)',
   };
   $('#inspector').innerHTML =
-    `<div class="inspector-head"><h2>Định hướng chung</h2><button class="close" aria-label="Đóng">×</button></div><p>Mô tả được kế thừa vào các node. Thay đổi sẽ đánh dấu ảnh/video cũ cần cập nhật.</p>${Object.entries(
-      labels,
-    )
+    `<div class="inspector-head"><h2>Định hướng chung</h2><button class="close" aria-label="Đóng">×</button></div>` +
+    '<div class="inspector-scroll"><p>Mô tả được kế thừa vào các node. Thay đổi sẽ đánh dấu ảnh/video cũ cần cập nhật.</p>' +
+    Object.entries(labels)
       .map(
         ([k, l]) =>
           `<label>${l}<textarea data-field="${k}" rows="${k === 'bpm' ? 1 : 3}">${esc(store.state.fields[k])}</textarea></label>`,
       )
-      .join('')}<button id="saveBrief" class="button primary wide">Lưu định hướng</button>`;
+      .join('') +
+    '</div><div class="inspector-footer"><button id="saveBrief" class="button primary wide">Lưu định hướng</button></div>';
+  openInspector('brief');
+  normalizeInspectorLayout();
   $('.close').onclick = closeInspector;
   $('#saveBrief').onclick = async () => {
     try {
       const fields = Object.fromEntries(
-        [...document.querySelectorAll('[data-field]')].map(e => [e.dataset.field, e.value]),
+        [...document.querySelectorAll('#inspector [data-field]')].map(e => [e.dataset.field, e.value]),
       );
       store.state = await api('/api/project', { method: 'PATCH', body: { fields } });
       render();
@@ -352,10 +353,9 @@ $('#export').onclick = async () => {
 };
 $('#projectSettings').onclick = () => {
   store.selected = null;
-  $('#overlay').hidden = false;
-  $('#inspector').hidden = false;
   $('#inspector').innerHTML =
-    '<div class="inspector-head"><h2>Cài đặt project</h2><button class="close" aria-label="Đóng">×</button></div><label>Tên project<input id="projectTitle" value="' +
+    '<div class="inspector-head"><h2>Cài đặt project</h2><button class="close" aria-label="Đóng">×</button></div>' +
+    '<div class="inspector-scroll"><label>Tên project<input id="projectTitle" value="' +
     esc(store.state.name) +
     '"></label><label>Chủ đề<select id="projectTheme">' +
     (store.state.themes || [])
@@ -370,17 +370,16 @@ $('#projectSettings').onclick = () => {
     '"></label><p class="field-hint">Đường dẫn tuyệt đối trên máy chạy tool (vd <code>D:\\MV\\Ashford</code>). Ảnh/video tạo ra được lưu thành các thư mục con: <code>thu-vien/nhan-vat</code>, <code>thu-vien/boi-canh</code>, <code>khung-hinh/&lt;seq&gt;</code>, <code>video/&lt;seq&gt;</code>. Để trống thì lưu trong thư mục mặc định của project.</p>' +
     '<label>Thư mục lưu trên máy chạy Orbit <code class="variable-tag">{{mv_output_dir}}</code><input id="outputDirectory" value="' +
     esc(store.state.outputDirectory) +
-    '"></label><p class="field-hint">Nhập đường dẫn tuyệt đối. Thư mục phải truy cập được bằng cùng đường dẫn từ MV Director và Orbit (cùng máy hoặc thư mục mạng dùng chung).</p><p>Đường dẫn đầy đủ gửi sang Orbit: <code>{{mv_output_path}}</code></p><button class="button primary wide" id="saveProjectSettings">Lưu cài đặt</button>' +
-    // Reusable templates: save this project's node/prompt skeleton (no media) for new projects.
+    '"></label><p class="field-hint">Nhập đường dẫn tuyệt đối. Thư mục phải truy cập được bằng cùng đường dẫn từ MV Director và Orbit (cùng máy hoặc thư mục mạng dùng chung).</p><p>Đường dẫn đầy đủ gửi sang Orbit: <code>{{mv_output_path}}</code></p>' +
     '<hr><h3 style="margin: 10px 0 4px">⭐ Template dùng lại</h3><p class="field-hint">Lưu bộ node/prompt của project này (không kèm ảnh/video) để tạo project mới giống hệt.</p>' +
     '<button class="button wide" id="saveAsTemplate">⭐ Lưu project này làm template</button>' +
     '<ul class="wardrobe-list" id="templateList">' +
     templateRows() +
     '</ul>' +
-    // Deleting happens in the main window (a secondary window only works on its project).
-    (store.state.window?.child
-      ? ''
-      : '<button class="button wide danger" id="deleteProject">🗑 Xóa project này</button>');
+    (store.state.window?.child ? '' : '<button class="button wide danger" id="deleteProject">🗑 Xóa project này</button>') +
+    '</div><div class="inspector-footer"><button class="button primary wide" id="saveProjectSettings">Lưu cài đặt</button></div>';
+  openInspector('project');
+  normalizeInspectorLayout();
   $('.close').onclick = closeInspector;
   bindTemplateList();
   $('#saveAsTemplate').onclick = async () => {

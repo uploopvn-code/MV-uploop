@@ -3,6 +3,7 @@
 // wires every shot to the assets / style / camera it uses.
 import crypto from 'node:crypto';
 import { defaultNaming } from './output-config.mjs';
+import { SHOT_LIST_HEADER } from './lib/shotlist.mjs';
 
 // The master prompt the user pastes into an LLM, plus the output contract that
 // makes its result machine-buildable. Served to the UI's "copy" button.
@@ -94,6 +95,251 @@ QUY TẮC:
 
 LỆNH KÍCH HOẠT: "BẮT ĐẦU: [Tên bài hát / Link / Lời]".`;
 
+// The MUSIC node's analyzer: from a song (title / YouTube link / lyrics / known length) the LLM
+// returns ONLY a JSON block of the parameters the tool needs to lay out an MV storyboard — the
+// song structure with timecodes, bpm, a suggested shot count, and visual/camera hints. A text
+// LLM cannot "listen" to audio, so the prompt leans on the supplied lyrics + duration and says
+// to state its assumptions when those are missing.
+export const MUSIC_MASTER_PROMPT = `MASTER PROMPT — PHÂN TÍCH BÀI HÁT CHO MV (XUẤT JSON THÔNG SỐ)
+Vai trò: Bạn là Giám đốc Âm nhạc kiêm Trợ lý sản xuất MV. Từ thông tin một bài hát (tên / link
+YouTube / lời / mô tả / thời lượng), hãy PHÂN TÍCH bài hát rồi XUẤT RA DUY NHẤT một khối JSON
+(trong \`\`\`json ... \`\`\`) chứa các THÔNG SỐ công cụ cần để dựng storyboard MV.
+
+QUY TẮC PHÂN TÍCH:
+- Nếu đã cho "Thời lượng (giây)", "durationSec" PHẢI đúng bằng con số đó; mọi mốc trong "sections"
+  phải nằm trong [0, durationSec], liền mạch (đoạn sau nối tiếp đoạn trước), không chồng, không hở.
+- Chia bài thành các đoạn (Intro, Verse, Pre-Chorus, Chorus, Bridge, Instrumental, Outro…), mỗi
+  đoạn một phần tử "sections" với mốc bắt đầu/kết thúc (giây) và ĐÚNG đoạn lời của nó.
+- Nếu không có lời: dựa vào hiểu biết về bài hát (nếu nhận ra) hoặc mô tả để ước lượng cấu trúc,
+  và ghi rõ giả định trong "notes" (đừng bịa lời — để "lyric" trống nếu không chắc).
+- "suggestedShots": số shot đề xuất phủ hết bài (mỗi shot 4–8 giây; Chorus/cao trào cắt nhanh hơn).
+- Các trường gợi ý hình ảnh/máy quay viết bằng TIẾNG ANH (để đưa thẳng vào prompt ảnh/video).
+
+CHỈ XUẤT MỘT KHỐI JSON duy nhất theo schema sau (không thêm chữ nào ngoài khối JSON):
+
+\`\`\`json
+{
+  "title": "Tên bài hát",
+  "artist": "Nghệ sĩ (nếu biết)",
+  "language": "ngôn ngữ lời hát",
+  "durationSec": 0,
+  "bpm": 0,
+  "timeSignature": "4/4",
+  "key": "tông (nếu biết)",
+  "genre": "thể loại",
+  "mood": "cảm xúc chủ đạo",
+  "energyCurve": "một dòng mô tả đường năng lượng theo thời gian",
+  "sections": [
+    { "name": "Intro", "startSec": 0, "endSec": 8, "energy": "low", "lyric": "đúng đoạn lời", "note": "" }
+  ],
+  "suggestedShotSeconds": 8,
+  "suggestedShots": 0,
+  "styleHints": "English: visual style / color / film-stock suggestions for the MV",
+  "cameraHints": "English: camera movement & shot-size energy per section",
+  "notes": "giả định / cảnh báo (vd: thời lượng ước lượng, chưa có lời)"
+}
+\`\`\`
+
+LỆNH KÍCH HOẠT: "PHÂN TÍCH BÀI HÁT: [tên / link / lời / thời lượng]".`;
+
+// The MV SHOT LIST master prompt — run OUTSIDE the app with the mp3 attached (e.g. ChatGPT). It
+// writes ONE CSV with the standard header the importer reads (lib/shotlist.mjs): the COVERAGE
+// stream (luồng A), which tiles the WHOLE song with what the editor cuts TO while it plays — band
+// wide/medium/close, the instrument playing at that moment, the full stage, the audience. The
+// singer's lip-sync stream (luồng B) is cut by the tool itself from the vocal, so the CSV never
+// spends a row on the singer performing to camera. The app then re-times every sung row to the GPU
+// reading of the vocal, so the prompt spends the model's effort on what the tool cannot measure:
+// exact lyrics in order, rhythm, emotion per line, set and camera.
+// The MUSIC node's copy button appends the song's facts (title, exact length, official lyrics).
+export const DEEP_MUSIC_ANALYSIS_PROMPT = `MASTER PROMPT — MV SHOT LIST · LUỒNG A "PHỦ CẢNH" (1 FILE CSV CHUẨN CHO TOOL)
+
+Bạn là Đạo diễn MV + Dựng phim âm nhạc + Giám sát hình ảnh sân khấu. Phân tích file nhạc ĐÍNH KÈM,
+đọc phần THÔNG TIN BÀI HÁT ở cuối, rồi viết MỘT bảng shot list CSV để tool dựng MV.
+
+HAI LUỒNG HÌNH — CSV NÀY CHỈ LÀ LUỒNG A:
+- LUỒNG A (chính là CSV bạn viết) = PHỦ CẢNH: toàn / trung / cận ban nhạc, đúng nhạc cụ đang chơi ở
+  khoảnh khắc đó, toàn cảnh sân khấu, khán giả và cảm xúc của họ, chi tiết và bối cảnh. Đây là những
+  hình người dựng CẮT SANG trong khi bài hát đang chạy.
+- LUỒNG B (tool tự dựng, bạn KHÔNG viết hàng nào) = HÁT NHÉP: tool lấy giọng hát thật, cắt từng câu
+  rồi gộp các câu liền nhau thành từng take 7–10 giây, mỗi take một cỡ cảnh của ca sĩ hát khớp giọng.
+- VÌ VẬY: KHÔNG được có hàng nào là "ca sĩ hát vào ống kính". Ca sĩ VẪN được xuất hiện trong luồng A
+  — từ phía sau, bóng ngược sáng, bàn tay, bước đi, nhìn sang ban nhạc — nhưng không bao giờ thấy
+  khẩu hình đang hát. Cột "Lip Sync" vì vậy LUÔN là NO (cột chỉ còn để đọc được file cũ).
+- Hai luồng chạy SONG SONG trên cùng một bài: luồng A phải phủ kín cả những giây đang có tiếng hát
+  (lúc đó khung là ban nhạc / nhạc cụ / khán giả đang nghe chính câu hát ấy), để người dựng cắt
+  sang ban nhạc được ở BẤT KỲ giây nào.
+
+TOOL SẼ LÀM GÌ VỚI CSV (để bạn ưu tiên đúng):
+- Tool tách giọng hát và dùng GPU tìm đúng chỗ từng câu được hát, rồi tự đặt mốc cắt của mỗi hàng
+  có lời ngay trước khi giọng vào, tự giữ các khoảng nghỉ và tự cắt hàng dài quá 8 giây. Vì vậy
+  LỜI và THỨ TỰ hàng phải đúng tuyệt đối; Start/End chỉ cần ước lượng hợp lý. Tool sửa được thời
+  gian, KHÔNG sửa được thứ tự.
+- Mỗi hàng = MỘT nhát cắt (một góc máy), dài TỐI ĐA 8 giây. Tool ghép các hàng liền nhau thành MỘT
+  clip ≤ 8 giây: một prompt duy nhất tả cả cụm, kèm ảnh tham chiếu của MỌI người và vật cụm đó cho
+  thấy. Vì vậy hãy xếp các hàng cùng một Location và cùng MỘT ý (cùng khoảnh khắc nhạc, cùng nhóm
+  người) nằm CẠNH NHAU, để prompt ghép đọc liền mạch.
+- Subject và người được nhắc trong Action → tool gắn ảnh nhân vật; Location → tool gắn ảnh bối cảnh
+  (tool chỉ biết bối cảnh qua TÊN Location, nên ô này KHÔNG được để trống). Emotion, Energy, Shot
+  Size, Angle, Camera Movement, Action → vào prompt ảnh/video. Lyric → phụ đề, và là chỗ tool dựa
+  vào để căn hàng vào giọng thật.
+
+LÀM THEO THỨ TỰ:
+1. Âm thanh: dùng Python đo độ to theo thời gian (và BPM nếu được) để xác định cấu trúc đoạn
+   (Intro / Verse / Pre-Chorus / Chorus / Bridge / Instrumental / Outro), năng lượng từng đoạn, và
+   NHẠC CỤ nào nghe rõ nhất ở từng đoạn. Không đo được thì ghi "ước lượng", không bịa số.
+2. Hành trình cảm xúc: mỗi Section một cảm xúc gốc (đổi tối đa một lần khi lời rẽ nghĩa); cả bài
+   là một đường đi (vd: cô độc → thú nhận → nhẹ nhõm → bình yên), đỉnh ở đoạn to và dày nhất;
+   đoạn kết lắng thì giữ lắng.
+3. Dàn và bối cảnh: theo dòng "Ý tưởng MV" ở cuối (QUY TẮC BỐI CẢNH). Singer + nhạc công cho các
+   nhạc cụ ghi ở dòng "Nhạc cụ" (tối đa 3). Dòng đó "không rõ": chỉ MỘT nhạc công — Pianist cho
+   ballad, thánh ca, nhạc thờ phượng; Guitarist cho thể loại khác. Choir chỉ khi dòng "Nhạc cụ"
+   có hợp xướng. Liệt kê luôn các Location: sân khấu, hàng ghế khán giả, và nơi khác nếu có thấy.
+4. Chia hàng theo lời (QUY TẮC NHỊP), phủ từng Section theo CÔNG THỨC PHỦ CẢNH, rồi viết từng hàng.
+5. Tự kiểm tra (VALIDATION) rồi mới xuất.
+
+CÁC CỘT — đúng tên, đúng thứ tự, mỗi ô MỘT giá trị:
+${SHOT_LIST_HEADER}
+
+- Shot: 001, 002, 003… mỗi hàng một số riêng, liên tục, không trùng, không thêm a/b.
+- Start, End: mm:ss.mmm. Hàng đầu Start = 00:00.000; Start hàng sau = End hàng trước; End hàng
+  cuối = TOTAL_DURATION. Không hở, không chồng. Mỗi hàng dài 2–8 giây: KHÔNG hàng nào quá 8 giây
+  (tool phải cắt, và chỗ cắt không còn khớp khung bạn viết).
+- Section: Intro, Verse 1, Pre-Chorus 1, Chorus 1, Verse 2, Bridge, Instrumental 1, Final Chorus,
+  Outro…
+- Lyric: câu ĐANG ĐƯỢC HÁT trong khoảng thời gian của hàng (người và nhạc cụ trong khung đang phản
+  ứng với chính câu đó; tool cũng dùng ô này để căn hàng vào giọng thật). Chép NGUYÊN VĂN từ LỜI
+  CHÍNH THỨC — lời đó đã đúng thứ tự và số lần hát trong bản thu. Không thêm lần lặp, không bỏ câu,
+  không đổi chữ (ngoại lệ duy nhất: số viết thành chữ như được hát, "2000" → "dos mil"), không
+  dịch, không ghi chú, không [Chorus], không (x2), không ad-lib. Để TRỐNG khi không có giọng. Không
+  dùng dấu gạch nối "-" và dấu ngoặc kép trong Lyric.
+- Lip Sync: LUÔN là NO, ở mọi hàng, không ngoại lệ (luồng hát nhép do tool tự cắt từ giọng thật).
+- Energy: 1–10 theo độ to đo được (1 = đoạn lặng nhất, 10 = đoạn to và dày nhất); không đo được
+  thì ước lượng theo cấu trúc bài (ghi "ước lượng" trong phần Tóm tắt).
+- Emotion: cảm xúc NHÌN THẤY ĐƯỢC, tiếng Anh. Người (nhạc công, ban nhạc, khán giả, ca sĩ):
+  "<cảm xúc> — <nét mặt, cơ thể>; <cách chơi hoặc cách phản ứng>" (vd "driving focus — brows down,
+  shoulders forward; hammering the low keys", "quiet awe — eyes wet, hands still; leaning
+  forward"). Không chắc phần sau thì bỏ phần sau dấu ";". Khung không có người (kể cả vật):
+  "<tâm trạng> — <hình ảnh>" (vd "stillness — untouched candles, cold blue air").
+- Subject: ai / cái gì trong khung — CHỈ dùng: Band, Singer, Pianist, Guitarist, Violinist,
+  Cellist, Drummer, Bassist, Choir, Audience, Stage, hoặc một vật (danh từ tiếng Anh, không mạo từ:
+  Piano keys, Guitar strings, Drum skin, Microphone, Candle). KHÔNG tự nghĩ tên mới: Ensemble,
+  Full Ensemble, Orchestra, Musicians, All performers, "Choir + Strings" đều phải viết là "Band".
+  - "Band" = 3 người trở lên. Action PHẢI gọi tên từng nhạc công thấy trong khung ("Pianist at
+    stage left, Drummer behind, Guitarist at stage right") — tool gắn ảnh nhạc công theo câu đó.
+  - Hai người: "Pianist + Drummer".
+  - Một nhạc cụ ("Piano keys", "Guitar strings"): tool gắn ảnh người chơi nhạc cụ đó.
+  - Có Singer: CHỈ cho khung không thấy đang hát — Angle phải là rear, profile hoặc overhead, hoặc
+    khung chỉ thấy bàn tay / bóng / dáng người; không bao giờ MCU hay CU chính diện mặt ca sĩ.
+  - Khung chỉ có bối cảnh, không có người: để TRỐNG (Location vẫn phải điền).
+- Location: BẮT BUỘC điền ở MỌI hàng. Tên tiếng Anh 2–5 chữ, đủ để vẽ, viết GIỐNG HỆT nhau ở mọi
+  hàng của cùng một nơi (vd "Candlelit opera stage"). Mỗi nơi NHÌN KHÁC nhau là một Location riêng
+  có tên riêng: hàng ghế khán giả là "Audience rows", ban công là "Opera balcony", hậu trường là
+  "Backstage wing". KHÔNG nhét tên nơi vào cột Subject.
+- Shot Size: CHỈ dùng mã EWS, WS, MS, MCU, CU, ECU, Macro — không viết "Wide", "Medium", "Close".
+- Angle: eye level, low, high, 3/4, profile, overhead, rear.
+- Camera Movement: locked, slow push-in, pull-out, dolly left, dolly right, orbit, tracking,
+  crane up, crane down, handheld, rack focus.
+- Action: một câu tiếng Anh tả việc nhìn thấy được (động tác, tay trên phím đàn, ánh sáng đổi…).
+  Chỉ nhắc người và nhạc cụ thật sự có trong khung — hàng Band phải nhắc đủ tên các nhạc công thấy
+  trong khung. Không lặp lại Emotion, không tả khẩu hình, không viết ca sĩ đang hát.
+- Vocal Delivery: CHỈ điền ở hàng CÓ Lyric; hàng không lời để TRỐNG. Tả CA SĨ hát câu đó thế nào —
+  cảm xúc TRONG GIỌNG + độ to (soft / medium / full voice), tiếng Anh (vd "aching, almost
+  whispered — soft voice"; "defiant, lifting — full voice"). Đây là dữ liệu DUY NHẤT cho luồng
+  hát nhép (luồng B): tool cắt các câu ca sĩ hát từ giọng thật rồi dùng ô này làm cảm xúc + cách
+  hát cho từng câu. KHÁC với Emotion (Emotion tả người/vật TRONG KHUNG của luồng A — thường là
+  band hoặc khán giả, không phải ca sĩ).
+
+QUY TẮC NHỊP (chia hàng theo TỪ — từ = các chữ cách nhau bởi dấu cách, không đếm âm tiết):
+- "Câu" = một dòng của LỜI CHÍNH THỨC. Mỗi câu bắt đầu một hàng mới (hàng đó là hình phủ cảnh
+  trong lúc câu ấy được hát), trừ hai trường hợp ghép và tách dưới đây.
+- Ghép (Intro, Verse, Bridge, Outro, phần nói): hai câu liền nhau đều ≤ 4 từ thì ghép vào một
+  hàng, nối bằng dấu cách — miễn hàng vẫn ≤ 8 giây.
+- Tách (Pre-Chorus, Chorus, Final Chorus): câu dài hơn 8 từ, hoặc câu hát lâu hơn 8 giây, tách 2
+  hàng ở dấu phẩy hoặc ranh giới từ. Bài nhanh: ở Final Chorus tách cả câu dài hơn 5 từ — đó là
+  chỗ cắt nhanh nhất của bài.
+- Khi tách: chia đúng từ theo thứ tự, không lặp từ; nửa sau phải là khung KHÁC (Subject khác hoặc
+  Shot Size khác).
+- Hàng không lời chỉ ở chỗ thật sự không có giọng: intro trước câu đầu, gian tấu giữa hai câu khi
+  khoảng lặng ≥ 1 giây, outro sau câu cuối; mỗi hàng 2–6 giây. Gian tấu từ 8 giây trở lên là
+  Section riêng "Instrumental N", phủ bằng nhiều hàng ≤ 8 giây (cận người đang solo → nhạc cụ →
+  toàn cảnh). Không chèn hàng không lời vào chỗ hai câu hát sát nhau (khoảng lặng < 1 giây).
+
+CÔNG THỨC PHỦ CẢNH (phần việc chính của luồng A):
+- Trong mỗi Section, luân phiên 6 loại khung sau theo THỨ TỰ ƯU TIÊN 3 → 1 → 4 → 6 → 2 → 5, lấy
+  được bao nhiêu loại thì tùy số hàng của Section (Section dài đủ cả 6; Section ngắn chỉ vài loại
+  đầu). Muốn thêm một loại khung mà không đủ hàng thì TÁCH một câu dài thành 2 hàng, mỗi nửa một
+  góc khác.
+  1) WS hoặc EWS cả ban nhạc trên sân khấu (toàn);
+  2) MS một nhóm 2–3 người đang chơi (trung);
+  3) CU hoặc MCU một nhạc công đang chơi (cận) — chọn người có tiếng nghe rõ nhất ở Section đó;
+  4) Macro hoặc ECU đúng nhạc cụ đang dẫn Section (phím đàn, dây guitar, mặt trống, cần kéo);
+  5) EWS toàn cảnh sân khấu trong không gian (thấy cả khán phòng hoặc cả chiều cao sân khấu);
+  6) khán giả phản ứng — CU một khuôn mặt hoặc WS hàng ghế, Location "Audience rows".
+- Nhạc cụ phải ĐÚNG LÚC: chỉ cận hay Macro nhạc cụ nào thật sự đang nghe thấy ở giây đó.
+- Thứ tự luân phiên theo Energy, để một Section không lặp một cỡ cảnh:
+  Energy 1–3: mở bằng Macro hoặc CU chi tiết, ít người; kết Section bằng một WS.
+  Energy 4–6: MS nhóm → CU nhạc công → WS cả band, lặp vòng đó.
+  Energy 7–8: mở bằng WS hoặc EWS cả band → CU nhạc công theo nhịp → chèn một hàng khán giả.
+  Energy 9–10: EWS toàn cảnh, khán giả và CU nhạc công dồn dập; Macro nhiều nhất một hàng.
+- Không lặp cùng (Subject + Shot Size) ở hai hàng liền nhau; cùng một Shot Size không quá 2 lần
+  trong một Section. Chorus hát lại không lặp lại thứ tự khung của Chorus trước.
+- Ca sĩ xuất hiện nhiều nhất ở 1/5 số hàng, và luôn theo luật Subject ở trên.
+
+QUY TẮC CẢM XÚC:
+- Mỗi Section có MỘT cảm xúc gốc (từ bước 2); nếu lời rẽ nghĩa giữa Section (vd câu mở bằng
+  "Pero…", "Nhưng…"), cảm xúc gốc đổi MỘT lần tại câu đó và giữ đến hết Section. Từng hàng đổi
+  BIỂU HIỆN (mắt, tay, hơi thở, hướng nhìn, lực đánh đàn) theo nghĩa của chính câu đang hát.
+- Độ mạnh của biểu cảm theo Energy. Khuôn Verse kìm nén → Pre-Chorus dồn lên → Chorus bung ra →
+  Bridge vỡ hoặc lắng → Final Chorus đỉnh chỉ là mặc định khi nghĩa câu không nói khác. Ballad,
+  thánh ca: "bung" là nước mắt, nhẹ nhõm, biết ơn — không gào.
+- Nhạc công và khán giả phản chiếu cảm xúc gốc đang áp dụng tại hàng đó: nhạc công qua cách chơi
+  (lực, biên độ tay, người gập xuống hay mở ra), khán giả qua mắt, tay và thế người.
+- Cùng một câu hát lại ở các Chorus phải có Emotion khác, đi tiếp hành trình (lần đầu ngỡ ngàng,
+  lần sau tin, lần cuối trọn vẹn).
+
+QUY TẮC MÁY:
+- Chỉ dùng giá trị trong danh sách Camera Movement.
+- Theo Energy: 1–3 locked, slow push-in; 4–6 dolly left, dolly right, pull-out, rack focus; 7–8
+  orbit, tracking, crane up; 9–10 crane up, crane down, tracking, handheld.
+- Macro và ECU: locked hoặc rack focus (giữ nét vào chi tiết). Hàng khán giả: locked, slow push-in,
+  dolly left hoặc dolly right — không orbit, không handheld.
+- Bài chậm hay nhanh xét theo thể loại và mật độ lời, không chỉ theo số BPM (máy đo hay nhân đôi
+  hoặc chia đôi). Ballad, thánh ca, nhạc thờ phượng luôn là bài chậm: bỏ handheld và tracking khỏi
+  bảng trên; Energy 7–10 dùng crane up, crane down hoặc orbit.
+- WS và EWS cho khung cả band, toàn cảnh sân khấu, hàng ghế khán giả. MS cho nhóm 2–3 người. CU và
+  MCU cho một nhạc công. Macro và ECU cho nhạc cụ, bàn tay, chi tiết đạo cụ.
+
+QUY TẮC BỐI CẢNH:
+- Live concert: nơi biểu diễn là Location chính, nhưng mỗi khu NHÌN KHÁC nhau trong cùng khán
+  phòng (hàng ghế khán giả, ban công, hậu trường) phải là một Location riêng — đó là cách duy nhất
+  để chúng có ảnh bối cảnh riêng thay vì dùng lại ảnh sân khấu. Ánh sáng đổi theo cảm xúc thì ghi
+  trong Action ("stage wash shifts to warm gold") — KHÔNG đổi Location.
+- MV kể chuyện hoặc kết hợp: thêm tối đa 2 Location ngoài khán phòng, lấy từ hình ảnh trong lời; ở
+  đó Subject chỉ là Singer (theo luật Singer ở trên) hoặc một vật.
+- Tool luôn cắt clip khi đổi Location, nên các hàng cùng một Location phải nằm liền nhau: mỗi lần
+  sang khán giả hoặc ban công thì gom 1–2 hàng liền nhau rồi quay lại sân khấu; trong một Section
+  đổi Location nhiều nhất hai lần.
+
+XUẤT KẾT QUẢ:
+1. Tóm tắt ngắn: BPM, nhịp, cấu trúc + năng lượng + nhạc cụ dẫn từng đoạn (ghi rõ đo hay ước
+   lượng), hành trình cảm xúc, danh sách Subject và Location.
+2. ĐÚNG MỘT khối \`\`\`csv … \`\`\` với header ở trên (dấu phẩy phân cách; bọc "…" mọi ô có dấu
+   phẩy — luôn bọc Lyric, Emotion, Action khi có chữ; ô trống để trống). Tạo luôn file .csv để
+   tải về.
+3. VALIDATION — dùng Python kiểm, sai thì sửa trước khi xuất:
+   - tổng thời lượng = TOTAL_DURATION; số chỗ hở = 0; số chỗ chồng = 0; số hàng dài quá 8 giây = 0;
+   - Lip Sync = NO ở 100% số hàng; số hàng là ca sĩ hát vào ống kính = 0 (mọi hàng có Singer đều
+     có Angle rear, profile hoặc overhead, hoặc chỉ thấy tay / bóng / dáng);
+   - số hàng Location trống = 0; mỗi tên Location viết giống hệt ở mọi hàng của nó;
+   - Subject chỉ nằm trong danh sách cho phép; Shot Size chỉ là EWS, WS, MS, MCU, CU, ECU, Macro;
+   - mọi hàng Subject = Band có Action gọi tên ít nhất 2 nhạc công;
+   - mỗi hàng CÓ Lyric đều có Vocal Delivery; mỗi hàng KHÔNG Lyric có Vocal Delivery trống;
+   - mỗi Section luân phiên cỡ cảnh theo CÔNG THỨC PHỦ CẢNH (không lặp Subject + Shot Size ở hai
+     hàng liền nhau);
+   - nối cột Lyric theo thứ tự, bỏ dấu câu, so từng từ với LỜI CHÍNH THỨC (sau khi đổi số trong đó
+     thành chữ như ở cột Lyric): số từ thừa = 0, số từ thiếu = 0.
+Ưu tiên: PHỦ KÍN BÀI → LỜI ĐÚNG → THỨ TỰ → CẢM XÚC → BỐI CẢNH, MÁY → ĐẸP.`;
+
 // First stage of the conversational director: turn a bare idea / logline / lyrics into a
 // readable KỊCH BẢN (treatment) a human reviews and edits before any JSON is built. Plain
 // prose, no JSON — the blueprint stage reuses the master prompt to turn this into JSON.
@@ -137,6 +383,27 @@ export function parseBlueprint(input) {
     } catch {}
   }
   throw new Error('Không đọc được JSON blueprint. Dán đúng khối JSON từ master prompt.');
+}
+
+// Extracts the music-analysis object from the LLM's reply (a ```json fence or a bare object),
+// the same tolerance as parseBlueprint but with its own error message.
+export function parseMusicAnalysis(input) {
+  if (input && typeof input === 'object') return input;
+  const text = String(input || '');
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates = [];
+  if (fence) candidates.push(fence[1]);
+  const first = text.indexOf('{'),
+    last = text.lastIndexOf('}');
+  if (first !== -1 && last > first) candidates.push(text.slice(first, last + 1));
+  candidates.push(text);
+  for (const c of candidates) {
+    try {
+      const o = JSON.parse(c);
+      if (o && typeof o === 'object' && !Array.isArray(o)) return o;
+    } catch {}
+  }
+  throw new Error('Không đọc được JSON thông số bài hát từ kết quả phân tích.');
 }
 
 const str = (v, n = 20000) => String(v ?? '').slice(0, n);
