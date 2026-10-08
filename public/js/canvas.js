@@ -388,6 +388,9 @@ function setFullscreen(full, persist = true) {
   $('#fullscreenToggle').setAttribute('aria-expanded', String(full));
   if (full) setToolsOpen(false);
   if (persist) try { localStorage.setItem(FULL_PREF_KEY, full ? '1' : '0'); } catch {}
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (store.state?.nodes?.length) $('#fitCanvas')?.click();
+  }));
 }
 let startFull = true;
 try { const v = localStorage.getItem(FULL_PREF_KEY); if (v !== null) startFull = v === '1'; } catch {}
