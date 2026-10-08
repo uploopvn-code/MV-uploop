@@ -381,6 +381,23 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   deleteEdge(selectedEdge);
 });
+const TOOLS_PREF_KEY = 'mv-canvas-tools-open';
+const graphArea = $('#graphArea');
+const graphSide = $('#graphSide');
+const toolsToggle = $('#toolsToggle');
+const toolsClose = $('#toolsClose');
+function setToolsOpen(open, persist = true) {
+  if (!graphArea?.classList || !graphSide || !toolsToggle?.setAttribute) return;
+  graphArea.classList.toggle('tools-open', open);
+  toolsToggle.setAttribute('aria-expanded', String(open));
+  toolsToggle.classList?.toggle?.('active', open);
+  if (persist) {
+    try {
+      localStorage.setItem(TOOLS_PREF_KEY, open ? '1' : '0');
+    } catch {}
+  }
+}
+
 const FULL_PREF_KEY = 'mv-canvas-full';
 function setFullscreen(full, persist = true) {
   $('#graphArea').classList.toggle('full', full);
@@ -404,22 +421,6 @@ document.addEventListener('keydown', e => {
   }
 });
 
-const TOOLS_PREF_KEY = 'mv-canvas-tools-open';
-const graphArea = $('#graphArea');
-const graphSide = $('#graphSide');
-const toolsToggle = $('#toolsToggle');
-const toolsClose = $('#toolsClose');
-function setToolsOpen(open, persist = true) {
-  if (!graphArea?.classList || !graphSide || !toolsToggle?.setAttribute) return;
-  graphArea.classList.toggle('tools-open', open);
-  toolsToggle.setAttribute('aria-expanded', String(open));
-  toolsToggle.classList?.toggle?.('active', open);
-  if (persist) {
-    try {
-      localStorage.setItem(TOOLS_PREF_KEY, open ? '1' : '0');
-    } catch {}
-  }
-}
 let toolsOpen = false;
 try {
   toolsOpen = localStorage.getItem(TOOLS_PREF_KEY) === '1';
