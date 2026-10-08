@@ -263,7 +263,7 @@ export function renderGraph() {
   const otherBusy = run?.status === 'running' || store.state.autoVideoRun?.status === 'running';
   $('#autoImageStart').disabled = otherBusy || ir?.status === 'running';
   const vr = store.state.autoVideoRun;
-  $('#autoVideoStatus').textContent = vr
+  const vrLabel = vr
     ? '🎬 Video: ' +
       ({
         running: 'đang tạo song song',
@@ -273,8 +273,12 @@ export function renderGraph() {
       }[vr.status] || vr.status) +
       ' · ' +
       vr.message
-    : 'Tự động tạo video cho mọi node đã sẵn ảnh, chạy song song. Mỗi phiên bản thành một node video riêng.';
+    : '';
+  $('#autoVideoStatus').textContent = vrLabel ||
+    'Tự động tạo video cho mọi node đã sẵn ảnh, chạy song song. Mỗi phiên bản thành một node video riêng.';
+  if ($('#autoVideoZoneStatus')) $('#autoVideoZoneStatus').textContent = vrLabel;
   $('#autoVideoStart').disabled = run?.status === 'running' || vr?.status === 'running';
+  if ($('#autoVideoZoneStart')) $('#autoVideoZoneStart').disabled = otherBusy || vr?.status === 'running';
   $('#autoVideoStop').disabled = !(vr?.status === 'running' || activeJobs('video'));
   // Offer a one-click retry whenever some video jobs failed.
   const lastVideoJob = new Map();
