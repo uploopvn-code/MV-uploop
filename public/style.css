@@ -1797,7 +1797,20 @@ h4 {
 .wires path { stroke: #759650; stroke-width: 1.6; opacity: .62; }
 .wires .wire-hit:hover + .wire,
 .wires .wire.selected { opacity: 1; }
-.timeline-strip { margin: 10px 0 0; border-color: #303641; border-radius: 14px; background: #15191f; }
+.timeline-strip { margin: 10px 0 0; border: 1px solid #303641; border-radius: 14px; background: #15191f; padding: 14px 16px 10px; overflow: hidden; }
+.lane-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.lane-name { flex-shrink: 0; width: 110px; font-size: 11px; font-weight: 600; color: #b4b9c4; padding-top: 4px; line-height: 1.3; }
+.lane-name small { display: block; font-weight: 400; color: var(--muted); font-size: 10px; margin-top: 2px; }
+.lane { position: relative; flex: 1; min-height: 28px; border-radius: 6px; background: #1a1f28; overflow: hidden; }
+.lane.a { background: #1c2418; }
+.lane.b { background: #1c1d28; }
+.blk { position: absolute; height: 22px; border: 0; border-radius: 3px; background: #3a5230; color: #c5dbb6; font-size: 10px; line-height: 22px; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; box-sizing: border-box; text-align: left; }
+.blk:hover { background: #4e6a3e; z-index: 1; }
+.lane.b .blk { background: #3a3560; color: #c5bdf0; }
+.lane.b .blk:hover { background: #4e4680; }
+.blk.over { border: 1px solid #e6be72; background: rgba(58, 82, 48, .75); z-index: 2; }
+.lane.b .blk.over { background: rgba(58, 53, 96, .75); }
+.lane-scale { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); padding-top: 4px; border-top: 1px solid #252a33; margin-top: 4px; }
 #connectHint { margin: 7px 4px 0; font-size: 10px; }
 .graph-area.full {
   top: 0;
@@ -2085,4 +2098,5 @@ h4 {
 .wires .wire-hit:hover + .wire,
 .wires .wire.selected,
 .wires .wire.focus { stroke: #c5ed89; stroke-width: 2.5; opacity: 1; }
+.wires .wire.hover-focus { stroke: #c5ed89; stroke-width: 2.2; opacity: .85; }
 .graph-node:hover ~ .wires .wire { opacity: .58; }
