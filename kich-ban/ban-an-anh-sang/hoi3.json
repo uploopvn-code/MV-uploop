@@ -1,0 +1,1139 @@
+{
+  "project": {
+    "title": "Bản án của ánh sáng — Hồi 3: Vết nứt thời gian & bản án song song",
+    "theme": "film"
+  },
+  "styles": [
+    {
+      "key": "style_hang",
+      "name": "Hồi 1 – Hang Karst",
+      "prompt": "Cinematic hard sci-fi, 2.39:1 anamorphic widescreen, Cooke Anamorphic /i look with Black Pro-Mist 1/4 diffusion, emerald moss green and dark limestone grey contrasted with warp plasma violet glow, volumetric god rays from a sinkhole cutting through cold machine haze, blue anamorphic streak flares, elliptical bokeh, organic 35mm film grain, dust motes in air, smooth linear camera movement only, photorealistic, fictional characters only, no on-screen text."
+    },
+    {
+      "key": "style_kyuc",
+      "name": "Hồi 2 – Miền ký ức 2026",
+      "prompt": "Cinematic poetic realism, 2.39:1 anamorphic widescreen, Black Pro-Mist 1/4, honey-amber 3200K golden hour light, silver-grey morning mist over deep teal bay water, warm nostalgic fragile mood, elliptical bokeh, gentle film grain, slow smooth camera movement, photorealistic, fictional characters only, no on-screen text."
+    },
+    {
+      "key": "style_deep",
+      "name": "Hồi 3 – Không gian sâu",
+      "prompt": "Cinematic deep-space drama, 2.39:1 anamorphic widescreen, Doppler-shift red emergency lighting against absolute vacuum black, gravitational lensing distortion with blinding white highlights, cold cyan HUD glow, claustrophobic cabin, subtle motion blur, controlled smooth movement, photorealistic, fictional characters only, no on-screen text."
+    },
+    {
+      "key": "style_2085",
+      "name": "Hồi 4 – Trái Đất 2085",
+      "prompt": "Cinematic solarpunk drama, 2.39:1 anamorphic widescreen, pearl white and bio-concrete grey palette, pale late-autumn golden sunset, floating eco-city on a limestone karst bay, green rooftops and solar sails, quiet displaced melancholy warming into resolve, elliptical bokeh, soft film grain, slow smooth movement, photorealistic, fictional characters only, no on-screen text."
+    }
+  ],
+  "audio": [
+    {
+      "key": "aud_hang",
+      "name": "Âm hang động và cỗ máy",
+      "prompt": "Dripping water in a huge cavern, low superconducting electromagnetic hum, deep bass vibration, distant echo, amplified mechanical clock ticking, a faint dan bau and low cello pad rising slowly. No lyrics, no extra voices."
+    },
+    {
+      "key": "aud_vinh",
+      "name": "Âm vịnh chiều 2026",
+      "prompt": "Soft wind, bamboo wind chimes, water lapping against a wooden pier, distant oar strokes, a thin bamboo flute melody, intimate warm room tone. No lyrics, no extra voices."
+    },
+    {
+      "key": "aud_tau",
+      "name": "Âm cabin tàu",
+      "prompt": "Dull air-recycler hum, metallic creaks of a stressed hull, tense low drone, rhythmic electronic alarms in emergency moments, then heavy silence with a single heartbeat and the ticking of a mechanical watch. No lyrics."
+    },
+    {
+      "key": "aud_phong",
+      "name": "Âm phóng tàu và warp",
+      "prompt": "Rising electromagnetic resonance swelling to a crescendo, deep sub-bass launch rumble through structure, a calm synthetic countdown layer, then a clean tonal shock as the warp bubble forms. No lyrics."
+    },
+    {
+      "key": "aud_2085",
+      "name": "Âm đô thị nổi 2085",
+      "prompt": "Gentle lapping of water against floating platforms, soft electric boat hum, distant children's voices, wind through solar sails, a slow dan bau and cello theme with warm resolve, mechanical watch ticking. No lyrics, no extra voices."
+    }
+  ],
+  "cameras": [
+    {
+      "key": "cam_fpv_dive",
+      "name": "FPV lao dốc",
+      "config": "Aerial FPV drone, straight vertical plunge from sky into a sinkhole, fast but perfectly stable linear descent, 2.39:1 anamorphic, wide field of view."
+    },
+    {
+      "key": "cam_wide_glide",
+      "name": "Toàn cảnh lướt chậm",
+      "config": "Extreme wide shot, slow controlled forward glide, 2.39:1 anamorphic, low smooth drone or dolly motion, locked horizon."
+    },
+    {
+      "key": "cam_track_follow",
+      "name": "Tracking theo sau",
+      "config": "Medium shot tracking steadily behind a walking subject, eye level, smooth linear dolly, 2.39:1 anamorphic."
+    },
+    {
+      "key": "cam_tilt_reveal",
+      "name": "Ngước lên mở cảnh",
+      "config": "Wide tilt-up reveal, slow controlled vertical tilt from foreground to a towering structure, eye level base, 2.39:1 anamorphic."
+    },
+    {
+      "key": "cam_macro_orbit",
+      "name": "Macro xoay nhẹ",
+      "config": "Macro close-up, very slow orbit around the subject, shallow depth of field, anamorphic elliptical bokeh."
+    },
+    {
+      "key": "cam_hologram",
+      "name": "Trượt ngang quanh hologram",
+      "config": "Medium shot, slow lateral slide around a glowing 3D holographic display, shallow focus, cool light spill on the actor, smooth linear motion."
+    },
+    {
+      "key": "cam_mcu_dolly",
+      "name": "Trung cận dolly in",
+      "config": "Medium close-up, slow smooth dolly in, eye level, shallow depth of field, hold final frame."
+    },
+    {
+      "key": "cam_wide_static",
+      "name": "Toàn cảnh cố định",
+      "config": "Wide shot, locked-off tripod, very slow subtle push-in, symmetrical composition."
+    },
+    {
+      "key": "cam_ecu_push",
+      "name": "Cận cực đại push in",
+      "config": "Extreme close-up, extremely slow push-in to the eyes, shallow focus, steady."
+    },
+    {
+      "key": "cam_intercut_track",
+      "name": "Montage xen kẽ tuyến tính",
+      "config": "Parallel-montage intercut between a locked wide and a slow linear tracking close detail, every move smooth and linear, no whip pans."
+    },
+    {
+      "key": "cam_mcu_insert",
+      "name": "Insert rồi trung cận",
+      "config": "Two beats: a macro insert detail with a slow slide, then a medium close-up with a slow dolly in, smooth linear motion."
+    },
+    {
+      "key": "cam_two_shot_track",
+      "name": "Trung cảnh hai người, tracking ngang",
+      "config": "Medium two-shot, slow lateral tracking alongside the subjects, eye level."
+    },
+    {
+      "key": "cam_reentry",
+      "name": "Xuyên khí quyển",
+      "config": "Wide tracking of a descending capsule, slow controlled follow through cloud and plasma, stable linear motion, 2.39:1 anamorphic."
+    }
+  ],
+  "assets": [
+    {
+      "key": "tien",
+      "role": "character",
+      "name": "Tiến",
+      "code": "NV1",
+      "identity_label": "the long-haired physicist",
+      "back_view": "dark slightly long hair brushing the nape, broad shoulders under the garment worn in the current scene",
+      "physical_anchors": [
+        "olive-green canvas engineer parka",
+        "slightly long swept-back dark hair",
+        "light stubble",
+        "sharp intellectual gaze",
+        "weathered hands"
+      ],
+      "voice_profile": {
+        "gender": "male",
+        "age_sound": "mid-30s",
+        "timbre": "low, measured baritone",
+        "accent": "Vietnamese-accented English",
+        "pacing": "precise and lecture-like, stops mid-sentence when something turns personal",
+        "emotional_baseline": "controlled, suppressing fear"
+      },
+      "prompt": "Character model sheet turnaround of an original fictional 35-year-old Vietnamese man, quantum metric physicist and spaceship captain, slightly long swept-back dark hair, light stubble, sharp intelligent steady gaze, rugged handsome features, olive-green canvas engineer parka, portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling any celebrity or public figure; any resemblance is purely coincidental."
+    },
+    {
+      "key": "bemai",
+      "role": "character",
+      "name": "Bé Mai",
+      "code": "NV2",
+      "identity_label": "the ponytailed little girl",
+      "back_view": "dark hair tied in a high ponytail, small shoulders in a pale cotton dress",
+      "physical_anchors": [
+        "high ponytail",
+        "large round eyes",
+        "small distinct beauty-mark mole under the left outer eye corner",
+        "oversized vintage gold-plated leather-strap watch on a thin wrist"
+      ],
+      "voice_profile": {
+        "gender": "female",
+        "age_sound": "8 years old",
+        "timbre": "light, clear child voice",
+        "accent": "Vietnamese-accented English",
+        "pacing": "direct, short questions",
+        "emotional_baseline": "innocent but piercingly honest"
+      },
+      "prompt": "Character model sheet turnaround of an original fictional eight-year-old Vietnamese girl, high ponytail, large round innocent eyes, a small distinct beauty-mark mole under the left outer eye corner, pale cotton dress, an oversized vintage gold-plated leather-strap watch on her thin wrist, portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling anyone; any resemblance is purely coincidental."
+    },
+    {
+      "key": "maitruongthanh",
+      "role": "character",
+      "name": "Mai trưởng thành",
+      "code": "NV5",
+      "identity_label": "the young woman with the eye mole",
+      "back_view": "long straight black hair over the shoulders of a traditional white ao dai",
+      "physical_anchors": [
+        "long straight black hair",
+        "oval gentle face",
+        "small distinct beauty-mark mole under the left outer eye corner",
+        "traditional Vietnamese ao dai"
+      ],
+      "voice_profile": {
+        "gender": "female",
+        "age_sound": "20s to 30s",
+        "timbre": "clear, warm, a touch of restraint",
+        "accent": "Vietnamese-accented English",
+        "pacing": "measured, holds back",
+        "emotional_baseline": "longing under composure"
+      },
+      "prompt": "Character model sheet turnaround of an original fictional Vietnamese woman in her late twenties, long straight black hair, oval gentle face, a small distinct beauty-mark mole under the left outer eye corner (matching the little girl), wearing a traditional white ao dai, portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling anyone; any resemblance is purely coincidental."
+    },
+    {
+      "key": "cubamai",
+      "role": "character",
+      "name": "Cụ bà Mai",
+      "code": "NV3",
+      "identity_label": "the silver-haired elderly woman",
+      "back_view": "silver-white hair in a low neat bun, narrow upright shoulders in a soft grey linen tunic",
+      "physical_anchors": [
+        "silver-white hair in a low bun",
+        "deep gentle wrinkles",
+        "small distinct beauty-mark mole under the left outer eye corner",
+        "old worn gold-plated watch with a faded leather strap",
+        "soft grey linen tunic"
+      ],
+      "voice_profile": {
+        "gender": "female",
+        "age_sound": "late 60s",
+        "timbre": "soft, slightly husky",
+        "accent": "Vietnamese-accented English",
+        "pacing": "slow, few words, formal distance",
+        "emotional_baseline": "calm surface over buried anger, finally softening"
+      },
+      "prompt": "Character model sheet turnaround of an original fictional Vietnamese woman in her late sixties, silver-white hair in a low neat bun, dignified gentle wrinkled face, a small distinct beauty-mark mole under the left outer eye corner (matching the little girl), soft grey linen tunic, a worn vintage gold-plated leather-strap watch on her wrist, portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling anyone; any resemblance is purely coincidental."
+    },
+    {
+      "key": "aria",
+      "role": "character",
+      "name": "A.R.I.A",
+      "code": "NV4",
+      "identity_label": "the cyan light core",
+      "back_view": "rear housing of a brushed-metal interface core with a bundle of cyan fibre cables",
+      "physical_anchors": [
+        "floating brushed-metal interface core",
+        "pulsing cyan light ring",
+        "mounted on the cockpit console"
+      ],
+      "voice_profile": {
+        "gender": "neutral female",
+        "age_sound": "ageless synthetic",
+        "timbre": "flat, clean, cool",
+        "accent": "neutral international English",
+        "pacing": "even, numeric, no filler, one half-beat pause only once",
+        "emotional_baseline": "cold on the surface, quietly protective"
+      },
+      "prompt": "Concept model sheet of a ship AI interface: a compact brushed-metal core with a pulsing cyan light ring mounted on a spaceship cockpit console, front, side and back views on one baseline, solid gray background, studio lighting, consistent design. No human features. Fictional prop design."
+    },
+    {
+      "key": "sc_hang",
+      "role": "scene",
+      "name": "Xưởng ngầm hang karst",
+      "prompt": "Gigantic prehistoric karst cavern the size of a cathedral, a sinkhole in the ceiling letting a shaft of god rays fall through cold haze, an emerald subterranean river below, ancient moss-covered stalactites and prehistoric ferns, a high-tech launch facility with two glowing violet Metric Toroid rings and the ship Chronos-1 suspended between them, a steel bridge over the river, a metal table of optical atomic clocks; keep the river, bridge and toroid positions consistent across angles."
+    },
+    {
+      "key": "sc_caugo",
+      "role": "scene",
+      "name": "Cầu gỗ nhà sàn 2026",
+      "prompt": "A rustic wooden stilt house at the foot of a limestone cliff, a small wooden pier extending onto still mist-covered bay water, amber sunset reflected in the water, karst peaks emerging from silver mist, bamboo wind chimes; keep the stilt house camera-left and the open bay camera-right across angles.",
+      "conversation": {
+        "place": "the end of the wooden pier by the stilt house at golden sunset",
+        "two_shot": "Two figures sitting side by side at the edge of the pier, feet near the water, @NV1 on the left and @NV2 on the right, karst peaks and amber water behind them",
+        "left": {
+          "anchor": "@NV1 sitting on the left of the pier edge",
+          "background": "misty limestone peaks and glowing amber water, wooden posts of the pier",
+          "light": "warm 3200K backlight with soft rim light on the shoulders"
+        },
+        "right": {
+          "anchor": "@NV2 sitting on the right of the pier edge, feet dangling toward the water",
+          "background": "the stilt house and bamboo chimes, silver mist over the bay",
+          "light": "warm 3200K backlight with a soft golden rim"
+        }
+      }
+    },
+    {
+      "key": "sc_lang2026",
+      "role": "scene",
+      "name": "Nhà sàn & sân vườn 2026",
+      "prompt": "The interior and front yard of the rustic stilt house by the karst bay: a wooden room with a simple ancestral altar holding a framed photo, a yard of packed earth under drizzle, a leaf-roofed porch, lanterns; warm practical light inside, silver drizzle outside. Period-neutral rural Vietnam, timeless."
+    },
+    {
+      "key": "sc_orbit",
+      "role": "scene",
+      "name": "Không gian và warp",
+      "prompt": "Low Earth orbit and deep space: the curved blue Earth below, the black starfield, the Chronos-1 ship with two spinning violet toroidal rings, a forming warp bubble that bends the starlight into a bright blue-white ring by relativistic aberration and gravitational lensing; also serviceable for a fiery atmospheric re-entry plume through storm clouds over a karst bay."
+    },
+    {
+      "key": "sc_cabin",
+      "role": "scene",
+      "name": "Buồng lái Chronos-1",
+      "prompt": "A compact futuristic spaceship cockpit lit by cold cyan LEDs that can flip to flashing red emergency light, a curved canopy showing the black void and stars, a console with a floating cyan ring interface core, loose instruments and a small family photo that can float in zero gravity; keep the console camera-right and the canopy forward across angles.",
+      "conversation": {
+        "place": "the cockpit of Chronos-1 beside the console holding the interface core",
+        "two_shot": "@NV1 on the left floating near the console and the cyan interface core @NV4 on the right of frame, canopy and stars behind",
+        "left": {
+          "anchor": "@NV1 on the left of frame, strapped loosely at the console, hands on the emergency control",
+          "background": "the curved canopy with black void and drifting stars, red warning lights",
+          "light": "flashing crimson emergency light with a cold cyan HUD glow on the face"
+        },
+        "right": {
+          "anchor": "@NV4 the cyan interface core on the right of frame, mounted on the console",
+          "background": "dense screens of falling graphs and red error text",
+          "light": "pulsing cyan ring light, red flicker from the alarms"
+        }
+      }
+    },
+    {
+      "key": "sc_2085",
+      "role": "scene",
+      "name": "Đô thị nổi 2085",
+      "prompt": "Solarpunk Neo-Vietnam: a floating eco-city on a limestone karst bay, pearl-white and bio-concrete grey platforms curving into the ancient karst towers, green living rooftops, solar sails, small silent maglev electric boats, an unassuming warm ground beacon lamp lit on one platform; pale late-autumn gold sunset and soft mist; keep the karst towers and the beacon platform consistent across angles."
+    },
+    {
+      "key": "sc_nhabamai",
+      "role": "scene",
+      "name": "Cửa nhà bà Mai 2085",
+      "prompt": "A modest wooden house door on a floating platform, a woven bamboo screen, a vintage wall clock inside, warm lamp light spilling onto the threshold, pearl evening sky and karst peaks beyond; keep the doorway camera-right and the open platform camera-left across angles.",
+      "conversation": {
+        "place": "the threshold of a modest floating house at dusk",
+        "two_shot": "@NV1 on the left outside the threshold and @NV3 on the right in the doorway, warm lamp light between them, karst peaks behind",
+        "left": {
+          "anchor": "@NV1 on the left of frame, standing outside the doorway",
+          "background": "pearl dusk sky, floating platforms and karst peaks in soft haze",
+          "light": "soft pale pearl dusk light with a cool edge"
+        },
+        "right": {
+          "anchor": "@NV3 on the right of frame, standing in the doorway",
+          "background": "a warm interior with a bamboo screen and a vintage wall clock",
+          "light": "warm lamp light from behind, gentle front fill"
+        }
+      }
+    },
+    {
+      "key": "sc_truong",
+      "role": "scene",
+      "name": "Cửa lớp học nổi",
+      "prompt": "A bright airy corridor of a school floating on a karst bay, bio-concrete walls, a wooden classroom door ajar, children's drawings on the wall, long late-sun beams across the floor; keep the classroom door camera-left and the window wall camera-right across angles.",
+      "conversation": {
+        "place": "the corridor in front of the classroom door at the end of the school day",
+        "two_shot": "@NV1 on the left standing at the door and @NV3 on the right in the corridor, long sun beams on the floor",
+        "left": {
+          "anchor": "@NV1 on the left of frame, standing just beside the classroom door",
+          "background": "the wooden classroom door and a wall of children's drawings",
+          "light": "low golden sun from the window, soft pearl fill"
+        },
+        "right": {
+          "anchor": "@NV3 on the right of frame, standing in the corridor holding a small leather bag",
+          "background": "the long corridor with sun beams and the floating bay through the windows",
+          "light": "low golden sun on one side, soft pearl fill"
+        }
+      }
+    },
+    {
+      "key": "pr_dongho",
+      "role": "prop",
+      "kind": "item",
+      "name": "Đồng hồ Poljot",
+      "prompt": "One worn 1970s Soviet-style gold-plated mechanical wristwatch on a faded brown leather strap, scratched case, a clearly ticking second hand, no printed brand words or logo.",
+      "continuity_note": "Same scratched gold watch across the whole film: oversized on the little girl's wrist, worn and dull on the elderly woman's wrist; its ticking second hand is the film's motif."
+    },
+    {
+      "key": "pr_anhgiadinh",
+      "role": "prop",
+      "kind": "item",
+      "name": "Ảnh gia đình",
+      "prompt": "One small printed family photograph of a father and a little girl sitting on a misty wooden pier at sunset, slightly curled edges, warm faded colours, no text.",
+      "continuity_note": "The same photo drifts weightless in the cabin during the crisis."
+    },
+    {
+      "key": "pr_denhieu",
+      "role": "prop",
+      "kind": "item",
+      "name": "Đèn hiệu mặt đất",
+      "prompt": "One unassuming hand-built ground beacon lamp on a short post: a warm amber light inside a simple weatherproof glass housing with a small solar panel, worn metal base, no text.",
+      "continuity_note": "Kept lit every night on the beacon platform; its warm light reflects in the bay water."
+    },
+    {
+      "key": "pr_tau",
+      "role": "prop",
+      "kind": "item",
+      "name": "Tàu Chronos-1",
+      "prompt": "The starship Chronos-1 as a single object: a sleek titanium-grey central crew hull with minimalist Dong Son geometric engraving, flanked by two large concentric glowing violet Metric Toroid rings mounted fore and aft, an aerodynamic heat-shielded nose, mechanical greebling and weld seams, 3/4 front, side and rear object views on one baseline, neutral gray background, studio lighting, no scenery, no text.",
+      "continuity_note": "Same ship across the film: two violet toroid rings around a grey engraved hull; its nose becomes the scorched return capsule pr_khoang in Act 4."
+    },
+    {
+      "key": "pr_khoang",
+      "role": "prop",
+      "kind": "item",
+      "name": "Khoang hồi quyển",
+      "prompt": "The scorched conical re-entry capsule of Chronos-1 as a single object: a blackened heat-shielded cone with a small Vietnamese flag and faded hull markings, three silver-white nano-parachute mounts, a charred hatch, mechanical detail, front, side and rear object views on one baseline, neutral gray background, studio lighting, no scenery, no text.",
+      "continuity_note": "The capsule is the nose module of pr_tau after re-entry; keep the charred cone and the small flag."
+    },
+    {
+      "key": "pr_donghont",
+      "role": "prop",
+      "kind": "item",
+      "name": "Đồng hồ nguyên tử quang học",
+      "prompt": "A pair of high-precision strontium optical atomic clocks as a single object: polished aluminium casings with a glowing cyan laser-trap vacuum glass chamber, fine instrumentation and cables, front, side and rear object views on one baseline, neutral gray background, studio lighting, no scenery, no text.",
+      "continuity_note": "The lab-grade quantum clocks on the cavern table, visually contrasted with the mechanical Poljot pr_dongho."
+    }
+  ],
+  "wardrobe": [
+    {
+      "key": "wb_tien_linen",
+      "for": "tien",
+      "prompt": "Garment turnaround on an invisible mannequin: a plain off-white linen short-sleeve shirt and loose light cotton trousers, softly worn, neutral gray background, studio lighting, no head, no body, clothing only.",
+      "items": "off-white linen shirt, light cotton trousers"
+    },
+    {
+      "key": "wb_tien_suit",
+      "for": "tien",
+      "prompt": "Garment turnaround on an invisible mannequin: a modern dark grey and white pressure flight suit with a sealed collar ring, subtle minimalist Dong Son geometric engraving on the chest plate and a small Vietnamese flag patch on the left upper arm, neutral gray background, studio lighting, no head, clothing only.",
+      "items": "pressure flight suit, Vietnam flag patch, sealed collar ring"
+    }
+  ],
+  "shots": [
+    {
+      "name": "H3-01 Ngày thứ 540",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_wide_static",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No voice. A thin metallic tink of tools, the monotonous drone of an air recycler.",
+      "videoPrompt": "Interior wide locked shot, @NV1 in the flight suit floating weightless in the cabin, hair and light stubble grown longer, meticulously adjusting a microchip with tweezers, deep-space solitude, cold cyan light, no text. Fictional character, not based on any real person.",
+      "start": 0
+    },
+    {
+      "name": "H3-02 Vết rạn vành Toroid",
+      "duration": 10,
+      "uses": [
+        "sc_orbit",
+        "pr_tau"
+      ],
+      "camera": "cam_macro_orbit",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No voice. A rising high-frequency electrical crackle, xẹt... zzzzt.",
+      "videoPrompt": "Macro slow orbit of a spinning toroidal ring against the black void, a microscopic stress fracture opening on the superconducting alloy and glowing with violent violet electrical arcs, cosmic darkness behind, no text.",
+      "start": 10
+    },
+    {
+      "name": "H3-03 Metric shear bùng nổ",
+      "duration": 10,
+      "uses": [
+        "sc_orbit",
+        "pr_tau"
+      ],
+      "camera": "cam_wide_glide",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "A single dull concussive boom carried through structure, then nothing.",
+      "videoPrompt": "Violent plasma rupture on ring two of Chronos-1, an invisible gravitational shockwave warping the starfield like cracked glass around the ship, the hull shuddering as if about to break, cinematic disaster, no text.",
+      "start": 20
+    },
+    {
+      "name": "H3-04 Cabin báo động đỏ",
+      "duration": 10,
+      "uses": [
+        "sc_cabin",
+        "pr_anhgiadinh"
+      ],
+      "camera": "cam_wide_static",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "Alarm siren wailing: u-o-o-u-o-o; loose objects clatter.",
+      "videoPrompt": "Interior wide of the cockpit flooding with flashing crimson emergency light, loose instruments and the family photo flung drifting, cyan HUD screens flickering red, chaos in zero gravity, no text.",
+      "start": 30
+    },
+    {
+      "name": "H3-05 Lệnh cắt plasma",
+      "duration": 8,
+      "uses": [
+        "wb_tien_suit",
+        "aria",
+        "sc_cabin"
+      ],
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "place": "sc_cabin",
+      "sides": {
+        "left": "tien",
+        "right": "aria"
+      },
+      "setups": [
+        {
+          "framing": "ots_a",
+          "dialogue": "A.R.I.A: \"Metric shear. Gamma twenty-one point four.\"",
+          "audio_delivery": "Flat clean synthetic voice, numbers with no emphasis, alarms beneath.",
+          "action": "@NV4 pulses its cyan ring in rhythm with the words while screens behind fill with collapsing red graphs."
+        },
+        {
+          "framing": "ots_b",
+          "dialogue": "Tiến: \"Cut the plasma on ring two. Now!\"",
+          "audio_delivery": "Breathless, fast, urgent baritone, clipped command.",
+          "action": "@NV1 in the flight suit, blood on his brow, grips the emergency control with both hands under crimson light. Fictional character, not based on any real person."
+        }
+      ],
+      "start": 40
+    },
+    {
+      "name": "H3-06 Trán túa máu",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No voice. Ragged breathing, siren hammering.",
+      "videoPrompt": "Handheld-style medium close-up of @NV1, a cut on his forehead dripping a drifting bead of blood in zero gravity, panic and adrenaline, flashing red light, sweat, photorealistic, no text. Fictional character, not based on any real person.",
+      "start": 48
+    },
+    {
+      "name": "H3-07 Đồ thị sụp đổ",
+      "duration": 10,
+      "uses": [
+        "aria",
+        "sc_cabin"
+      ],
+      "camera": "cam_hologram",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "A.R.I.A: \"Warning. Metric field asymmetry. The local gravity well is collapsing inward.\"",
+      "audio_delivery": "Even synthetic voice over static crackle, no speaker face on screen.",
+      "videoPrompt": "A.R.I.A's synthetic voice (no human mouth on screen). A tactical flight monitor flickering with a critical red error graph, a gravitational-well curve deepening exponentially and a bold readout 'GAMMA 21.4', the cyan core @NV4 pulsing, cabin red, minimal legible text.",
+      "start": 58
+    },
+    {
+      "name": "H3-08 A.R.I.A đặt lựa chọn",
+      "duration": 8,
+      "uses": [
+        "wb_tien_suit",
+        "aria",
+        "sc_cabin"
+      ],
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "place": "sc_cabin",
+      "sides": {
+        "left": "tien",
+        "right": "aria"
+      },
+      "setups": [
+        {
+          "framing": "ots_a",
+          "dialogue": "A.R.I.A: \"Cut the field, we break apart. Hold it, we reach Earth in 2085.\"",
+          "audio_delivery": "Flat synthetic voice, a half-beat pause before the year.",
+          "action": "@NV4 dims its cyan ring slightly while a red counter on the screen behind settles on 2085."
+        },
+        {
+          "framing": "ots_b",
+          "dialogue": "Tiến: \"How old is she then?\"",
+          "audio_delivery": "Very quiet, hoarse, barely above a whisper.",
+          "action": "@NV1 hangs motionless in the red light, hands slipping off the controls, the small family photo drifting past his face. Fictional character, not based on any real person."
+        },
+        {
+          "framing": "ots_a",
+          "dialogue": "A.R.I.A: \"Sixty-eight, by her calendar.\"",
+          "audio_delivery": "Even synthetic voice, a hint of softness on the last words.",
+          "action": "@NV4 pulses once, slowly, cyan light washing across the red cabin."
+        }
+      ],
+      "start": 68
+    },
+    {
+      "name": "H3-09 Mắt phản chiếu năm 2085",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_ecu_push",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No voice. The siren cuts out; only a heavy heartbeat remains.",
+      "videoPrompt": "Extreme close-up, slow push-in on @NV1's terrified iris reflecting a red readout '2085' ticking, tears welling, profound existential shock, no other legible text. Fictional character, not based on any real person.",
+      "start": 76
+    },
+    {
+      "name": "H3-10 Gục giữa hư vô",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "pr_anhgiadinh",
+        "sc_cabin"
+      ],
+      "camera": "cam_wide_glide",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No voice. All sound gone but a slow, heavy heartbeat: thình... thịch.",
+      "videoPrompt": "Slow dolly out from @NV1 floating limp in the centre of the red-lit cockpit, hands adrift, the family photograph of him and the little girl floating weightless before his face, heartbreak, no text. Fictional character, not based on any real person.",
+      "start": 86
+    },
+    {
+      "name": "H3-11 Giọt nước mắt không trọng lực",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_ecu_push",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "The Lament of Light begins: a solo dan bau over mournful low cello.",
+      "videoPrompt": "Extreme macro of a single round tear leaving @NV1's closed eye and becoming a perfect floating liquid sphere in zero gravity, reflecting the cold distant stars through the canopy, cinematic poetry, no text. Fictional character, not based on any real person.",
+      "start": 96
+    },
+    {
+      "name": "H3-12 Giữ trường",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_ecu_push",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "Tiến: \"Hold the field.\"",
+      "audio_delivery": "Almost voiceless, hoarse and flat, each word separated by a breath.",
+      "videoPrompt": "Extreme close-up on @NV1's eyes and mouth, extremely slow push-in, cold cyan glow with a faint red afterglow, the single tear still drifting at frame edge. His mouth articulates every word in perfect lip-sync: \"Hold the field.\" Only @NV1 speaks, no text. Fictional character, not based on any real person.",
+      "start": 106
+    },
+    {
+      "name": "H3-13 Mai 18 tốt nghiệp trong mưa",
+      "duration": 10,
+      "uses": [
+        "maitruongthanh",
+        "sc_lang2026"
+      ],
+      "camera": "cam_wide_static",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Watch ticking over the dan bau, soft drizzle on a leaf roof.",
+      "videoPrompt": "Parallel montage. Wide locked shot of @NV5 in a white ao dai in light drizzle holding a graduation certificate in the stilt-house yard, one empty parent's chair beside her glistening with rain, very slow push-in, no text. Fictional character, not based on any real person.",
+      "start": 116
+    },
+    {
+      "name": "H3-14 Ghế cha bỏ trống",
+      "duration": 10,
+      "uses": [
+        "maitruongthanh",
+        "sc_lang2026",
+        "pr_dongho"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Rain and the relentless tick of the watch.",
+      "videoPrompt": "Medium close-up, slow dolly in on @NV5's face, eyes rimmed red, looking at the empty rain-soaked chair, the gold Poljot on her wrist, restrained grief, no text. Fictional character, not based on any real person.",
+      "start": 126
+    },
+    {
+      "name": "H3-15 Tiến hàn trong băng giá",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_intercut_track",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. A soldering hiss, frost cracking, the oxygen pump breathing.",
+      "videoPrompt": "Parallel montage cut. Slow close tracking on @NV1's gloved hands soldering a joint inside the freezing cabin, his breath fogging, frost on the panels, grim determination, no text. Fictional character, not based on any real person.",
+      "start": 136
+    },
+    {
+      "name": "H3-16 Mai 26 áo cưới thắp nhang",
+      "duration": 10,
+      "uses": [
+        "maitruongthanh",
+        "sc_lang2026"
+      ],
+      "camera": "cam_wide_static",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. A small bell, incense crackle, dan bau aching.",
+      "videoPrompt": "Parallel montage. Wide shot of @NV5 in a red-and-gold wedding ao dai lighting a stick of incense at the wooden ancestral altar that holds her father's framed photo, warm interior light, very slow push-in, no text. Fictional character, not based on any real person.",
+      "start": 146
+    },
+    {
+      "name": "H3-17 Mai 26 ngước nhìn trời vịnh",
+      "duration": 10,
+      "uses": [
+        "maitruongthanh",
+        "sc_lang2026"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Wind, the watch, a swell of strings.",
+      "videoPrompt": "Medium close-up, slow dolly in on @NV5 in the wedding ao dai turning from the altar to gaze up through the open door at the misty bay sky, longing and quiet reproach, no text. Fictional character, not based on any real person.",
+      "start": 156
+    },
+    {
+      "name": "H3-18 Tiến hoa râm ăn lương khô",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Chewing, the air recycler, isolation.",
+      "videoPrompt": "Parallel montage cut. Medium close-up of @NV1, now clean-shaven with a few grey hairs, floating alone and eating a frozen ration bar, staring at nothing, cold cyan light, no text. Fictional character, not based on any real person.",
+      "start": 166
+    },
+    {
+      "name": "H3-19 Mai dạy trẻ bên vịnh",
+      "duration": 10,
+      "uses": [
+        "maitruongthanh",
+        "sc_lang2026",
+        "pr_dongho"
+      ],
+      "camera": "cam_wide_static",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. A child reading aloud faintly, the watch ticking.",
+      "videoPrompt": "Parallel montage. Wide shot of @NV5 as a young teacher patiently guiding a small child's hand over a book in the sunlit stilt-house room, the gold Poljot on her wrist, warm light, very slow push-in, no text. Fictional character, not based on any real person.",
+      "start": 176
+    },
+    {
+      "name": "H3-20 Tiến vá tấm vách tàu",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_intercut_track",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Tools clicking, floating parts tapping the hull.",
+      "videoPrompt": "Parallel montage cut. Slow tracking on @NV1 patching a cracked interior panel, tools and bolts floating around him in zero gravity, exhaustion on his face, cold cyan light, no text. Fictional character, not based on any real person.",
+      "start": 186
+    },
+    {
+      "name": "H3-21 Mai bế con trên cầu",
+      "duration": 10,
+      "uses": [
+        "maitruongthanh",
+        "sc_caugo",
+        "pr_dongho"
+      ],
+      "camera": "cam_wide_static",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Water, a baby's soft coo, the watch.",
+      "videoPrompt": "Parallel montage. Wide shot of @NV5, a little older, standing on the old wooden pier at dusk holding her own baby, the gold Poljot on her wrist, karst peaks in silver mist, very slow push-in, no text. Fictional character, not based on any real person.",
+      "start": 196
+    },
+    {
+      "name": "H3-22 Mai nhìn chiếc đồng hồ",
+      "duration": 10,
+      "uses": [
+        "maitruongthanh",
+        "pr_dongho",
+        "sc_caugo"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The second hand ticking, close and clear.",
+      "videoPrompt": "Medium close-up, slow dolly in on @NV5 turning the gold Poljot on her wrist and gazing at its ticking face, a complicated grief and tenderness, dusk light, no text. Fictional character, not based on any real person.",
+      "start": 206
+    },
+    {
+      "name": "H3-23 Tiến nhìn ảnh gia đình trôi",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "pr_anhgiadinh",
+        "sc_cabin"
+      ],
+      "camera": "cam_macro_orbit",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The hum, the watch, a held breath.",
+      "videoPrompt": "Macro slow orbit of @NV1 watching the family photo drift slowly past his face in the cyan cabin light, reaching out but not quite touching it, no text. Fictional character, not based on any real person.",
+      "start": 216
+    },
+    {
+      "name": "H3-24 Mai thắp đèn hiệu lần đầu",
+      "duration": 10,
+      "uses": [
+        "maitruongthanh",
+        "pr_denhieu",
+        "sc_caugo"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. A match, a small electric hum, the watch ticking.",
+      "videoPrompt": "Medium close-up, slow dolly in on @NV5 lighting a small handmade ground beacon lamp at the end of the pier at dusk, cupping its warm glow against the wind, a vow in her face, no text. Fictional character, not based on any real person.",
+      "start": 226
+    },
+    {
+      "name": "H3-25 Macro đèn hiệu sáng",
+      "duration": 10,
+      "uses": [
+        "pr_denhieu",
+        "sc_caugo"
+      ],
+      "camera": "cam_macro_orbit",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The lamp's faint hum over lapping water.",
+      "videoPrompt": "Macro slow orbit of the humble beacon lamp glowing warm amber on the misty pier at night, its light reflected in the dark bay water, the one small defiant light against the vast dark, shallow focus, no text.",
+      "start": 236
+    },
+    {
+      "name": "H3-26 Tiến đánh dấu ngày",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_macro_orbit",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. A stylus scratch, the air recycler, the watch.",
+      "videoPrompt": "Macro shot of @NV1 scratching one more tally mark into a dense field of marks on a cabin panel, his hand aged a little more, cold cyan light, no text. Fictional character, not based on any real person.",
+      "start": 246
+    },
+    {
+      "name": "H3-27 Mai trung niên bên cửa sổ",
+      "duration": 10,
+      "uses": [
+        "maitruongthanh",
+        "sc_lang2026",
+        "pr_dongho"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Rain on the roof, a clock on the wall, the Poljot.",
+      "videoPrompt": "Parallel montage. Medium close-up, slow dolly in on @NV5, now middle-aged with the first grey in her hair, sitting by a rain-streaked window watching the bay sky, the gold Poljot on her wrist, no text. Fictional character, not based on any real person.",
+      "start": 256
+    },
+    {
+      "name": "H3-28 A.R.I.A nửa đường về",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "aria",
+        "sc_cabin"
+      ],
+      "camera": "cam_hologram",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "A.R.I.A: \"Halfway home. On Earth, forty years have passed.\"",
+      "audio_delivery": "Flat synthetic voice, quiet, almost gentle, no speaker face on screen.",
+      "videoPrompt": "A.R.I.A's synthetic voice (no human mouth on screen). A cabin HUD showing the long return curve half-complete, SHIP and EARTH counters far apart, cyan light, @NV1 in the flight suit small and weary in the background, minimal clean labels, no clutter text. Fictional character, not based on any real person.",
+      "start": 266
+    },
+    {
+      "name": "H3-29 Tiến tỉa râu, bạc thêm",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. A razor's scrape, the hum.",
+      "videoPrompt": "Medium close-up of @NV1 trimming his beard at a small cabin mirror, more grey at his temples now, the toll of the years on his face though his body stays young, cold cyan light, no text. Fictional character, not based on any real person.",
+      "start": 276
+    },
+    {
+      "name": "H3-30 Mai 59 tóc bạc trên cầu cũ",
+      "duration": 10,
+      "uses": [
+        "cubamai",
+        "pr_dongho",
+        "sc_caugo"
+      ],
+      "camera": "cam_wide_static",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Water, a child's small footsteps, the worn watch ticking.",
+      "videoPrompt": "Parallel montage. Wide shot of @NV3 with half-silver hair walking slowly along the same old wooden pier leading a small grandchild by the hand, her fingers turning the faded gold Poljot on her wrist, dusk mist, very slow push-in, no text. Fictional character, not based on any real person.",
+      "start": 286
+    },
+    {
+      "name": "H3-31 Macro Poljot đã ố màu",
+      "duration": 10,
+      "uses": [
+        "pr_dongho",
+        "sc_caugo"
+      ],
+      "camera": "cam_macro_orbit",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The watch ticking, louder now, alone.",
+      "videoPrompt": "Macro slow orbit of the old gold Poljot, its case dulled and strap faded, still ticking on an aged wrinkled wrist on the misty pier, shallow focus, no text.",
+      "start": 296
+    },
+    {
+      "name": "H3-32 Mai 59 ngước nhìn trời",
+      "duration": 10,
+      "uses": [
+        "cubamai",
+        "sc_caugo"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Wind, a child tugging, the dan bau.",
+      "videoPrompt": "Medium close-up, slow dolly in on @NV3 with half-silver hair looking up at the evening sky over the bay, a small grandchild tugging at her hand, decades of waiting in her eyes, no text. Fictional character, not based on any real person.",
+      "start": 306
+    },
+    {
+      "name": "H3-33 Xen kẽ: chờ đợi và sửa chữa",
+      "duration": 10,
+      "uses": [
+        "cubamai",
+        "wb_tien_suit",
+        "sc_caugo",
+        "sc_cabin",
+        "pr_dongho"
+      ],
+      "camera": "cam_intercut_track",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. Rain on the leaf roof cross-fading with the oxygen pump; the tick never stops.",
+      "videoPrompt": "Four-beat parallel montage, smooth linear moves only. Beat 1: locked wide of the misty pier, @NV3 waiting at its end. Beat 2: close tracking on @NV1's hands tightening a joint in the cabin. Beat 3: the pier again in rain, @NV3 holding the worn watch to her chest. Beat 4: close on @NV1's hands finishing the repair. No dialogue, no text. Fictional characters, not based on any real person.",
+      "start": 316
+    },
+    {
+      "name": "H3-34 Giọt mồ hôi trôi",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_macro_orbit",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. A single drop of effort, the hum, the tick.",
+      "videoPrompt": "Macro shot of @NV1 finishing a repair, a bead of sweat lifting off his temple and floating free in zero gravity catching the cyan light, exhaustion and grim relief, no text. Fictional character, not based on any real person.",
+      "start": 326
+    },
+    {
+      "name": "H3-35 Tiến nhìn các vì sao méo",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The lensed hum of warp, the dan bau thin and far.",
+      "videoPrompt": "Medium close-up, slow dolly in on @NV1 gazing through the canopy at the gravitationally lensed ring of stars, gaunt and hollow-eyed, decades of solitude on his face, no text. Fictional character, not based on any real person.",
+      "start": 336
+    },
+    {
+      "name": "H3-36 Ảnh gia đình quăn mép",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "pr_anhgiadinh",
+        "sc_cabin"
+      ],
+      "camera": "cam_macro_orbit",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The watch, a held breath.",
+      "videoPrompt": "Macro slow orbit of the family photograph now curled and faded at the edges, drifting gently by the console in the cyan light, the little girl's face still clear, no text.",
+      "start": 346
+    },
+    {
+      "name": "H3-37 Cụ bà Mai lên dây cót",
+      "duration": 10,
+      "uses": [
+        "cubamai",
+        "pr_dongho",
+        "sc_lang2026"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The tiny ratchet of a winding crown, the watch resuming.",
+      "videoPrompt": "Medium close-up, slow dolly in on @NV3's wrinkled hands carefully winding the old gold Poljot by lamplight, keeping it alive for someone not yet home, tenderness and resolve, no text. Fictional character, not based on any real person.",
+      "start": 356
+    },
+    {
+      "name": "H3-38 Macro lên dây cót",
+      "duration": 10,
+      "uses": [
+        "pr_dongho",
+        "sc_lang2026"
+      ],
+      "camera": "cam_macro_orbit",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The crown clicking, the second hand springing back to life.",
+      "videoPrompt": "Macro slow orbit of wrinkled fingers turning the winding crown of the dulled gold Poljot, the second hand beginning to sweep again, warm lamp light, shallow focus, no text.",
+      "start": 366
+    },
+    {
+      "name": "H3-39 Tiến kiệt sức tựa canopy",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_deep",
+      "audio": "aud_tau",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. A slow exhale, the faint far dan bau.",
+      "videoPrompt": "Medium close-up of @NV1 resting his forehead against the cold canopy glass, the lensed stars beyond, utterly spent after the long years, cyan light, no text. Fictional character, not based on any real person.",
+      "start": 376
+    },
+    {
+      "name": "H3-40 Mai thắp đèn mỗi đêm",
+      "duration": 10,
+      "uses": [
+        "cubamai",
+        "pr_denhieu",
+        "sc_caugo"
+      ],
+      "camera": "cam_wide_static",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The lamp hum, water, a long patient quiet.",
+      "videoPrompt": "Wide locked shot of @NV3, now elderly, lighting the beacon lamp on the pier again at nightfall as she has for decades, her silhouette small beside its warm glow over the dark bay, very slow push-in, no text. Fictional character, not based on any real person.",
+      "start": 386
+    },
+    {
+      "name": "H3-41 Nhắm mắt, quyết tâm về",
+      "duration": 10,
+      "uses": [
+        "wb_tien_suit",
+        "sc_cabin"
+      ],
+      "camera": "cam_ecu_push",
+      "style": "style_deep",
+      "audio": "aud_phong",
+      "dialogue": "Tiến: \"Take us home, A.R.I.A.\"",
+      "audio_delivery": "Low, worn, resolved, barely above a breath.",
+      "videoPrompt": "Extreme close-up, slow push-in on @NV1 opening his eyes with hard resolve, the red glow giving way to a faint warm reflection as the ship begins its turn. His mouth articulates every word in perfect lip-sync: \"Take us home, A.R.I.A.\" Only @NV1 speaks, no text. Fictional character, not based on any real person.",
+      "start": 396
+    },
+    {
+      "name": "H3-42 Con tàu quay đầu về",
+      "duration": 10,
+      "uses": [
+        "sc_orbit",
+        "pr_tau"
+      ],
+      "camera": "cam_wide_glide",
+      "style": "style_deep",
+      "audio": "aud_phong",
+      "dialogue": "",
+      "audio_delivery": "No voice. The warp tone rises with a fragile hope.",
+      "videoPrompt": "Wide shot of Chronos-1 slowly reorienting and re-forming its blue-white warp halo, turning back toward a tiny distant point of light that is the Sun, the lensed starfield sweeping past, smooth linear motion, no text.",
+      "start": 406
+    },
+    {
+      "name": "H3-43 Hướng về Mặt Trời",
+      "duration": 10,
+      "uses": [
+        "sc_orbit",
+        "pr_tau"
+      ],
+      "camera": "cam_wide_glide",
+      "style": "style_deep",
+      "audio": "aud_phong",
+      "dialogue": "",
+      "audio_delivery": "No voice. A rising hopeful swell over the hum.",
+      "videoPrompt": "Wide shot of the warp halo of Chronos-1 steadying onto a course toward the growing pinpoint of the Sun, the lensed stars streaming past, the long road home beginning, smooth linear motion, no text.",
+      "start": 416
+    },
+    {
+      "name": "H3-44 Cụ bà Mai nhìn đèn ngoài vịnh đêm",
+      "duration": 10,
+      "uses": [
+        "cubamai",
+        "pr_denhieu",
+        "sc_caugo",
+        "pr_dongho"
+      ],
+      "camera": "cam_mcu_dolly",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. The lamp hum, a faint hopeful dan bau.",
+      "videoPrompt": "Medium close-up, slow dolly in on @NV3's elderly face lit warm by the beacon lamp, gazing out over the night bay as if she can feel him turning back, the watch ticking on her wrist, no text. Fictional character, not based on any real person.",
+      "start": 426
+    },
+    {
+      "name": "H3-45 Kim giây dẫn Hồi 4",
+      "duration": 10,
+      "uses": [
+        "pr_dongho",
+        "sc_caugo"
+      ],
+      "camera": "cam_ecu_push",
+      "style": "style_kyuc",
+      "audio": "aud_vinh",
+      "dialogue": "",
+      "audio_delivery": "No dialogue. A single clean mechanical tick fills the dark, bridging to Act 4.",
+      "videoPrompt": "Extreme close-up, slow push-in on the ticking second hand of the dulled gold Poljot, the warm beacon light behind it going soft, a long quiet fade feel bridging to Act 4, no text.",
+      "start": 436
+    }
+  ]
+}
