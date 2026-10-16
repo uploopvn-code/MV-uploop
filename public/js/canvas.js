@@ -1149,7 +1149,18 @@ function wiresMarkup(pos, skip = () => false, compactNodes = {}) {
       if (focusEdge)
         flows.push(
           ['wire-flow-glow', 'wire-flow-mid', 'wire-flow']
-            .map(c => '<path class="' + c + '" d="' + d + '"/>')
+            .map(
+              c =>
+                '<path class="' +
+                c +
+                '" data-edge-source="' +
+                esc(e.source) +
+                '" data-edge-target="' +
+                esc(e.target) +
+                '" d="' +
+                d +
+                '"/>',
+            )
             .join(''),
         );
       return (
@@ -1239,6 +1250,27 @@ function repaintWires(pointer) {
   const svg = $('#graphCanvas .wires');
   if (!svg) return;
   document.querySelectorAll('.wire-delete').forEach(el => el.remove());
+  // Kéo một node thì CHỈ dây của chính nó đổi hình (gesture.node di chuyển đúng gesture.id), nên
+  // chỉ đặt lại thuộc tính `d` của những path chạm tới nó. Gán lại cả `innerHTML` buộc trình duyệt
+  // phân tích lại hàng trăm đường SVG mỗi khung hình — với phim dài đó chính là thứ làm giật tay.
+  // Mọi trường hợp khác (nối dây, đổi cấu trúc, đổi focus) vẫn dựng lại đầy đủ như cũ.
+  if (gesture?.type === 'node' && svg.firstChild) {
+    const id = gesture.id;
+    const touching = svg.querySelectorAll(
+      '[data-edge-source="' + id + '"], [data-edge-target="' + id + '"]',
+    );
+    for (const path of touching)
+      path.setAttribute(
+        'd',
+        edgePath(
+          ...wireEnds(
+            { source: path.dataset.edgeSource, target: path.dataset.edgeTarget },
+            currentPositions,
+          ),
+        ),
+      );
+    return;
+  }
   svg.innerHTML = wiresMarkup(currentPositions);
   if (gesture?.type === 'wire' && pointer) {
     const p = currentPositions[gesture.id];
