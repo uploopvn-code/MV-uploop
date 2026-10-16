@@ -84,6 +84,35 @@ try {
   const fresh = r.data.nodes.at(-1);
   assert.equal(fresh.providers.image.aspectRatio ?? '9:16', '9:16', 'node mới theo khuôn project');
 
+  // 4b) Sheet tham chiếu xin thêm độ phân giải, khung shot thì không. Đo thật trên đĩa cho thấy
+  //     sheet vốn ra đúng bằng cỡ một khung shot, mà sheet 3-trong-1 còn chia bề ngang cho ba khung.
+  {
+    const st4b = await state();
+    const noPick = n => !n.seedvis?.image; // node chưa ai chọn tay: mặc định mới mới có tác dụng
+    const sheets = st4b.nodes.filter(
+      n => ['character', 'wardrobe', 'design'].includes(n.zone) && !n.terminal && noPick(n),
+    );
+    assert.ok(sheets.length, 'project mẫu có node sheet');
+    for (const sh of sheets)
+      assert.equal(sh.providers.image.upscale, '2k', `sheet "${sh.name}" mặc định 2k`);
+    const shots = st4b.nodes.filter(n => n.zone === 'production' && !n.terminal && noPick(n));
+    assert.ok(shots.length, 'project mẫu có khung shot');
+    for (const sh of shots)
+      assert.equal(sh.providers.image.upscale, 'none', `khung shot "${sh.name}" giữ cỡ gốc`);
+
+    // Người dùng tự chọn thì KHÔNG bị đè.
+    const picked = await api('/api/node', 'PATCH', {
+      id: sheets[0].id,
+      seedvis: { image: { model: 'GEM_PIX_2', aspectRatio: '9:16', upscale: 'none' } },
+    });
+    assert.equal(picked.status, 200, JSON.stringify(picked.data));
+    assert.equal(
+      picked.data.nodes.find(n => n.id === sheets[0].id).providers.image.upscale,
+      'none',
+      'lựa chọn tay của người dùng được giữ nguyên',
+    );
+  }
+
   // 5) Tỉ lệ lạ bị bỏ qua, không làm hỏng cài đặt.
   r = await api('/api/project', 'PATCH', { defaults: { aspect: '7:3' } });
   assert.equal(r.status, 200);
@@ -98,7 +127,7 @@ try {
   );
 
   console.log(
-    'PASS: khuôn hình project — mặc định 16:9, đổi sang 9:16 thì node có binding riêng cũng theo, media khuôn cũ bị đánh dấu làm lại, nội dung prompt đổi theo (không sót 16:9), node mới kế thừa, tỉ lệ không hợp lệ bị bỏ qua, đổi lại áp ngay',
+    'PASS: khuôn hình project — mặc định 16:9, đổi sang 9:16 thì node có binding riêng cũng theo, media khuôn cũ bị đánh dấu làm lại, nội dung prompt đổi theo (không sót 16:9), node mới kế thừa, tỉ lệ không hợp lệ bị bỏ qua, đổi lại áp ngay; sheet tham chiếu mặc định upscale 2k còn khung shot giữ cỡ gốc, lựa chọn tay không bị đè',
   );
 } finally {
   proc.kill();
