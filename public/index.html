@@ -650,6 +650,14 @@
                 <label for="commandInput" class="sr-only" data-i18n="assistant.requestLabel"
                   >Bạn muốn làm gì?</label
                 >
+                <div id="assistantFiles" class="assistant-files" hidden></div>
+                <input
+                  id="assistantFileInput"
+                  type="file"
+                  multiple
+                  accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.txt,.md,.csv,.json,.srt,.vtt,.log"
+                  hidden
+                />
                 <textarea
                   id="commandInput"
                   class="command-input assistant-input"
@@ -660,6 +668,15 @@
                   aria-label="Studio command"
                 ></textarea>
                 <div class="assistant-composer-actions">
+                  <button
+                    id="assistantAttach"
+                    class="button assistant-attach"
+                    type="button"
+                    title="Đính kèm ảnh hoặc tài liệu cho tin nhắn này (tối đa 4 tệp) — còn có thể kéo-thả vào panel hoặc dán ảnh bằng Ctrl+V. Trợ lý chỉ xem để hiểu yêu cầu, không lưu vào project."
+                    aria-label="Đính kèm tệp"
+                  >
+                    📎
+                  </button>
                   <span class="field-hint" data-i18n="assistant.enterHint"
                     >Enter để gửi · Shift+Enter để xuống dòng</span
                   >

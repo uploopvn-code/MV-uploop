@@ -1295,6 +1295,123 @@ if ($('#assistantRecipePanel')) {
   }, 2000);
 }
 
+// Files attached to the NEXT assistant message. Context for that one request only: the server
+// never stores them in the project, and they are cleared as soon as the message is sent.
+const MAX_ASSISTANT_FILES = 4;
+const MAX_ASSISTANT_FILE_MB = 12;
+let assistantFiles = [];
+
+function renderAssistantFiles() {
+  const box = $('#assistantFiles');
+  if (!box) return;
+  box.hidden = !assistantFiles.length;
+  box.innerHTML = assistantFiles
+    .map(
+      (f, i) =>
+        `<span class="assistant-file-chip">${f.mime.startsWith('image/') ? '\u{1F5BC}' : '\u{1F4C4}'} ` +
+        `<span class="assistant-file-name">${esc(f.name)}</span>` +
+        `<button type="button" class="assistant-file-drop" data-drop-file="${i}" ` +
+        `title="Bỏ tệp này" aria-label="Bỏ ${esc(f.name)}">\u00d7</button></span>`,
+    )
+    .join('');
+}
+
+const readFileBase64 = file =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    // readAsDataURL gives "data:<mime>;base64,<payload>" — the server wants the payload alone.
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(new Error(`Không đọc được tệp "${file.name}".`));
+    reader.readAsDataURL(file);
+  });
+
+async function addAssistantFiles(fileList) {
+  const picked = Array.from(fileList || []);
+  if (!picked.length) return;
+  for (const file of picked) {
+    if (assistantFiles.length >= MAX_ASSISTANT_FILES) {
+      toast(`Tối đa ${MAX_ASSISTANT_FILES} tệp cho một tin nhắn.`, true);
+      break;
+    }
+    if (file.size > MAX_ASSISTANT_FILE_MB * 1024 * 1024) {
+      toast(`Tệp "${file.name}" lớn hơn ${MAX_ASSISTANT_FILE_MB} MB.`, true);
+      continue;
+    }
+    try {
+      assistantFiles.push({
+        name: file.name,
+        // Browsers leave .srt/.md with an empty type; the server falls back to the extension.
+        mime: file.type || 'text/plain',
+        base64: await readFileBase64(file),
+      });
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+  renderAssistantFiles();
+}
+
+$('#assistantAttach')?.addEventListener('click', () => $('#assistantFileInput')?.click());
+$('#assistantFileInput')?.addEventListener('change', async e => {
+  await addAssistantFiles(e.target.files);
+  e.target.value = ''; // so picking the same file again still fires a change
+});
+$('#assistantFiles')?.addEventListener('click', e => {
+  const drop = e.target.closest('[data-drop-file]');
+  if (!drop) return;
+  assistantFiles.splice(Number(drop.dataset.dropFile), 1);
+  renderAssistantFiles();
+});
+
+// Kéo-thả tệp vào bất cứ đâu trong panel trợ lý, và dán ảnh (Ctrl+V) khi đang gõ trong panel.
+// Chỉ nhận khi con trỏ thật sự mang TỆP — kéo node trên canvas đi ngang qua thì không tính.
+const draggingFiles = e => Array.from(e.dataTransfer?.types || []).includes('Files');
+const assistantDock = $('#assistantDock');
+if (assistantDock) {
+  // dragenter/dragleave bắn theo từng phần tử con, nên phải đếm để viền không nhấp nháy.
+  let dragDepth = 0;
+  const clearDrag = () => {
+    dragDepth = 0;
+    assistantDock.classList.remove('file-drop');
+  };
+  assistantDock.addEventListener('dragenter', e => {
+    if (!draggingFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    assistantDock.classList.add('file-drop');
+  });
+  assistantDock.addEventListener('dragover', e => {
+    if (!draggingFiles(e)) return;
+    // Không chặn mặc định thì trình duyệt MỞ tệp và mất hết trạng thái đang làm.
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  assistantDock.addEventListener('dragleave', e => {
+    if (!draggingFiles(e)) return;
+    if (--dragDepth <= 0) clearDrag();
+  });
+  assistantDock.addEventListener('drop', async e => {
+    if (!draggingFiles(e)) return;
+    e.preventDefault();
+    clearDrag();
+    await addAssistantFiles(e.dataTransfer.files);
+  });
+  assistantDock.addEventListener('paste', async e => {
+    const pasted = Array.from(e.clipboardData?.files || []);
+    if (!pasted.length) return; // dán chữ bình thường thì để nguyên
+    e.preventDefault();
+    // Ảnh chụp màn hình từ clipboard đều tên "image.png" — đặt lại tên để hai chip không trùng nhau.
+    const stamp = Date.now();
+    await addAssistantFiles(
+      pasted.map((f, i) =>
+        !f.name || f.name === 'image.png'
+          ? new File([f], `dan-${stamp}${i ? '-' + i : ''}.png`, { type: f.type || 'image/png' })
+          : f,
+      ),
+    );
+  });
+}
+
 async function runAssistant() {
   if (awaitingApproval) return;
   const request = $('#commandInput').value.trim();
@@ -1302,7 +1419,13 @@ async function runAssistant() {
   const requestProjectId = assistantProjectId();
   const requestRevision = store.state.revision;
   const recentHistory = assistantHistory(requestProjectId);
-  addAssistantMessage('user', request);
+  const sentFiles = assistantFiles;
+  addAssistantMessage(
+    'user',
+    sentFiles.length ? `${request}\n\n\u{1F4CE} ${sentFiles.map(f => f.name).join(', ')}` : request,
+  );
+  assistantFiles = []; // the files belong to this message; a failure must not resend them silently
+  renderAssistantFiles();
   $('#commandInput').value = '';
   $('#commandInput').style.height = '';
   const button = $('#commandRun');
@@ -1317,6 +1440,7 @@ async function runAssistant() {
         history: recentHistory,
         projectId: requestProjectId,
         revision: requestRevision,
+        attachments: sentFiles,
         directorDraft: {
           idea: $('#directorIdea')?.value || '',
           script: $('#agentScriptText')?.value || '',
