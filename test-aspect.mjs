@@ -100,6 +100,34 @@ try {
     for (const sh of shots)
       assert.equal(sh.providers.image.upscale, 'none', `khung shot "${sh.name}" giữ cỡ gốc`);
 
+    // Chọn mức nâng cỡ ở cài đặt project thì sheet đi theo; khung shot vẫn giữ cỡ gốc.
+    const to4k = await api('/api/project', 'PATCH', { defaults: { sheetUpscale: '4k' } });
+    assert.equal(to4k.status, 200, JSON.stringify(to4k.data));
+    assert.equal(to4k.data.defaults.sheetUpscale, '4k', 'cài đặt lưu lại');
+    assert.equal(
+      to4k.data.nodes.find(n => n.id === sheets[0].id).providers.image.upscale,
+      '4k',
+      'sheet theo mức đã chọn',
+    );
+    assert.equal(
+      to4k.data.nodes.find(n => n.id === shots[0].id).providers.image.upscale,
+      'none',
+      'khung shot vẫn giữ cỡ gốc',
+    );
+    // Mức lạ bị bỏ qua, không làm hỏng cài đặt.
+    const bad = await api('/api/project', 'PATCH', { defaults: { sheetUpscale: '8k' } });
+    assert.equal(bad.status, 200);
+    assert.equal(bad.data.defaults.sheetUpscale, '4k', 'mức không hợp lệ bị bỏ qua');
+    // Về 'none' thì sheet cũng trở lại cỡ gốc.
+    const off = await api('/api/project', 'PATCH', { defaults: { sheetUpscale: 'none' } });
+    assert.equal(off.status, 200);
+    assert.equal(
+      off.data.nodes.find(n => n.id === sheets[0].id).providers.image.upscale,
+      'none',
+      'tắt thì sheet về cỡ gốc',
+    );
+    await api('/api/project', 'PATCH', { defaults: { sheetUpscale: '2k' } });
+
     // Người dùng tự chọn thì KHÔNG bị đè.
     const picked = await api('/api/node', 'PATCH', {
       id: sheets[0].id,
@@ -127,7 +155,7 @@ try {
   );
 
   console.log(
-    'PASS: khuôn hình project — mặc định 16:9, đổi sang 9:16 thì node có binding riêng cũng theo, media khuôn cũ bị đánh dấu làm lại, nội dung prompt đổi theo (không sót 16:9), node mới kế thừa, tỉ lệ không hợp lệ bị bỏ qua, đổi lại áp ngay; sheet tham chiếu mặc định upscale 2k còn khung shot giữ cỡ gốc, lựa chọn tay không bị đè',
+    'PASS: khuôn hình project — mặc định 16:9, đổi sang 9:16 thì node có binding riêng cũng theo, media khuôn cũ bị đánh dấu làm lại, nội dung prompt đổi theo (không sót 16:9), node mới kế thừa, tỉ lệ không hợp lệ bị bỏ qua, đổi lại áp ngay; sheet tham chiếu mặc định upscale 2k còn khung shot giữ cỡ gốc, chọn 2k/4k/tắt ở cài đặt project thì sheet đi theo (mức lạ bị bỏ qua), lựa chọn tay không bị đè',
   );
 } finally {
   proc.kill();

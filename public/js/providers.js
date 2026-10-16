@@ -488,6 +488,27 @@ export function paintDefaults() {
         : defModel[kind]?.model || models[0]?.id || '';
     row.hidden = srcSel.value !== 'seedvis';
   }
+  // Độ nét ảnh tham chiếu: chỉ hiện khi nguồn ảnh là Seedvis VÀ model ảnh đang chọn thật sự có
+  // mức nâng cỡ ("nếu có"). Mức nào model không nhận thì server tự hạ, nên danh sách lấy theo
+  // đúng model đang chọn, không phải toàn catalog.
+  {
+    const up = $('#defaultSheetUpscale');
+    const upRow = $('#defaultSheetUpscaleRow');
+    if (up && upRow) {
+      const chosen = (cat.image || []).find(m => m.id === $('#defaultImageModel')?.value);
+      const levels = chosen?.upscale || [];
+      upRow.hidden = img.value !== 'seedvis' || levels.length < 2;
+      if (!upRow.hidden) {
+        up.innerHTML = levels
+          .map(v => `<option value="${esc(v)}">${v === 'none' ? 'Cỡ gốc' : v.toUpperCase()}</option>`)
+          .join('');
+        if (document.activeElement !== up) {
+          const want = d.sheetUpscale || '2k';
+          up.value = levels.includes(want) ? want : levels[0];
+        }
+      }
+    }
+  }
   const hint = $('#defaultsHint');
   if (hint)
     hint.textContent =
@@ -515,6 +536,7 @@ async function saveDefaults() {
           video: $('#defaultVideo').value,
           imageModel: $('#defaultImageModel')?.value || '',
           videoModel: $('#defaultVideoModel')?.value || '',
+          sheetUpscale: $('#defaultSheetUpscale')?.value || '',
         },
       },
     });
@@ -524,7 +546,13 @@ async function saveDefaults() {
     toast(e.message, true);
   }
 }
-for (const id of ['#defaultImage', '#defaultVideo', '#defaultImageModel', '#defaultVideoModel'])
+for (const id of [
+  '#defaultImage',
+  '#defaultVideo',
+  '#defaultImageModel',
+  '#defaultVideoModel',
+  '#defaultSheetUpscale',
+])
   if ($(id)) $(id).onchange = saveDefaults;
 
 // The ChatGPT extension worker token (read once; it does not change). Shown so the user can
