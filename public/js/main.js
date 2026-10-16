@@ -1,8 +1,8 @@
 // Entry point: loads every feature module, then fetches the first state and keeps it fresh.
-import { esc } from './core.js';
+import { esc, workflowProcessing } from './core.js';
 import { initGuide } from './guide.js';
 import { refreshOrbit, refreshSeedvis, refreshWorkerInfo } from './providers.js';
-import { pollState, refresh } from './render.js';
+import { listenForChanges, pollState, refresh } from './render.js';
 import './zones.js';
 import './cards.js';
 import './canvas.js';
@@ -54,7 +54,15 @@ try {
       '</div>',
   );
 }
-setInterval(() => pollState(), 4000);
+// Changes arrive on the push channel, so the poll is only a safety net for an event that went
+// missing — except while a job is live: its progress line ("đang dựng… 60s") keeps changing without
+// an event of its own, and that is worth the fast tick.
+const pushChannel = listenForChanges();
+const tick = async () => {
+  await pollState();
+  setTimeout(tick, !pushChannel || workflowProcessing() ? 4000 : 20000);
+};
+setTimeout(tick, 4000);
 await refreshOrbit();
 // Hướng dẫn sử dụng: tự hiện lần đầu vào tool, sau đó mở bằng nút ？ Hướng dẫn.
 initGuide();

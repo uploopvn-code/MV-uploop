@@ -937,3 +937,31 @@ export async function pollState() {
     if (r.revision !== store.state?.revision || r.active > 0) await refresh();
   } catch {}
 }
+
+// The push channel (/api/events): the server sends a line the moment the graph changes or a worker
+// hands in an image/video, and this reloads right then, instead of up to one poll interval later.
+// A job result does not bump the revision, so the poll alone cannot see it — this is how a finished
+// image/video reaches an idle window. The poll stays on as a safety net if an event is missed.
+let pushTimer = null;
+let missedWhileHidden = false;
+// Coalesce a burst (a batch mutating many nodes) into one reload.
+function reloadSoon() {
+  if (typeof document !== 'undefined' && document.hidden) {
+    missedWhileHidden = true; // reloading a hidden window is wasted work; catch up when it shows
+    return;
+  }
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => refresh().catch(() => {}), 150);
+}
+export function listenForChanges() {
+  if (typeof EventSource === 'undefined') return null; // the poll alone still keeps the UI current
+  const source = new EventSource('/api/events');
+  source.addEventListener('change', reloadSoon);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && missedWhileHidden) {
+      missedWhileHidden = false;
+      reloadSoon();
+    }
+  });
+  return source;
+}
