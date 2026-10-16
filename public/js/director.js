@@ -4,14 +4,16 @@ import { $, api, copy, esc, toast } from './core.js';
 import { gallerySel } from './gallery.js';
 import { importFolder } from './projects.js';
 import { render, view } from './render.js';
+import { t as tx } from './i18n.js';
+import { loadObrion } from './obrion.js';
 
 // --- Đạo diễn: master prompt + build graph from blueprint + LLM auto ---
 let directorLoaded = false;
 let defaultMaster = '';
 function showMasterBadge(custom) {
   $('#masterBadge').textContent = custom
-    ? '· đã sửa riêng cho project này'
-    : '· đang dùng mặc định';
+    ? '· ' + tx('director.customForProject')
+    : '· ' + tx('director.usingDefault');
 }
 export async function loadDirector() {
   try {
@@ -33,14 +35,15 @@ export async function loadDirector() {
     paintAgentMode();
     paintProjType();
     directorLoaded = true;
+    await loadObrion();
   } catch (e) {
     toast(e.message, true);
   }
 }
 function showDirectorLLM(llm) {
   $('#directorLLMStatus').textContent = llm.configured
-    ? 'Đã cấu hình · ' + llm.model + ' · key ' + llm.keyHint + ' · ' + llm.baseUrl
-    : 'Chưa cấu hình API key.';
+    ? tx('director.configured') + ' · ' + llm.model + ' · key ' + llm.keyHint + ' · ' + llm.baseUrl
+    : tx('director.noApiKey');
   if (!$('#llmBaseUrl').value) $('#llmBaseUrl').value = llm.baseUrl || '';
   if (!$('#llmModel').value) $('#llmModel').value = llm.model || '';
 }
@@ -51,14 +54,28 @@ function fillMasterTemplates(list, selectId) {
   const sel = $('#masterTemplate');
   if (!sel) return;
   const opt = t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`;
-  const builtins = masterTemplates.filter(t => t.builtin);
+  // Thư viện skill xếp theo THỂ LOẠI, không phải theo "có sẵn / của tôi": khi chọn skill người
+  // dùng nghĩ "mình đang làm phim kinh dị", không nghĩ "cái này ai viết".
+  const genres = (store.state.promptGenres || []).filter(g =>
+    masterTemplates.some(t => (t.genre || 'other') === g.id && t.builtin),
+  );
   const mine = masterTemplates.filter(t => !t.builtin);
   sel.innerHTML =
-    '<option value="">— Giữ nguyên —</option>' +
-    (builtins.length
-      ? '<optgroup label="Dựng sẵn">' + builtins.map(opt).join('') + '</optgroup>'
-      : '') +
-    (mine.length ? '<optgroup label="Mẫu của tôi">' + mine.map(opt).join('') + '</optgroup>' : '');
+    `<option value="">— ${tx('director.keepCurrent')} —</option>` +
+    genres
+      .map(
+        g =>
+          `<optgroup label="${esc(g.label)}">` +
+          masterTemplates
+            .filter(t => t.builtin && (t.genre || 'other') === g.id)
+            .map(opt)
+            .join('') +
+          '</optgroup>',
+      )
+      .join('') +
+    (mine.length
+      ? `<optgroup label="${tx('director.myTemplates')}">` + mine.map(opt).join('') + '</optgroup>'
+      : '');
   sel.value = selectId || '';
   updateDelMaster();
 }
@@ -66,6 +83,10 @@ function updateDelMaster() {
   const t = masterTemplates.find(x => x.id === $('#masterTemplate')?.value);
   if ($('#delMasterTemplate')) $('#delMasterTemplate').hidden = !(t && !t.builtin);
 }
+document.addEventListener('localechange', () => {
+  if (directorLoaded && $('#masterTemplate'))
+    fillMasterTemplates(masterTemplates, $('#masterTemplate').value);
+});
 if ($('#masterTemplate'))
   $('#masterTemplate').onchange = async () => {
     updateDelMaster();
@@ -80,14 +101,14 @@ if ($('#masterTemplate'))
       });
       $('#masterPrompt').value = r.masterPrompt;
       showMasterBadge(r.customMaster);
-      toast('Đã áp dụng mẫu "' + t.name + '" cho project');
+      toast(tx('director.templateApplied') + ' "' + t.name + '"');
     } catch (e) {
       toast(e.message, true);
     }
   };
 if ($('#saveMasterTemplate'))
   $('#saveMasterTemplate').onclick = async () => {
-    const name = prompt('Tên mẫu master prompt:', '');
+    const name = prompt(tx('director.templateNamePrompt'), '');
     if (name === null) return;
     try {
       const r = await api('/api/director/master-templates/save', {
@@ -95,7 +116,7 @@ if ($('#saveMasterTemplate'))
         body: { name, prompt: $('#masterPrompt').value },
       });
       fillMasterTemplates(r.templates, r.saved.id);
-      toast('Đã lưu mẫu "' + r.saved.name + '"');
+      toast(tx('director.templateSaved') + ' "' + r.saved.name + '"');
     } catch (e) {
       toast(e.message, true);
     }
@@ -104,14 +125,14 @@ if ($('#delMasterTemplate'))
   $('#delMasterTemplate').onclick = async () => {
     const t = masterTemplates.find(x => x.id === $('#masterTemplate').value);
     if (!t || t.builtin) return;
-    if (!confirm('Xóa mẫu "' + t.name + '"?')) return;
+    if (!confirm(tx('director.deleteTemplateConfirm') + ' "' + t.name + '"?')) return;
     try {
       const r = await api('/api/director/master-templates/delete', {
         method: 'POST',
         body: { id: t.id },
       });
       fillMasterTemplates(r.templates, '');
-      toast('Đã xóa mẫu');
+      toast(tx('director.templateDeleted'));
     } catch (e) {
       toast(e.message, true);
     }
@@ -125,24 +146,24 @@ $('#saveMaster').onclick = async () => {
     });
     $('#masterPrompt').value = r.masterPrompt;
     showMasterBadge(r.customMaster);
-    toast('Đã lưu master prompt cho project này');
+    toast(tx('director.masterSaved'));
   } catch (e) {
     toast(e.message, true);
   }
 };
 $('#resetMaster').onclick = async () => {
-  if (!confirm('Khôi phục master prompt mặc định cho project này?')) return;
+  if (!confirm(tx('director.resetMasterConfirm'))) return;
   try {
     const r = await api('/api/director/master', { method: 'POST', body: { masterPrompt: '' } });
     $('#masterPrompt').value = r.masterPrompt;
     showMasterBadge(r.customMaster);
-    toast('Đã dùng lại master prompt mặc định');
+    toast(tx('director.masterReset'));
   } catch (e) {
     toast(e.message, true);
   }
 };
 async function buildFromBlueprint(blueprint) {
-  if (!confirm('Dựng sơ đồ sẽ THAY TOÀN BỘ node của project đang mở. Tiếp tục?')) return;
+  if (!confirm(tx('director.buildReplacesGraph'))) return;
   const btn = $('#buildGraph');
   btn.disabled = true;
   try {
@@ -181,7 +202,7 @@ async function buildFromBlueprint(blueprint) {
 }
 $('#buildGraph').onclick = () => {
   const bp = $('#blueprintInput').value.trim();
-  if (!bp) return toast('Dán blueprint JSON hoặc chọn file trước', true);
+  if (!bp) return toast(tx('director.blueprintRequired'), true);
   buildFromBlueprint(bp);
 };
 // Pick one or more .json files (feature mode: bible.json + seq-XX.json) and build from them.
@@ -194,7 +215,7 @@ $('#blueprintFiles').onchange = async e => {
     for (const f of files) parts.push(JSON.parse(await f.text()));
     await buildFromBlueprint(parts);
   } catch (err) {
-    toast('File JSON không hợp lệ: ' + err.message, true);
+    toast(tx('director.invalidJson', { error: err.message }), true);
   }
 };
 // Fill the character / scene / costume nodes that still have no image from the other projects
@@ -352,10 +373,9 @@ function paintMetaHint() {
   const m = agentMeta();
   const sec = m.type === 'mv' ? m.seconds || 0 : (m.minutes || 0) * 60;
   if (sec > 0)
-    el.textContent = `🎯 Mục tiêu: ~${Math.round(sec)} giây · ~${shotRange(sec)} shot — gửi kèm master prompt khi viết kịch bản / blueprint.`;
-  else if (m.type === 'mv')
-    el.textContent = '🎯 MV: chọn file mp3 để đọc thời lượng (hoặc để phân tích ở bước sau).';
-  else el.textContent = 'Nhập thời lượng (phút) để tool tính số shot và gửi kèm master prompt.';
+    el.textContent = tx('director.targetMeta', { seconds: Math.round(sec), shots: shotRange(sec) });
+  else if (m.type === 'mv') el.textContent = tx('director.mvChooseAudio');
+  else el.textContent = tx('director.enterMinutes');
 }
 // Show the right fields per type, and apply the matching master prompt in step 2.
 function paintProjType() {
@@ -405,10 +425,10 @@ if ($('#projSongFile'))
 // into the blueprint + build steps when "Tự động hoàn toàn" is on).
 async function runAgentScript() {
   const idea = $('#directorIdea').value.trim();
-  if (!idea) return toast('Nhập ý tưởng / lời để Đạo diễn viết kịch bản', true);
+  if (!idea) return toast(tx('director.ideaRequired'), true);
   const btn = $('#agentScript');
   btn.disabled = true;
-  btn.textContent = '⏳ Đang viết kịch bản…';
+  btn.textContent = tx('director.writingScript');
   try {
     const r = await api('/api/director/agent', {
       method: 'POST',
@@ -417,24 +437,24 @@ async function runAgentScript() {
     $('#agentScriptText').value = r.script;
     $('#agentScriptWrap').hidden = false;
     $('#agentBlueprint').disabled = false;
-    toast('Đã viết kịch bản · xem/sửa, chọn master prompt (bước 2) rồi sang bước 3');
+    toast(tx('director.scriptDone'));
     return r.script;
   } catch (e) {
     toast(e.message, true);
     throw e;
   } finally {
     btn.disabled = false;
-    btn.textContent = '① Viết kịch bản';
+    btn.textContent = tx('director.writeScript');
   }
 }
 // Turns the (edited) script into a blueprint, drops it into the mục-2 box, and — in auto mode —
 // builds the graph straight away.
 async function runAgentBlueprint(auto) {
   const script = $('#agentScriptText').value.trim();
-  if (!script) return toast('Chưa có kịch bản. Bấm ① trước.', true);
+  if (!script) return toast(tx('director.scriptRequired'), true);
   const btn = $('#agentBlueprint');
   btn.disabled = true;
-  btn.textContent = '⏳ Đang lên blueprint…';
+  btn.textContent = tx('director.writingBlueprint');
   try {
     const r = await api('/api/director/agent', {
       method: 'POST',
@@ -444,13 +464,13 @@ async function runAgentBlueprint(auto) {
     $('#agentSummary').textContent =
       '✓ Blueprint: ' + r.summary + ' — xem ở ô dưới, rồi sang bước 4 bấm ✦ Dựng sơ đồ.';
     if (auto) await buildFromBlueprint(r.blueprint);
-    else toast('Đã tạo blueprint · kiểm tra ở ô dưới, rồi sang bước 4 bấm ✦ Dựng sơ đồ');
+    else toast(tx('director.blueprintDone'));
   } catch (e) {
     toast(e.message, true);
     throw e;
   } finally {
     btn.disabled = false;
-    btn.textContent = '② Lên blueprint';
+    btn.textContent = tx('director.createBlueprint');
   }
 }
 $('#agentScript').onclick = async () => {

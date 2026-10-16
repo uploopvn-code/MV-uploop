@@ -9,7 +9,11 @@ import { shutdown } from './lib/windows.mjs';
 import { handle as connectionsRoutes } from './lib/routes/connections.mjs';
 import { handle as projectsRoutes } from './lib/routes/projects.mjs';
 import { handle as directorRoutes } from './lib/routes/director.mjs';
+import { handle as obrionRoutes } from './lib/routes/obrion.mjs';
+import { handle as assistantRoutes } from './lib/routes/assistant.mjs';
 import { handle as musicRoutes } from './lib/routes/music.mjs';
+import { handle as scriptRoutes } from './lib/routes/script.mjs';
+import { handle as recipesRoutes } from './lib/routes/recipes.mjs';
 import { handle as nodesRoutes } from './lib/routes/nodes.mjs';
 import { handle as assetsRoutes } from './lib/routes/assets.mjs';
 import { handle as jobsRoutes } from './lib/routes/jobs.mjs';
@@ -33,7 +37,11 @@ const routes = [
   connectionsRoutes,
   projectsRoutes,
   directorRoutes,
+  obrionRoutes,
+  assistantRoutes,
   musicRoutes,
+  scriptRoutes,
+  recipesRoutes,
   nodesRoutes,
   assetsRoutes,
   jobsRoutes,

@@ -3,50 +3,57 @@ import { store } from './store.js';
 import { esc } from './core.js';
 import { SIZE_VI } from './stage-math.js';
 import { nodeTime } from './zones.js';
+import { t } from './i18n.js';
 
 function status(n) {
   const j = [...store.state.jobs].reverse().find(j => j.nodeId === n.id);
   if (j && ['queued', 'running', 'failed', 'needs_review'].includes(j.status))
     return {
       text: {
-        queued: j.recover ? 'Đang lấy lại ảnh từ ChatGPT' : 'Đang chờ chạy',
+        queued: j.recover
+          ? j.payload.site === 'musechat'
+            ? t('node.runningWeb')
+            : t('node.recoverChatgpt')
+          : t('node.queued'),
         running: j.payload.seedvis
-          ? 'Đang tạo trên Seedvis'
+          ? t('node.runningSeedvis')
           : j.recover
-            ? 'Đang lấy lại ảnh từ ChatGPT'
-            : 'Đang chạy trên web',
-        failed: 'Cần xử lý lỗi',
+            ? j.payload.site === 'musechat'
+              ? t('node.runningWeb')
+              : t('node.recoverChatgpt')
+            : t('node.runningWeb'),
+        failed: t('node.failed'),
         needs_review: j.payload.seedvis
-          ? 'Cần kiểm tra Seedvis'
+          ? t('node.reviewSeedvis')
           : j.kind === 'image' && j.payload.site === 'chatgpt'
             ? j.recoverAt
-              ? 'Chờ lấy lại ảnh ChatGPT'
-              : 'Ảnh ChatGPT chưa về'
-            : 'Cần kiểm tra website',
+              ? t('node.waitChatgpt')
+              : t('node.chatgptMissing')
+            : t('node.reviewWebsite'),
       }[j.status],
       class: 'warn',
     };
   if (n.stale || (n.videoStale && (n.video || videosOf(n).length)))
-    return { text: 'Đầu vào đã thay đổi', class: 'warn' };
+    return { text: t('node.inputChanged'), class: 'warn' };
   // A merged scene has no image of its own: it is ready, blocked, or filmed.
   if (n.role === 'merged')
     return n.video || videosOf(n).length
-      ? { text: 'Có video', class: 'good' }
+      ? { text: t('node.hasVideo'), class: 'good' }
       : n.merged?.problem
-        ? { text: 'Chưa đủ để quay', class: 'warn' }
-        : { text: 'Sẵn sàng quay', class: 'good' };
+        ? { text: t('node.notReady'), class: 'warn' }
+        : { text: t('node.ready'), class: 'good' };
   // a 3D stage node holds marks, not a picture
   if (n.stageOnly) {
     const k = n.stage3d?.performers?.length;
     return k
-      ? { text: 'Đã ghim ' + k + ' người', class: 'good' }
-      : { text: 'Chưa ghim', class: '' };
+      ? { text: t('node.pinned') + ' ' + k, class: 'good' }
+      : { text: t('node.notPinned'), class: '' };
   }
   return n.video || videosOf(n).length
-    ? { text: 'Có video', class: 'good' }
+    ? { text: t('node.hasVideo'), class: 'good' }
     : n.image
-      ? { text: 'Đã có ảnh', class: 'good' }
-      : { text: 'Chưa có ảnh', class: '' };
+      ? { text: t('node.hasImage'), class: 'good' }
+      : { text: t('node.noImage'), class: '' };
 }
 // The clips this node produced: one node per version in the Video column, newest last.
 // (A video uploaded by hand still lives on the node itself.)
@@ -61,14 +68,18 @@ export const videosOf = n =>
   store.state.nodes
     .filter(t => t.terminal && t.source === n.id && t.video)
     .sort((a, b) => (a.version || 0) - (b.version || 0));
-// The clips of one source are ONE card on the canvas: the version being looked at, with
-// the count; ‹ › on the card walks through the others. Which one is shown lives here
-// while the page is open (the newest until the user picks).
+// The clips of one source are ONE stacked card on the canvas. The timeline choice is saved
+// on the source node; `picked` only makes the just-selected thumbnail update immediately.
 const picked = new Map(); // source id → clip id
 export const clipsOf = sourceId => videosOf({ id: sourceId });
+export function timelineClip(sourceId) {
+  const source = store.state.nodes.find(n => n.id === sourceId);
+  const list = clipsOf(sourceId);
+  return list.find(t => t.id === source?.timelineClipId) || list.at(-1) || null;
+}
 export function shownClip(sourceId) {
   const list = clipsOf(sourceId);
-  return list.find(t => t.id === picked.get(sourceId)) || list.at(-1) || null;
+  return list.find(t => t.id === picked.get(sourceId)) || timelineClip(sourceId);
 }
 export const pickClip = (sourceId, clipId) => picked.set(sourceId, clipId);
 export function showClip(sourceId, delta) {
@@ -82,34 +93,56 @@ export function showClip(sourceId, delta) {
 function preview(n, cls = '') {
   // a 3D stage node shows its front wide
   if (n.stageOnly)
-    return `<div class="preview ${cls}">${n.stage3d?.capture ? `<img src="${esc(n.stage3d.capture.url)}" alt="${esc(n.name)}">` : '<div class="placeholder"><span class="symbol">🧍</span>Sân khấu 3D</div>'}<span class="play-badge">🧍 3D</span></div>`;
+    return `<div class="preview ${cls}">${n.stage3d?.capture ? `<img src="${esc(n.stage3d.capture.url)}" alt="${esc(n.name)}">` : `<div class="placeholder"><span class="symbol">🧍</span>${esc(t('node.stage3d'))}</div>`}<span class="play-badge">🧍 3D</span></div>`;
   if (n.role === 'merged')
-    return `<div class="preview ${cls}"><div class="placeholder"><span class="symbol">🎞</span>Phân cảnh ghép · ${n.imageInputs ?? 0} khung</div></div>`;
-  return `<div class="preview ${cls}">${n.image ? `<img src="${esc(n.image.url)}" alt="${esc(n.name)}">` : `<div class="placeholder"><span class="symbol">${n.id === 'singer' ? '♙' : n.id === 'stage' ? '▱' : n.id === 'scene' ? '▧' : n.role === 'wardrobe' ? '👗' : n.role === 'look' ? '👤' : n.role === 'angle' ? '◧' : '▣'}</span>${n.id === 'scene' ? 'Nhân vật + bối cảnh' : n.role === 'wardrobe' ? 'Bộ đồ (render riêng)' : n.role === 'look' ? 'Nhân vật đã mặc bộ' : n.role === 'angle' ? 'Góc máy của bối cảnh' : 'Tạo hoặc tải ảnh'}</div>`}</div>`;
+    return `<div class="preview ${cls}"><div class="placeholder"><span class="symbol">🎞</span>${esc(t('node.merged'))} · ${n.imageInputs ?? 0} ${esc(t('node.frames'))}</div></div>`;
+  return `<div class="preview ${cls}">${n.image ? `<img src="${esc(n.image.url)}" alt="${esc(n.name)}">` : `<div class="placeholder"><span class="symbol">${n.id === 'singer' ? '♙' : n.id === 'stage' ? '▱' : n.id === 'scene' ? '▧' : n.role === 'wardrobe' ? '👗' : n.role === 'look' ? '👤' : n.role === 'angle' ? '◧' : '▣'}</span>${esc(n.id === 'scene' ? t('node.scene') : n.role === 'wardrobe' ? t('node.wardrobe') : n.role === 'look' ? t('node.look') : n.role === 'angle' ? t('node.angle') : t('node.createImage'))}</div>`}</div>`;
 }
 // Inputs summary on a node card: reference images vs. style / camera text, and whether
 // a shot exceeds its video model's reference limit (then its keyframe is composed first).
 function inputsLabel(n) {
   const over =
-    'duration' in n && n.videoNeedsKeyframe ? ` · >${n.videoRefLimit}: tạo ảnh trước` : '';
+    'duration' in n && n.videoNeedsKeyframe
+      ? ` · >${n.videoRefLimit}: ${t('node.createKeyframeFirst')}`
+      : '';
   const people = n.stage3d?.performers?.length;
-  return `🖼 ${n.imageInputs ?? 0} ảnh${n.settingInputs ? ` · 🎨🎥 ${n.settingInputs}` : ''}${over}${pinMark(n)}${people ? ` · 🧍 ${people}` : ''}`;
+  return `🖼 ${n.imageInputs ?? 0} ${t('node.images')}${n.settingInputs ? ` · 🎨🎥 ${n.settingInputs}` : ''}${over}${pinMark(n)}${people ? ` · 🧍 ${people}` : ''}`;
 }
 // A node keeping a pinned stage's marks: 📌, with the framing the tool chose in its tooltip.
 function pinMark(n) {
   const p = n.stagePin;
   if (!p) return '';
   const tip =
-    'Vị trí ghim theo ' +
+    t('node.pinnedBy') +
     p.setName +
-    (p.sig
-      ? ' · ' + (SIZE_VI[p.size] || p.size)
-      : ' · cận đồ vật — chỉ video nhận sơ đồ sân khấu') +
-    (p.capture === 'missing' ? ' · đang tự chụp ảnh 3D' : '');
+    (p.sig ? ' · ' + (SIZE_VI[p.size] || p.size) : ' · ' + t('node.objectCloseup')) +
+    (p.capture === 'missing' ? ' · ' + t('node.capturing3d') : '');
   return ` · <span class="pin3d" title="${esc(tip)}">📌</span>`;
 }
 export function card(n, shot = false) {
   const s = status(n);
+  if (n.kind === 'script') {
+    const run = n.run;
+    const qc = n.qc;
+    const foot =
+      run?.status === 'running'
+        ? `⏳ ${esc(run.label || '')} ${run.step}/${run.total}`
+        : qc
+          ? qc.ok
+            ? '✅ QC sạch'
+            : `❌ ${qc.errors.length} lỗi QC`
+          : n.blueprint
+            ? 'Có blueprint'
+            : 'Chưa chạy';
+    const idea = String(n.brief?.idea || '').slice(0, 70);
+    // A song wired in makes this an MV breakdown rather than a drama written from scratch.
+    const song = store.state.nodes.find(
+      x =>
+        x.kind === 'music' && store.state.edges.some(e => e.source === x.id && e.target === n.id),
+    );
+    const body = song ? '🎵 ' + esc(song.name) : idea ? esc(idea) : '<em>Chưa có ý tưởng</em>';
+    return `<article class="node setting" tabindex="0" role="button" data-node="${n.id}" aria-label="Chỉnh ${esc(n.name)}"><div class="node-top"><span>✍ ${esc(n.name)}</span><span class="mini">↗</span></div><div class="setting-body">${body}</div><div class="node-footer"><span class="status ${qc?.ok ? 'good' : ''}">${foot}</span><span>${song ? 'MV · ' : ''}${n.mode === 'full' ? 'Kỹ' : 'Nhanh'}</span></div></article>`;
+  }
   if (n.kind === 'music') {
     const src = n.audio
       ? '🎵 ' + esc(n.audio.name)
@@ -120,14 +153,14 @@ export function card(n, shot = false) {
               .replace(/^https?:\/\/(www\.)?/, '')
               .slice(0, 42),
           )
-        : '<em>Chưa có nguồn nhạc</em>';
+        : `<em>${esc(t('node.noMusicSource'))}</em>`;
     const j = n.analysis?.json;
     const foot = j
       ? '✓ ' +
         (j.sections?.length || 0) +
         ' đoạn' +
         (j.durationSec ? ' · ' + j.durationSec + 's' : '')
-      : 'Chưa phân tích';
+      : t('node.notAnalyzed');
     return `<article class="node setting" tabindex="0" role="button" data-node="${n.id}" aria-label="Chỉnh ${esc(n.name)}"><div class="node-top"><span>🎼 ${esc(n.name)}</span><span class="mini">↗</span></div><div class="setting-body">${src}</div><div class="node-footer"><span class="status ${j ? 'good' : ''}">${foot}</span></div></article>`;
   }
   if (n.role === 'lipsync') {
@@ -141,17 +174,14 @@ export function card(n, shot = false) {
   }
   if (n.kind === 'setting') {
     const icon = { camera: '🎥', audio: '🔊' }[n.settingType] || '🎨';
-    return `<article class="node setting" tabindex="0" role="button" data-node="${n.id}" aria-label="Chỉnh ${esc(n.name)}"><div class="node-top"><span>${icon} ${esc(n.name)}</span><span class="mini">↗</span></div><div class="setting-body">${n.config ? esc(n.config) : '<em>Chưa đặt nội dung</em>'}</div><div class="node-footer"><span class="status">Áp cho node được nối</span></div></article>`;
+    return `<article class="node setting" tabindex="0" role="button" data-node="${n.id}" aria-label="Chỉnh ${esc(n.name)}"><div class="node-top"><span>${icon} ${esc(n.name)}</span><span class="mini">↗</span></div><div class="setting-body">${n.config ? esc(n.config) : '<em>' + esc(t('node.noContent')) + '</em>'}</div><div class="node-footer"><span class="status">${esc(t('node.appliesToConnected'))}</span></div></article>`;
   }
   if (n.terminal) {
     const stack = clipsOf(n.source);
     const total = stack.length,
       k = stack.findIndex(x => x.id === n.id) + 1;
-    const nav =
-      total > 1
-        ? `<span class="stack-nav"><button class="stack-btn" data-stack-prev="${esc(n.source)}" title="Bản trước">‹</button><span>${k}/${total}</span><button class="stack-btn" data-stack-next="${esc(n.source)}" title="Bản sau">›</button></span>`
-        : '<span>Bấm để xem</span>';
-    return `<article class="node terminal" tabindex="0" role="button" data-node="${n.id}" aria-label="Xem ${esc(n.name)}"><div class="node-top"><span>🎬 ${esc(n.name)}</span><span class="mini">↗</span></div><div class="preview video"><video muted playsinline preload="metadata" src="${esc(n.video?.url || '')}"></video><span class="play-badge">▶</span></div><div class="node-footer"><span class="status good">${total > 1 ? total + ' video' : 'Phiên bản video'}</span>${nav}</div></article>`;
+    const selected = timelineClip(n.source)?.id === n.id;
+    return `<article class="node terminal video-stack-card" tabindex="0" role="button" data-video-stack-source="${esc(n.source)}" aria-label="${esc(t('node.openVideoVersions'))}: ${esc(n.name)}"><div class="node-top"><span>🎬 ${esc(n.name)}</span><span class="video-stack-count">${total}</span></div><div class="preview video"><video muted playsinline preload="metadata" src="${esc(n.video?.url || '')}"></video><span class="play-badge">▶</span>${selected ? `<span class="timeline-choice">✓ ${esc(t('node.onTimeline'))}</span>` : ''}</div><div class="node-footer"><span class="status good">${total} ${esc(t('node.videoVersions'))}</span><span>v${n.version || k} · ${esc(t('node.clickToChoose'))}</span></div></article>`;
   }
   const seq = n.seq ? `<span class="seq">#${n.seq}</span>` : '';
   // the shot's place on the song, from the one time helper (a float sum needs the rounding)

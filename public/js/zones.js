@@ -5,25 +5,42 @@ import { store } from './store.js';
 // two streams the film is edited from: luồng A phủ kín cả bài bằng phủ cảnh, luồng B chạy song
 // song với từng câu hát nhép (xem nodeStream).
 export const ZONES = [
-  { id: 'character', label: '① Nhân vật' },
-  { id: 'wardrobe', label: '② Trang phục & vật dụng' },
-  { id: 'design', label: '③ Bối cảnh' },
-  { id: 'setup', label: '④ Style & Máy quay' },
-  { id: 'audio', label: '⑤ Âm thanh' },
-  { id: 'production', label: '⑥ Luồng A · Phủ cảnh (band / nhạc cụ / toàn cảnh / khán giả)' },
-  { id: 'merged', label: '⑦ Phân cảnh ghép' },
-  { id: 'output', label: '⑧ Video luồng A · Phủ cảnh' },
-  { id: 'seedance', label: '⑨ Seedance' },
-  { id: 'seedance-video', label: '⑩ Video Seedance' },
-  { id: 'lipsync', label: '⑪ Luồng B · Câu hát nhép 7–10s (Omni)' },
-  { id: 'lipsync-video', label: '⑫ Video luồng B · Hát nhép' },
+  { id: 'start', label: '⓪ START · Kịch bản & Nhạc', labelKey: 'zone.start' },
+  { id: 'character', label: '① Characters · Nhân vật', labelKey: 'zone.character' },
+  {
+    id: 'wardrobe',
+    label: '② Wardrobe & Props · Trang phục & Vật dụng',
+    labelKey: 'zone.wardrobe',
+  },
+  { id: 'design', label: '③ Locations & Sets · Bối cảnh', labelKey: 'zone.design' },
+  { id: 'setup', label: '④ Camera & Style · Máy quay & Phong cách', labelKey: 'zone.setup' },
+  { id: 'audio', label: '⑤ Audio & Music · Âm thanh & Nhạc', labelKey: 'zone.audio' },
+  { id: 'production', label: '⑥ Production · Sản xuất', labelKey: 'zone.production' },
+  { id: 'merged', label: '⑦ Merged Scenes · Phân cảnh ghép', labelKey: 'zone.merged' },
+  { id: 'output', label: '⑧ Deliverables · Video đầu ra', labelKey: 'zone.output' },
+  { id: 'seedance', label: '⑨ Groups & Multi-shot · Nhóm Seedance', labelKey: 'zone.seedance' },
+  { id: 'seedance-video', label: '⑩ Group Renders · Video nhóm', labelKey: 'zone.seedanceVideo' },
+  { id: 'lipsync', label: '⑪ Lip Sync · Đồng bộ môi', labelKey: 'zone.lipsync' },
+  {
+    id: 'lipsync-video',
+    label: '⑫ Lip Sync Renders · Video hát nhép',
+    labelKey: 'zone.lipsyncVideo',
+  },
 ];
+export const zoneLabel = z =>
+  (z?.labelKey && globalThis.mvT ? globalThis.mvT(z.labelKey) : z?.label) || z?.label || '';
 export const ZONE_W = 340;
 // Which stream a node belongs to — mirror of nodeStream() in lib/zones.mjs (the state the browser
 // gets already carries the resolved zone). '' = an asset, or a Seedance group.
 const STREAM = { production: 'A', merged: 'A', output: 'A', lipsync: 'B', 'lipsync-video': 'B' };
 export const nodeStream = n => (n ? STREAM[n.zone] || '' : '');
 export const STREAM_LABEL = { A: 'Luồng A · Phủ cảnh', B: 'Luồng B · Câu hát nhép' };
+export const streamLabel = stream =>
+  (globalThis.mvT && stream
+    ? globalThis.mvT(stream === 'A' ? 'stream.coverage' : 'stream.lipsync')
+    : '') ||
+  STREAM_LABEL[stream] ||
+  '';
 // Where a node sits on the song, in seconds, as [in, out] — or null when it has no time. Mirror of
 // nodeTime() in lib/zones.mjs: a shot spans [start, start + duration], a lip-sync take spans the
 // cut it sends to Omni, [clipStart, clipEnd] (a take has no `duration` — that field means "shot").
@@ -55,13 +72,16 @@ const OUT_STEP = 250;
 // First row, below the column name: the stream labels wrap onto two lines, so the cards start
 // lower than the one-line labels needed.
 const FIRST_Y = 74;
-export function zoneLayout() {
+// `hidden` is a display-only set used when a Seedance group is collapsed on the canvas. The
+// stored graph remains unchanged; the rest of that column closes its gap for easier navigation.
+export function zoneLayout(hidden = new Set()) {
   const rows = {},
     pos = {},
     sourceY = {},
     outputs = [];
   const merged = [];
   for (const n of [...store.state.nodes].sort((a, b) => zoneOrder(a) - zoneOrder(b))) {
+    if (hidden.has(n.id)) continue;
     if (CLIP_ZONES.includes(n.zone)) {
       outputs.push(n);
       continue;

@@ -3,6 +3,7 @@ import { store } from './store.js';
 import { $, api, toast } from './core.js';
 import { closeInspector, inspect, saveNode } from './inspector.js';
 import { refresh, render } from './render.js';
+import { t } from './i18n.js';
 
 // "Change only this" on the node's current image: the picture itself is sent with the request
 // and the answer replaces it. The previous image is kept for a one-click swap back.
@@ -12,10 +13,15 @@ export function editPanel(n) {
   const type = n.providers?.image?.type;
   const canEdit = type === 'seedvis' || type === 'web';
   const label = type === 'web' ? 'Sửa ảnh · ChatGPT' : 'Sửa ảnh · Seedvis';
+  // Ảnh tham chiếu nối vào node cũng được gửi kèm khi sửa — để model sửa theo (vd thay mặt).
+  const refs = (n.references || []).length;
   return (
     '<section class="edit-image"><label>✏️ Sửa ảnh này' +
-    '<textarea id="editPrompt" rows="2" placeholder="Viết điều cần đổi, tiếng Anh cho kết quả tốt nhất — vd: make the sky darker, remove the umbrella on the left, close her mouth"></textarea></label>' +
+    '<textarea id="editPrompt" rows="2" placeholder="Viết điều cần đổi, tiếng Anh cho kết quả tốt nhất — vd: make the sky darker, replace the face with image 2, close her mouth"></textarea></label>' +
     '<p class="field-hint">Gửi đúng ảnh đang có kèm yêu cầu; ảnh mới tự thay vào node, ảnh cũ được giữ để đổi lại.' +
+    (refs
+      ? ` <b>${refs} ảnh tham chiếu nối vào cũng được gửi kèm</b> (ảnh 1 = ảnh đang sửa, ảnh 2…= tham chiếu) — gọi chúng trong yêu cầu, vd "replace the face with image 2".`
+      : ' Nối thêm node ảnh vào để gửi kèm ảnh tham chiếu (vd nối mặt người khác rồi yêu cầu thay mặt theo ảnh đó).') +
     (type === 'web' ? ' Qua ChatGPT cần bật worker extension.' : '') +
     '</p>' +
     '<div class="actions">' +
@@ -28,12 +34,12 @@ export function editPanel(n) {
 }
 export async function editImage(id) {
   const text = $('#editPrompt').value.trim();
-  if (!text) return toast('Nhập điều cần sửa trong ảnh', true);
+  if (!text) return toast(t('edit.enterInstruction'), true);
   try {
     await saveNode();
     await api('/api/jobs', { method: 'POST', body: { nodeId: id, kind: 'image', edit: text } });
     await refresh();
-    toast('Đã gửi sửa ảnh — ảnh mới sẽ tự thay vào node');
+    toast(t('edit.submitted'));
     closeInspector();
   } catch (e) {
     toast(e.message, true);
@@ -47,7 +53,7 @@ export async function swapImage(id) {
     render();
     inspect(id);
     if ($('#editPrompt')) $('#editPrompt').value = draft;
-    toast('Đã đổi ảnh');
+    toast(t('edit.swapped'));
   } catch (e) {
     toast(e.message, true);
   }

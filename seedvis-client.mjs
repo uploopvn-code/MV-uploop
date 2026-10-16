@@ -402,9 +402,15 @@ export function createSeedvis(dataDir) {
       // A job we asked to stop (or that Seedvis reports as cancelled) is not a real failure.
       if (job.cancelRequested || e.code === 'cancelled')
         throw Object.assign(new Error('Đã dừng theo yêu cầu.'), { aborted: true, definite: true });
+      // Giữ cả MÃ lẫn câu: câu là tiếng Việt và có thể đổi, mã thì ổn định — thang leo tự sửa
+      // prompt (lib/prompt-doctor.mjs) phân loại lỗi theo mã. Trước đây có câu là mã bị vứt.
       throw Object.assign(
-        new Error('Seedvis báo lỗi: ' + (e.message || e.code || 'không rõ lý do')),
-        { definite: true },
+        new Error(
+          'Seedvis báo lỗi: ' +
+            (e.message || e.code || 'không rõ lý do') +
+            (e.message && e.code ? ' [' + e.code + ']' : ''),
+        ),
+        { definite: true, code: e.code || '' },
       );
     }
     const outs = (state.outputs || []).filter(o => o.url || o.b64);

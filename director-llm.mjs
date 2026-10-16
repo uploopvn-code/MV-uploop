@@ -54,7 +54,10 @@ export function createDirectorLLM(dataDir) {
     return status();
   }
   // Runs one chat turn, returns the assistant text.
-  async function complete(system, user) {
+  const complete = (system, user) => completeFull(system, user).then(r => r.text);
+  // The same turn with what the API reports about it: { text, model, usage: { inputTokens,
+  // outputTokens } } (the OpenAI-compatible `usage` block; zeros when a server omits it).
+  async function completeFull(system, user) {
     const k = key();
     if (!k) throw new Error('Chưa cấu hình API key LLM cho Đạo diễn.');
     const r = await fetch(baseUrl() + '/chat/completions', {
@@ -78,7 +81,19 @@ export function createDirectorLLM(dataDir) {
       throw new Error('LLM lỗi HTTP ' + r.status + ': ' + (j?.error?.message || j?.message || ''));
     const text = j?.choices?.[0]?.message?.content;
     if (!text) throw new Error('LLM không trả nội dung.');
-    return text;
+    const u = j.usage || {};
+    return {
+      text,
+      model: String(j.model || model()).slice(0, 100),
+      usage: {
+        inputTokens: Number(u.prompt_tokens) || 0,
+        outputTokens: Number(u.completion_tokens) || 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: Number(u.prompt_tokens_details?.cached_tokens) || 0,
+      },
+    };
   }
-  return { status, save, complete, configured: () => !!key() };
+  // Server-only bridge configuration. Never include this in a public API response.
+  const bridgeConfig = () => ({ key: key(), baseUrl: baseUrl(), model: model() });
+  return { status, save, complete, completeFull, bridgeConfig, configured: () => !!key() };
 }

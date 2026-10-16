@@ -7,16 +7,19 @@ import { $, api, copy, esc, toast } from './core.js';
 import {
   closeInspector,
   deleteNode,
+  inspect,
   lockInspectorIfBusy,
   normalizeInspectorLayout,
   openInspector,
   videoResults,
 } from './inspector.js';
 import { refresh, render, view } from './render.js';
+import { t } from './i18n.js';
 
 const PANEL_W = 640,
   PANEL_H = 360,
-  GAP = 16;
+  GAP = 16,
+  LABEL_H = 30; // white strip above each panel for its number (outside the image)
 
 // Columns × rows for `count` 16:9 panels: as close to a 16:9 sheet as possible, never wider
 // than 2.5 : 1 nor taller than 1 : 2.5 (the shape Seedance accepts for a reference image).
@@ -35,7 +38,7 @@ const loadImage = url =>
   new Promise((ok, no) => {
     const img = new Image();
     img.onload = () => ok(img);
-    img.onerror = () => no(new Error('Không tải được ảnh ' + url));
+    img.onerror = () => no(new Error(t('seedance.imageLoadError') + ' ' + url));
     img.src = url;
   });
 
@@ -43,21 +46,32 @@ const loadImage = url =>
 // "Shot 1…N", and nothing else written on it — captions make Seedance mix up the characters.
 export async function composeStoryboard(g) {
   const members = g.seedance?.members || [];
-  if (!members.length) throw new Error('Nhóm chưa có shot nào.');
+  if (!members.length) throw new Error(t('seedance.noShots'));
   const notReady = members.find(m => !m.ready);
   if (notReady)
-    throw new Error(`Shot "${notReady.name}" chưa có ảnh hoặc ảnh đã cũ. Tạo ảnh shot trước.`);
+    throw new Error(t('seedance.shotNotReady', { name: notReady.name }));
   const { cols, rows } = grid(members.length);
   const canvas = document.createElement('canvas');
+  // Số thứ tự panel đặt NGOÀI khung (trong dải nhãn trắng phía trên mỗi panel), không vẽ đè lên
+  // ảnh — số nằm trong hình dễ bị model coi là chi tiết của cảnh / nhân vật.
   canvas.width = cols * PANEL_W + (cols + 1) * GAP;
-  canvas.height = rows * PANEL_H + (rows + 1) * GAP;
+  canvas.height = rows * (PANEL_H + LABEL_H) + (rows + 1) * GAP;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const images = await Promise.all(members.map(m => loadImage(m.image)));
   images.forEach((img, i) => {
-    const x = GAP + (i % cols) * (PANEL_W + GAP),
-      y = GAP + Math.floor(i / cols) * (PANEL_H + GAP);
+    const col = i % cols,
+      row = Math.floor(i / cols);
+    const x = GAP + col * (PANEL_W + GAP);
+    const labelTop = GAP + row * (PANEL_H + LABEL_H + GAP);
+    const y = labelTop + LABEL_H; // panel sits below its number strip
+    // the panel number, in the white strip ABOVE the panel (outside the image)
+    ctx.fillStyle = '#111111';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(i + 1), x + 2, labelTop + LABEL_H / 2);
     ctx.fillStyle = '#000000';
     ctx.fillRect(x, y, PANEL_W, PANEL_H);
     // the whole keyframe, letterboxed if it is not 16:9
@@ -65,14 +79,6 @@ export async function composeStoryboard(g) {
     const w = img.width * s,
       h = img.height * s;
     ctx.drawImage(img, x + (PANEL_W - w) / 2, y + (PANEL_H - h) / 2, w, h);
-    // the panel number, small, in the corner
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.fillRect(x + 8, y + 8, 40, 34);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(i + 1), x + 28, y + 26);
   });
   const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.9));
   // sent straight to the server so a refusal (e.g. the queue is running) reaches the caller
@@ -114,37 +120,67 @@ export function inspectGroup(n) {
     )
     .join('');
   $('#inspector').innerHTML =
-    `<div class="inspector-head"><h2>🧩 ${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div>` +
+    `<div class="inspector-head"><h2>🧩 ${esc(n.name)}</h2><button class="close" aria-label="${t('common.close')}">×</button></div>` +
     '<div class="inspector-scroll">' +
-    `<div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Storyboard ${esc(n.name)}">` : 'Storyboard sẽ hiện ở đây'}</div>` +
-    (info.problem ? `<div class="note">${esc(info.problem)}</div>` : '') +
-    (info.uncertain
-      ? `<div class="note">Nhóm còn ${info.uncertain} tác vụ Seedance chờ kiểm tra (quá giờ, app khởi động lại hoặc mất phản hồi): Seedvis có thể đã làm xong. Kiểm tra lại miễn phí trước khi tạo mới. <button class="button" id="recheckGroup">↻ Kiểm tra lại</button></div>`
+    `<div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="${t('seedance.storyboardAlt')} ${esc(n.name)}">` : t('seedance.storyboardPlaceholder')}</div>` +
+    (info.problem
+      ? `<div class="note">${esc(info.problem)}` +
+        // Mở thẳng shot đang chặn (chưa có ảnh / ảnh cũ) để xử lý.
+        ((info.missingShots?.[0] || info.staleShots?.[0])
+          ? ` <button class="button" id="openProblemShot" data-shot="${esc((info.missingShots?.[0] || info.staleShots?.[0]).id)}">→ Mở shot cần xử lý</button>`
+          : '') +
+        // Ảnh đã cũ (không phải thiếu ảnh): cho ép dùng ảnh hiện tại, khỏi phải render lại.
+        (info.staleShots?.length && !info.missingShots?.length
+          ? ` <button class="button" id="keepStaleImages">✓ Dùng ảnh hiện tại (${info.staleShots.length})</button>`
+          : '') +
+        '</div>'
       : '') +
-    `<label>Tên nhóm<input id="groupName" value="${esc(n.name)}"></label>` +
-    `<section class="inspector-section"><h3>Shot trong nhóm</h3><ol class="seedance-shots">${shots}</ol>` +
+    (info.uncertain
+      ? `<div class="note">Nhóm còn ${info.uncertain} tác vụ Seedance chờ kiểm tra (quá giờ, app khởi động lại hoặc mất phản hồi): Seedvis có thể đã làm xong. Kiểm tra lại miễn phí trước khi tạo mới. <button class="button" id="recheckGroup">↻ ${t('seedance.recheck')}</button></div>`
+      : '') +
+    `<label>${t('seedance.groupName')}<input id="groupName" value="${esc(n.name)}"></label>` +
+    `<section class="inspector-section"><h3>${t('seedance.shotsInGroup')}</h3><ol class="seedance-shots">${shots}</ol>` +
     `<p class="field-hint">${length}</p>` +
-    `<p class="field-hint">Thêm hoặc bớt shot: nối hoặc cắt dây từ shot vào nhóm này. Ảnh shot đổi thì dựng lại storyboard.</p>` +
-    `<button class="button" id="buildStoryboard">🧩 Dựng storyboard</button></section>` +
-    `<section class="inspector-section"><h3>Gửi Seedance</h3><p class="field-hint">Ảnh gửi đi: ${refs}</p>` +
-    `<label>Model<select id="groupModel">${models}</select></label>` +
-    `<label>Prompt <span class="field-hint">tự dựng từ các shot; sửa tay rồi Lưu nếu cần</span><textarea id="groupPrompt" rows="12">${esc(n.resolvedPrompts.video)}</textarea></label>` +
-    `<div class="prompt-tools"><button id="copyGroupPrompt">Sao chép prompt</button><button id="resetGroupPrompt">Dùng prompt tự dựng</button></div>` +
+    `<p class="field-hint">${t('seedance.editShotsHint')}</p>` +
+    `<button class="button" id="buildStoryboard">🧩 ${t('seedance.buildStoryboard')}</button></section>` +
+    `<section class="inspector-section"><h3>${t('seedance.sendTitle')}</h3><p class="field-hint">${t('seedance.imagesSent')}: ${refs}</p>` +
+    // Dola là Seedance (của Seedane trên máy): chạy qua API key Seedvis, hoặc qua nick Dola của Seedane.
+    `<label>Nguồn<select id="groupSource">` +
+    `<option value="seedvis" ${info.source !== 'dola' ? 'selected' : ''}>Seedance · Seedvis (API key)</option>` +
+    `<option value="dola" ${info.source === 'dola' ? 'selected' : ''}>Seedance · Dola (Seedane)</option>` +
+    '</select></label>' +
+    `<label data-group-model-row="seedvis" ${info.source === 'dola' ? 'hidden' : ''}>Model<select id="groupModel">${models}</select></label>` +
+    `<label data-group-model-row="dola" ${info.source === 'dola' ? '' : 'hidden'}>Model Dola<select id="groupDolaModel">` +
+    `<option value="2.5" ${info.dolaModel !== '2.0' ? 'selected' : ''}>Dola 2.5 (tới 30 giây)</option>` +
+    `<option value="2.0" ${info.dolaModel === '2.0' ? 'selected' : ''}>Dola 2.0 (tới 15 giây)</option>` +
+    '</select></label>' +
+    (info.source === 'dola' && !info.dolaConfigured
+      ? '<p class="field-hint">Chưa nhập token Seedane — Kết nối web → Seedane.</p>'
+      : '') +
+    `<label>Prompt <span class="field-hint">${t('seedance.promptHint')}</span><textarea id="groupPrompt" rows="12">${esc(n.resolvedPrompts.video)}</textarea></label>` +
+    `<div class="prompt-tools"><button id="copyGroupPrompt">${t('seedance.copyPrompt')}</button><button id="resetGroupPrompt">${t('seedance.resetPrompt')}</button></div>` +
     videoResults(n) +
-    `<label>Số phiên bản<select id="nodeVideoVersions"><option value="1">1 bản</option><option value="2">2 bản</option><option value="3">3 bản</option><option value="4">4 bản</option></select></label>` +
-    `<div class="actions"><button class="button primary" id="generateGroup" ${info.problem ? 'disabled' : ''}>Tạo video Seedance</button></div></section>` +
-    `<section class="inspector-footer"><button class="button wide" id="saveGroup">Lưu chỉnh sửa</button><button class="button wide danger" id="deleteNode">Xóa nhóm này</button></section></div>`;
+    `<label>${t('seedance.versionCount')}<select id="nodeVideoVersions"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>` +
+    `<div class="actions"><button class="button primary" id="generateGroup" ${info.problem ? 'disabled' : ''}>${t('seedance.generateVideo')}</button></div></section>` +
+    `<section class="inspector-footer"><button class="button wide" id="saveGroup">${t('common.save')}</button><button class="button wide danger" id="deleteNode">${t('seedance.deleteGroup')}</button></section></div>`;
   openInspector('seedance');
   normalizeInspectorLayout();
   const save = async () => {
     const b = { id };
     if ($('#groupName').value !== n.name) b.name = $('#groupName').value;
-    if ($('#groupModel').value !== info.model)
+    const source = $('#groupSource').value;
+    if (source === 'dola') {
+      // Dola qua Seedane: tắt nguồn Seedvis, bật seedane.video platform dola.
+      b.seedvis = { video: false };
+      b.seedane = { video: { platform: 'dola', model: $('#groupDolaModel').value } };
+    } else {
+      // Seedvis: tắt Seedane nếu đang bật, chọn model Seedance.
+      if (info.source === 'dola') b.seedane = { video: false };
       b.seedvis = { video: { model: $('#groupModel').value, aspectRatio: '16:9' } };
+    }
     if ($('#groupPrompt').value !== n.resolvedPrompts.video)
       b.videoPrompt = $('#groupPrompt').value;
-    if (Object.keys(b).length > 1)
-      store.state = await api('/api/node', { method: 'PATCH', body: b });
+    store.state = await api('/api/node', { method: 'PATCH', body: b });
   };
   const run = action => async () => {
     try {
@@ -154,13 +190,18 @@ export function inspectGroup(n) {
     }
   };
   $('.close').onclick = closeInspector;
+  $('#groupSource').onchange = () => {
+    const dola = $('#groupSource').value === 'dola';
+    document.querySelector('[data-group-model-row="seedvis"]').hidden = dola;
+    document.querySelector('[data-group-model-row="dola"]').hidden = !dola;
+  };
   $('#buildStoryboard').onclick = run(async () => {
     $('#buildStoryboard').disabled = true;
     try {
       await composeStoryboard(n);
       const g = store.state.nodes.find(x => x.id === id);
       if (g && store.selected === id) inspectGroup(g);
-      toast('Đã dựng storyboard');
+      toast(t('seedance.storyboardBuilt'));
     } finally {
       if ($('#buildStoryboard')) $('#buildStoryboard').disabled = false;
     }
@@ -170,7 +211,22 @@ export function inspectGroup(n) {
       store.state = await api('/api/seedance/recheck', { method: 'POST', body: { id } });
       render();
       closeInspector();
-      toast('Đang kiểm tra lại với Seedvis — không tạo trùng');
+      toast(t('render.rechecking'));
+    });
+  // Mở thẳng shot đang chặn storyboard (chưa có ảnh / ảnh cũ) để xử lý.
+  if ($('#openProblemShot'))
+    $('#openProblemShot').onclick = () => inspect($('#openProblemShot').dataset.shot);
+  // Ép dùng ảnh hiện tại của các shot ảnh cũ: dựng storyboard được ngay, khỏi render lại.
+  if ($('#keepStaleImages'))
+    $('#keepStaleImages').onclick = run(async () => {
+      store.state = await api('/api/node/keep-image', {
+        method: 'POST',
+        body: { ids: (info.staleShots || []).map(s => s.id) },
+      });
+      render();
+      const g = store.state.nodes.find(x => x.id === id);
+      if (g) inspectGroup(g);
+      toast('Đã dùng ảnh hiện tại — dựng storyboard được rồi.');
     });
   $('#copyGroupPrompt').onclick = () => copy($('#groupPrompt').value);
   $('#resetGroupPrompt').onclick = run(async () => {
@@ -184,7 +240,7 @@ export function inspectGroup(n) {
     render();
     const g = store.state.nodes.find(x => x.id === id);
     if (g) inspectGroup(g);
-    toast('Đã lưu');
+    toast(t('common.saved'));
   });
   $('#generateGroup').onclick = run(async () => {
     // a render that may already be paid for: only on purpose

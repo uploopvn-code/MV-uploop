@@ -107,6 +107,35 @@ test('observer excludes baseline demo and reference blobs but finds extensionles
   assert.equal(f.w.__dramaMuseChatCaptured.videoUrl, 'https://muse.ai/media/generated');
   f.w.__dramaMuseChatClear(); assert.equal(f.w.sessionStorage.getItem('__dramaMuseChatJob_v13'), null);
 });
+test('Muse image observer ignores old images and captures only the result after its prompt', async t => {
+  const f = fixture(t); const messages = f.w.document.getElementById('messages');
+  messages.innerHTML = '<div data-role="assistant"><img src="https://muse.ai/old.png"></div>';
+  f.w.__dramaMuseChatArm('job', prompt, 'image'); f.w.__dramaMuseChatConfirm();
+  echoPrompt(f);
+  f.w.__dramaMuseChatPoll();
+  assert.equal(f.w.__dramaMuseChatCaptured, null);
+  const card = f.w.document.createElement('div'); card.setAttribute('data-role', 'assistant');
+  card.innerHTML = '<img src="https://muse.ai/generated.png">'; messages.appendChild(card);
+  f.w.__dramaMuseChatPoll();
+  assert.equal(f.w.__dramaMuseChatCaptured.imageUrl, 'https://muse.ai/generated.png');
+});
+test('Muse recovery reads an existing video and image without sending a prompt', async t => {
+  for (const kind of ['video', 'image']) {
+    const f = fixture(t); const messages = f.w.document.getElementById('messages');
+    echoPrompt(f);
+    const card = f.w.document.createElement('div'); card.setAttribute('data-role', 'assistant');
+    card.innerHTML = kind === 'image'
+      ? '<img src="https://muse.ai/finished.png">'
+      : '<video src="https://muse.ai/finished.mp4"></video>';
+    messages.appendChild(card);
+    assert.equal(f.w.__dramaMuseChatRestore({ queueId: 'old', prompt, kind, sentAt: 1,
+      confirmed: true, recovery: true, baseline: [] }), true);
+    f.w.__dramaMuseChatPoll();
+    assert.equal(f.w.__dramaMuseChatCaptured?.[kind === 'image' ? 'imageUrl' : 'videoUrl'],
+      `https://muse.ai/finished.${kind === 'image' ? 'png' : 'mp4'}`);
+    assert.equal(f.clicks(), 0);
+  }
+});
 test('observer finds a Muse player rendered outside the captured conversation root', async t => {
   const f = fixture(t);
   f.w.document.body.insertAdjacentHTML('beforeend', '<div id="player-portal"><video src="https://muse.ai/old.mp4"></video></div>');
@@ -236,30 +265,36 @@ test('MediaSource segments are reconstructed immediately without replaying the p
   assert.equal(result.bytes.length, bytes.length);
 });
 // Run the real orchestration, injected driver, observer and downloader together.
-async function runWorker(t, { saveFails = false, temporaryVideo = false, navigates = false, lateVideo = false, editorState = 'normal', neverVideo = false } = {}) {
+async function runWorker(t, { kind = 'video', recover = false, saveFails = false, temporaryVideo = false, navigates = false, lateVideo = false, editorState = 'normal', neverVideo = false } = {}) {
   const f = fixture(t, { button: 'icon', preview: 'background', sendWorks: !(lateVideo || neverVideo) });
   const newChat = f.w.document.createElement('button'); newChat.setAttribute('aria-label', 'New side chat'); newChat.textContent = '+'; f.w.document.body.appendChild(newChat);
-  let closed = false, saved = null, failure = '', reads = 0, driverReturned = false, lateAdded = false, wasPending = false;
+  let closed = false, closeCalls = 0, saved = null, failure = '', reads = 0, driverReturned = false, lateAdded = false, wasPending = false, wakes = 0;
+  const events = [];
   const reports = [];
   f.w.AbortController = AbortController;
   f.w.fetch = async url => {
     reads++;
     if (temporaryVideo && reads === 1) return new Response('not ready', { status: 404 });
-    return new Response(mp4(), { headers: { 'content-type': 'video/mp4' } });
+    const image = new Uint8Array(2048); image.set([0x89, 0x50, 0x4e, 0x47]);
+    return new Response(kind === 'image' ? image : mp4(), { headers: { 'content-type': kind === 'image' ? 'image/png' : 'video/mp4' } });
   };
   const addVideo = () => {
-    const card = f.w.document.createElement('div'); const video = f.w.document.createElement('video'); video.src = '/generated.mp4';
-    card.appendChild(video); f.w.document.getElementById('messages').appendChild(card);
+    const card = f.w.document.createElement('div');
+    if (kind === 'image') card.setAttribute('data-role', 'assistant');
+    const media = f.w.document.createElement(kind === 'image' ? 'img' : 'video');
+    media.src = kind === 'image' ? '/generated.png' : '/generated.mp4';
+    card.appendChild(media); f.w.document.getElementById('messages').appendChild(card);
   };
   f.w.document.querySelector('main button').addEventListener('click', () => {
     if (editorState === 'disabled') f.input.disabled = true;
     if (editorState === 'removed') f.input.remove();
     if (!lateVideo && !neverVideo) addVideo();
   });
-  const context = { console: { log() {} }, Date: f.w.Date,
+  const context = { console: { log() {} }, Date: f.w.Date, URL,
     trackJob: () => ({}), heartbeat: async () => {}, setInterval: () => 1, clearInterval() {},
-    chrome: { tabs: { query: async () => [], create: async () => ({ id: 42 }), get: async () => ({ url: 'https://muse.ai/chat/job' }), update: async () => {}, remove: async () => { closed = true; } } },
+    chrome: { tabs: { query: async () => [], create: async () => ({ id: 42 }), get: async () => { if (closed) throw new Error('No tab with id: 42'); return { url: 'https://muse.ai/chat/job' }; }, update: async () => {}, remove: async () => { closeCalls++; closed = true; events.push('close'); } } },
     report: message => reports.push(message), MUSECHAT_HOME_URL: 'https://muse.ai/', ensureMuseChatHook: async () => {},
+    wakeMuseTab: async () => { wakes++; }, glog() {},
     execMain: async (_tab, fn, args = []) => { const result = await f.w.eval('(' + fn.toString() + ')')(...args); if (fn.name === 'museChatDriveUi') { driverReturned = true; wasPending = !!result.pending; } if (navigates && fn.name === 'museChatDriveUi') throw new Error('Execution context destroyed'); return result; },
     downloadRef: async () => ({ dataUrl: 'data:image/png;base64,YQ==', mime: 'image/png', name: 'ref.png' }),
     sleep: async ms => {
@@ -270,7 +305,8 @@ async function runWorker(t, { saveFails = false, temporaryVideo = false, navigat
       }
       await new Promise(resolve => f.w.setTimeout(resolve, ms));
     },
-    completeVideo: async (_job, result) => { if (saveFails) throw new Error('Drama server unavailable'); saved = result; },
+    completeVideo: async (_job, result) => { if (saveFails) throw new Error('Drama server unavailable'); saved = result; events.push('save'); },
+    complete: async (_job, result) => { if (saveFails) throw new Error('Drama server unavailable'); saved = result; events.push('save'); },
     fail: async (_job, message) => { failure = message; }, active: new Map(), anyRunning: () => false };
   context.clearMuseChatActive = async () => f.w.__dramaMuseChatClear();
   vm.createContext(context);
@@ -278,18 +314,38 @@ async function runWorker(t, { saveFails = false, temporaryVideo = false, navigat
     extract('museChatWaitReady', '// Check whether') + extract('museChatIsNewChat', '// Click the') +
     extract('museChatClickNewChat', '// Type the prompt') + extract('museChatDriveUi', '// Download the video inside the page') +
     extract('museChatDownload', '// --- MAIN-world functions injected into the Google Vids'), context);
-  await context.startMuseChatJob({ id: 'job', payload: { prompt, references: [{ asset: {} }] } });
-  return { closed, saved, failure, reads, reports, wasPending, clicks: f.clicks() };
+  if (recover) { echoPrompt(f); addVideo(); }
+  await context.startMuseChatJob({ id: 'job', kind, payload: { prompt, references: [{ asset: {} }] },
+    ...(recover ? { recover: { conversationUrl: 'https://muse.ai/chat/job' } } : {}) });
+  return { closed, closeCalls, saved, failure, reads, reports, wasPending, wakes, events, clicks: f.clicks() };
 }
 test('whole worker flow sends, observes, downloads, saves, then closes its owned tab', async t => {
   const result = await runWorker(t); assert.equal(result.failure, '', result.failure); assert.equal(result.saved?.mime, 'video/mp4'); assert.equal(result.closed, true); assert.equal(result.clicks, 1);
+  assert.deepEqual(result.events, ['save', 'close'], 'phải lưu video xong rồi đóng tab ngay');
+  assert.equal(result.closeCalls, 1, 'tab hoàn tất chỉ được đóng một lần');
   assert.ok(result.reports.find(s => s.includes('lưu video')));
+});
+test('whole Muse image flow sends, detects, downloads and saves an image', async t => {
+  const result = await runWorker(t, { kind: 'image' });
+  assert.equal(result.failure, '', result.failure);
+  assert.equal(result.saved?.mime, 'image/png');
+  assert.equal(result.clicks, 1);
+  assert.deepEqual(result.events, ['save', 'close']);
+});
+test('Muse recovery reopens an old conversation and saves its image or video without sending', async t => {
+  for (const kind of ['image', 'video']) {
+    const result = await runWorker(t, { kind, recover: true });
+    assert.equal(result.failure, '', result.failure);
+    assert.equal(result.saved?.mime, kind === 'image' ? 'image/png' : 'video/mp4');
+    assert.equal(result.clicks, 0);
+    assert.deepEqual(result.events, ['save', 'close']);
+  }
 });
 test('temporarily unavailable video is retried without resubmitting the prompt', async t => {
   const result = await runWorker(t, { temporaryVideo: true }); assert.equal(result.failure, '', result.failure); assert.ok(result.reads >= 2); assert.equal(result.clicks, 1); assert.equal(result.closed, true);
 });
-test('server save failure preserves the Muse tab and reports the actual failure', async t => {
-  const result = await runWorker(t, { saveFails: true }); assert.match(result.failure, /Drama server unavailable/); assert.equal(result.closed, false); assert.equal(result.clicks, 1);
+test('server save failure closes the Muse job tab and reports the actual failure', async t => {
+  const result = await runWorker(t, { saveFails: true }); assert.match(result.failure, /Drama server unavailable/); assert.equal(result.closed, true); assert.equal(result.clicks, 1);
 });
 
 test('rejected prompt HTTP request is reported rather than waiting for a video', async t => {
@@ -311,7 +367,7 @@ test('navigation destroying the send promise recovers without a second send', as
 test('late video after the 30s send-confirmation timeout is downloaded and saved', async t => {
   const result = await runWorker(t, { lateVideo: true });
   assert.equal(result.wasPending, true); assert.equal(result.failure, '', result.failure);
-  assert.equal(result.saved?.mime, 'video/mp4'); assert.equal(result.clicks, 1); assert.equal(result.closed, true);
+  assert.equal(result.saved?.mime, 'video/mp4'); assert.equal(result.clicks, 1); assert.equal(result.closed, true); assert.equal(result.wakes, 1);
 });
 test('late video is collected while Muse disables the editor', async t => {
   const result = await runWorker(t, { lateVideo: true, editorState: 'disabled' });
@@ -343,8 +399,8 @@ test('pending session restores with no editor, retains baseline, and captures on
   restored.w.document.getElementById('messages').insertAdjacentHTML('beforeend', '<div><video src="https://muse.ai/new.mp4"></video></div>');
   restored.w.__dramaMuseChatPoll(); assert.equal(restored.w.__dramaMuseChatCaptured.videoUrl, 'https://muse.ai/new.mp4');
 });
-test('no-result job waits the full video deadline, keeps tab open, and never resends', async t => {
-  const result = await runWorker(t, { neverVideo: true }); assert.match(result.failure, /10 phút/); assert.equal(result.closed, false); assert.equal(result.saved, null); assert.equal(result.clicks, 1);
+test('no-result job waits the full video deadline, closes its tab, and never resends', async t => {
+  const result = await runWorker(t, { neverVideo: true }); assert.match(result.failure, /10 phút/); assert.equal(result.closed, true); assert.equal(result.saved, null); assert.equal(result.clicks, 1);
 });
 
 test('UI confirmation exception after clicking keeps the observation job alive', async t => {

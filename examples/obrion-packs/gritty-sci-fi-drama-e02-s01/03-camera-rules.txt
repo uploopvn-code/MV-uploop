@@ -1,0 +1,29 @@
+CAMERA RULES — E02-S01 · TẤM THẺ TITAN
+
+Mục tiêu
+- Gritty realism, quan sát kín đáo. Camera cảm giác đứng trong nhà chứa tàu cùng nhân vật, không phô diễn.
+- Toàn cảnh khoảng 30 giây phải có nhịp từ không gian → nghi ngờ → bí mật → nguy hiểm bên ngoài.
+
+Continuity bắt buộc
+- Ami đi từ trái sang trung tâm; Ken vào từ phải. Giữ screen_direction này xuyên suốt cảnh.
+- Đối thoại Ami/Ken: Ami nhìn screen-right, Ken nhìn screen-left. Không vượt trục 180°.
+- Thẻ titanium ở tay phải Ami rồi vào túi áo trong. Không được xuất hiện lại sau đó.
+- Wide/reset trước bất cứ thay đổi trục nào; ưu tiên không đổi trục.
+
+Coverage đề xuất, không bắt buộc trùng đúng số shot
+- Mở bằng wide 28–32mm, locked tripod: giới thiệu Ami, cột chống, cửa Ken sẽ vào và đèn đỏ.
+- Khi Ami kiểm tra thẻ: medium/insert 50–65mm, static hold. Cận thẻ phải thấy nóng và serial xanh mờ.
+- Ken vào: medium 50mm từ góc giữ được cả cửa và Ami ở độ sâu. Không dùng reveal kiểu horror.
+- Đối thoại: medium đối xứng 50mm, sau đó close-up 65–85mm chỉ khi câu nói làm đổi lợi thế giữa hai người.
+- “Chưa. Nhưng chúng biết tôi có nó.”: slow push-in rất ngắn vào Ami, 65mm, bắt đầu sau “Chưa”, dừng trước khi cô nói hết câu.
+- “Giấu nó đi.”: close Ken 85mm hoặc over-shoulder sạch, static; âm lượng thấp phải có không gian yên.
+- Kết: wide hoặc two-shot 40–50mm có cửa ở background, giữ 1–2 giây sau tiếng kim loại, hard cut to black.
+
+Movement và ánh sáng
+- Không handheld trước lúc nghe tiếng động ngoài cửa. Nếu dùng handheld ở shot cuối, chỉ lắc rất nhẹ như người nín thở.
+- Không crane, drone, orbit, whip pan hay lens flare.
+- Đèn đỏ nhấp nháy là motivator chính; giữ texture thép rỉ/bê tông dầu. Không biến cảnh thành neon sạch hoặc cyberpunk bóng bẩy.
+- Khung hình chừa look room về phía đối phương/cửa. Negative space quanh cửa được phép ở shot kết.
+
+Cut
+- Hard cut mặc định. Match action khi Ami cất thẻ. Không dissolve, slow motion, freeze frame hoặc transition trang trí.

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Drama Tool · Web Worker (ChatGPT + Google Vids + Muse Chat)",
-  "version": "0.5.20",
-  "description": "Nhận job từ Drama Tool: tạo ảnh + chạy Đạo diễn AI trên ChatGPT, tạo video trên Google Vids và Muse chat — bằng phiên đăng nhập của bạn. Ba worker bật/tắt riêng, chạy song song.",
+  "version": "0.5.37",
+  "description": "Nhận job từ Drama Tool: tạo ảnh + chạy Đạo diễn AI trên ChatGPT, tạo video trên Google Vids, tạo ảnh/video trên Muse chat — bằng phiên đăng nhập của bạn.",
   "permissions": [
     "storage",
     "alarms",

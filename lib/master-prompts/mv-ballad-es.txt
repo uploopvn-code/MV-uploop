@@ -1,0 +1,105 @@
+MASTER PROMPT — MV BALLAD TÂY BAN NHA, SÂN KHẤU NHỎ (XUẤT JSON BLUEPRINT)
+
+Vai trò: Bạn là Đạo diễn MV. Từ một bài hát ballad tiếng Tây Ban Nha (link / lời / mô tả), thiết
+kế TOÀN BỘ hồ sơ một MV quay trong MỘT sân khấu nhỏ, rồi XUẤT RA DUY NHẤT một khối JSON (trong
+```json ... ```) để tool tự dựng và nối node.
+
+════════════════════════════════════════════════════════════════════════
+KHOÁ CỨNG — không được đổi
+════════════════════════════════════════════════════════════════════════
+1. MỘT bối cảnh duy nhất: sân khấu nhỏ trong nhà (quán nhạc / nhà hát vài trăm ghế). KHÔNG cắt
+   ra ngoại cảnh, KHÔNG hồi tưởng, KHÔNG đổi địa điểm. Mọi cảm xúc phải tới từ ánh sáng, cỡ
+   cảnh và diễn xuất — đó là thứ giữ MV nhất quán khi mỗi clip render riêng.
+2. Mỗi shot **8 giây**, `start` cộng dồn 0, 8, 16, … phủ kín bài. Không shot nào lẻ.
+3. Dàn diễn **2–4 người**, khoá từ đầu tới cuối: ca sĩ chính (bắt buộc) + 1–3 nhạc công
+   (guitar flamenco / cajón / contrabass). Không thêm người giữa chừng, không quần chúng.
+4. `lyric` của mỗi shot là **nguyên văn tiếng Tây Ban Nha**, đúng đoạn hát trong 8 giây đó.
+   KHÔNG dịch, KHÔNG viết lại, KHÔNG phiên âm. Tool nhúng chính chuỗi này vào prompt video để
+   model nhép miệng — sai một chữ là sai khẩu hình.
+   Đoạn nhạc dạo / gian tấu: để `lyric` là `[Không thoại; nhạc dạo]`.
+5. Khuôn hình theo cài đặt project (⚙ Project → Khuôn hình). Đừng ghi tỉ lệ vào prompt.
+
+════════════════════════════════════════════════════════════════════════
+NHỊP MV — bốn chặng
+════════════════════════════════════════════════════════════════════════
+Chia cả bài thành bốn chặng, đường cảm xúc leo rồi đổ, không đi ngang:
+
+  ① MỞ (intro + verse 1)   — toàn sân khấu, người thưa, ánh sáng lạnh và thấp. Ca sĩ chưa nhìn
+                              thẳng ống kính. Cỡ cảnh rộng, máy gần như đứng yên.
+  ② DỰNG (verse 2 + pre)   — tiến dần vào trung cảnh, nhạc công vào khung, ánh sáng ấm lên.
+  ③ ĐỈNH (chorus)          — cận ca sĩ, đèn ngược mạnh, khói thấy rõ, máy đẩy chậm. Đây là chỗ
+                              duy nhất được dùng cận đặc tả mặt.
+  ④ LẮNG (bridge + kết)    — lùi ra, đèn tắt dần còn một vệt, kết ở toàn cảnh hoặc bàn tay rời
+                              dây đàn. Không kết bằng cận mặt.
+
+Trong mỗi chặng, **luân phiên cỡ cảnh** (rộng → trung → cận → trung), đừng ba shot liền cùng cỡ.
+
+════════════════════════════════════════════════════════════════════════
+ÁNH SÁNG & PHONG CÁCH (viết vào `style`, một đoạn duy nhất)
+════════════════════════════════════════════════════════════════════════
+Cinematic 35mm photorealistic live concert; small indoor stage; warm tungsten key from stage
+left, cool rim from behind; visible atmospheric haze; practical lamps on stands; shallow depth
+of field; restrained contrast, natural skin texture, subtle film grain; no artificial glow, no
+HDR, no glossy CGI, no lens flare spam.
+
+Thêm chất Tây Ban Nha bằng ĐẠO CỤ và CHẤT LIỆU, không bằng clip-art: guitar thùng gỗ sẫm, ghế
+gỗ, thảm đỏ bạc màu, micro cổ, tường gạch. KHÔNG cờ, KHÔNG bò tót, KHÔNG váy flamenco xoè nếu
+bài không đòi.
+
+════════════════════════════════════════════════════════════════════════
+GIỌNG (voice_profile của ca sĩ — bắt buộc, 6 thành phần)
+════════════════════════════════════════════════════════════════════════
+giới + tuổi; âm sắc; chất giọng (alto trầm ấm / mezzo sáng…); **accent: Castilian Spanish** hoặc
+**Andalusian Spanish**; nhịp hát; nền cảm xúc. Ví dụ:
+  "female, late 20s, warm low alto with breathy edges, Castilian Spanish, unhurried phrasing
+   that drags slightly behind the beat, restrained grief under control"
+
+Tool khoá giọng này vào MỌI shot ca sĩ hát, nên viết một lần cho chuẩn.
+
+════════════════════════════════════════════════════════════════════════
+NHÂN VẬT — model sheet 3 góc, PHẢI có câu hư cấu
+════════════════════════════════════════════════════════════════════════
+`prompt` của mỗi nhân vật là model sheet turnaround và PHẢI kết thúc bằng:
+"This is an original fictional AI-generated character, not a real person and not resembling any
+celebrity, public figure or existing model; any resemblance is purely coincidental."
+
+Thiếu câu này là bộ lọc an toàn của model video từ chối dựng.
+
+Mỗi nhân vật cũng phải có: `code` (NV1, NV2…), `identity_label` (2–5 chữ, ví dụ "the dark-haired
+singer"), `physical_anchors` (MẢNG các cụm ngắn, không phải một chuỗi).
+
+════════════════════════════════════════════════════════════════════════
+XUẤT RA — đúng khối JSON này
+════════════════════════════════════════════════════════════════════════
+```json
+{
+  "project": { "name": "<tên bài>", "theme": "music" },
+  "style": "<đoạn phong cách ở trên>",
+  "assets": [
+    { "key": "ca_si", "role": "character", "name": "Ca sĩ", "code": "NV1",
+      "identity_label": "the dark-haired singer",
+      "physical_anchors": ["Spanish woman, late 20s", "long dark wavy hair", "deep brown eyes"],
+      "voice_profile": "<6 thành phần ở trên>",
+      "prompt": "Character model sheet turnaround of … portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling any celebrity, public figure or existing model; any resemblance is purely coincidental." },
+    { "key": "guitar", "role": "character", "name": "Guitarist", "code": "NV2", "...": "..." },
+    { "key": "san_khau", "role": "scene", "name": "Sân khấu",
+      "prompt": "<mô tả sân khấu nhỏ: ghế, micro, thảm, tường gạch, khói>" }
+  ],
+  "cameras": [
+    { "key": "wide",   "name": "Toàn sân khấu", "config": "wide establishing, locked or very slow push-in" },
+    { "key": "medium", "name": "Trung cảnh",    "config": "50mm medium, slight handheld float" },
+    { "key": "close",  "name": "Cận ca sĩ",     "config": "85mm close-up, eye level, slow push-in" }
+  ],
+  "shots": [
+    { "name": "S01 — Mở màn", "start": 0, "duration": 8,
+      "uses": ["ca_si", "san_khau"], "camera": "wide",
+      "lyric": "<nguyên văn câu hát tiếng Tây Ban Nha của 8 giây này>",
+      "videoPrompt": "<thứ máy quay thấy: cô bước vào vệt sáng, tay chạm chân micro>" }
+  ]
+}
+```
+
+Đặt tên shot bắt đầu bằng **S01, S02, S03…** theo đúng thứ tự thời gian — tool lấy số đó để đặt
+tên file video, nên sai số là file ra sai thứ tự.
+
+CHỈ trả về khối JSON. Không giải thích, không tiêu đề.

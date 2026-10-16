@@ -2,6 +2,7 @@
 import { store } from './store.js';
 import { $, api, esc, toast } from './core.js';
 import { refresh } from './render.js';
+import { t } from './i18n.js';
 
 // What a node can generate: a shot makes an image and a video, anything else an image.
 export const kindsFor = shot => (shot ? ['image', 'video'] : ['image']);
@@ -27,19 +28,19 @@ function seedvisFields(n, kind, cur) {
   const hint =
     kind === 'image'
       ? n.references.length
-        ? `Ảnh → ảnh: gửi ${n.references.length} ảnh đầu vào (tối đa ${m.maxImages}).`
-        : 'Chữ → ảnh: node chưa có ảnh đầu vào.'
-      : `${videoFromRefs(n) ? `Ảnh → video từ ${n.references.length} ảnh node nối vào` + (m.maxImages ? ` (model này tối đa ${m.maxImages})` : '') : 'Ảnh → video từ keyframe (ảnh của chính node này)'}. Thời lượng gửi: ${m.durations ? Math.max(...m.durations) + ' giây (tối đa của model, để cắt đầu đuôi)' : 'model tự quyết'} · shot dài ${n.duration} giây.`;
+        ? t('provider.imageToImageHint', { count: n.references.length, max: m.maxImages })
+        : t('provider.textToImageHint')
+      : t('provider.videoHint', { source: videoFromRefs(n) ? t('provider.fromReferences', { count: n.references.length, max: m.maxImages ? ` (${t('provider.modelMax', { max: m.maxImages })})` : '' }) : t('provider.fromKeyframe'), duration: m.durations ? `${Math.max(...m.durations)} giây` : t('provider.modelDecides'), shot: n.duration });
   return (
-    `<label>Model<select data-sv-model="${kind}">${models
+    `<label>${t('provider.model')}<select data-sv-model="${kind}">${models
       .map(
         x =>
-          `<option value="${esc(x.id)}" ${x.id === m.id ? 'selected' : ''}>${esc(x.name)}${available && !available.includes(x.id) ? ' (tài khoản chưa dùng được)' : ''}</option>`,
+          `<option value="${esc(x.id)}" ${x.id === m.id ? 'selected' : ''}>${esc(x.name)}${available && !available.includes(x.id) ? ' (' + t('provider.accountUnavailable') + ')' : ''}</option>`,
       )
       .join('')}</select></label>` +
-    `<div class="two"><label>Tỉ lệ khung<select data-sv-aspect="${kind}">${options(m.aspect, cur.aspectRatio)}</select></label>` +
+    `<div class="two"><label>${t('provider.aspectRatio')}<select data-sv-aspect="${kind}">${options(m.aspect, cur.aspectRatio)}</select></label>` +
     (m.upscale.length
-      ? `<label>Upscale<select data-sv-upscale="${kind}">${options(m.upscale, cur.upscale, v => (v === 'none' ? 'Không' : v))}</select></label>`
+      ? `<label>${t('provider.upscale')}<select data-sv-upscale="${kind}">${options(m.upscale, cur.upscale, v => (v === 'none' ? t('provider.none') : v))}</select></label>`
       : '') +
     `</div><p class="field-hint">${esc(hint)}</p>` +
     (m.note ? `<p class="note">${esc(m.note)}</p>` : '')
@@ -47,10 +48,10 @@ function seedvisFields(n, kind, cur) {
 }
 export function providerSettings(n, shot) {
   return (
-    '<section class="inspector-section"><h3>Nguồn tạo</h3>' +
+    '<section class="inspector-section"><h3>' + t('provider.sourceTitle') + '</h3>' +
     (store.state.seedvisConfigured
       ? ''
-      : '<p class="note">Chưa có API key Seedvis. Nhập key trong Kết nối web.</p>') +
+      : `<p class="note">${t('provider.noSeedvisKey')}</p>`) +
     kindsFor(shot)
       .map(kind => {
         const cur = n.providers[kind],
@@ -62,7 +63,7 @@ export function providerSettings(n, shot) {
             : '';
         const webHint =
           kind === 'image'
-            ? `<p class="field-hint" data-web-hint="${kind}" ${cur.type === 'web' ? '' : 'hidden'}>Tạo ảnh bằng ChatGPT qua extension: cài extension, đăng nhập ChatGPT, bật worker. Gửi prompt${n.references.length ? ' + ' + n.references.length + ' ảnh đầu vào' : ''} sang ChatGPT.</p>`
+            ? `<p class="field-hint" data-web-hint="${kind}" ${cur.type === 'web' ? '' : 'hidden'}>${t('provider.chatgptHint', { refs: n.references.length ? ' + ' + n.references.length + t('provider.inputImages') : '' })}</p>`
             : '';
         // Google Vids runs in the browser extension and only makes video.
         const gvidsOpt =
@@ -71,14 +72,33 @@ export function providerSettings(n, shot) {
             : '';
         const gvidsHint =
           kind === 'video'
-            ? `<p class="field-hint" data-gvids-hint="${kind}" ${cur.type === 'gvids' ? '' : 'hidden'}>Tạo video bằng Google Vids qua extension: cài extension, đăng nhập Google, mở sẵn một tài liệu Google Vids, bật worker Google Vids. Gửi prompt${n.references.length ? ' + ' + n.references.length + ' ảnh làm nhân vật/ingredient' : ''} sang Google Vids, tự đặt 1080p rồi tải video về.</p>`
+            ? `<p class="field-hint" data-gvids-hint="${kind}" ${cur.type === 'gvids' ? '' : 'hidden'}>${t('provider.gvidsHint', { refs: n.references.length ? ' + ' + n.references.length + t('provider.ingredientImages') : '' })}</p>`
             : '';
         // Muse chat runs in the browser extension for image and video — one background tab per job.
         const museOpt =
           `<option value="musechat" ${cur.type === 'musechat' ? 'selected' : ''}>Muse chat (extension)</option>`;
         const museHint =
-          `<p class="field-hint" data-musechat-hint="${kind}" ${cur.type === 'musechat' ? '' : 'hidden'}>Tạo ${kind === 'image' ? 'ảnh' : 'video'} bằng muse.ai qua extension: cài extension, đăng nhập muse.ai, bật worker Muse chat. Mỗi job mở một tab riêng rồi đóng; gửi prompt${n.references.length ? ' + ' + n.references.length + ' ảnh tham chiếu' : ''} sang Muse.</p>`;
-        return `<h4>${kind === 'image' ? 'Tạo ảnh' : 'Tạo video'}</h4><label>Dùng<select data-provider="${kind}"><option value="seedvis" ${cur.type === 'seedvis' ? 'selected' : ''}>Seedvis API</option>${webOpt}${gvidsOpt}${museOpt}<option value="orbit" ${cur.type === 'orbit' ? 'selected' : ''}>Orbit (kịch bản web)</option></select></label><div data-seedvis-fields="${kind}" ${cur.type === 'seedvis' ? '' : 'hidden'}>${seedvisFields(n, kind, sv)}</div>${webHint}${gvidsHint}${museHint}`;
+          `<p class="field-hint" data-musechat-hint="${kind}" ${cur.type === 'musechat' ? '' : 'hidden'}>${t('provider.museHint', { kind: kind === 'image' ? t('provider.image') : t('provider.video'), refs: n.references.length ? ' + ' + n.references.length + t('provider.referenceImages') : '' })}</p>`;
+        // Seedane (desktop tool on the LAN): Dola makes video, Muse image or video.
+        const sdVal = cur.type === 'seedane' ? 'seedane-' + cur.platform : '';
+        const seedaneOpt =
+          (kind === 'video'
+            ? `<option value="seedane-dola" ${sdVal === 'seedane-dola' ? 'selected' : ''}>Seedane · Dola</option>`
+            : '') +
+          `<option value="seedane-muse" ${sdVal === 'seedane-muse' ? 'selected' : ''}>Seedane · Muse</option>`;
+        const seedaneFields =
+          `<div data-seedane-fields="${kind}" ${sdVal ? '' : 'hidden'}>` +
+          (kind === 'video'
+            ? `<label data-seedane-model-row="${kind}" ${sdVal === 'seedane-muse' ? 'hidden' : ''}>Model Dola<select data-seedane-model="${kind}">` +
+              ['2.5', '2.0']
+                .map(m => `<option value="${m}" ${(cur.model || '2.5') === m ? 'selected' : ''}>Dola ${m}${m === '2.5' ? ' (10/15/30 giây)' : ' (10/15 giây)'}</option>`)
+                .join('') +
+              '</select></label>'
+            : '') +
+          `<label>Nick (để trống = nick sẵn sàng đầu tiên)<input data-seedane-account="${kind}" value="${esc(cur.type === 'seedane' ? cur.account || '' : '')}" placeholder="vd Muse #1"></label>` +
+          `<p class="field-hint">${store.state.seedaneConfigured ? 'Chạy qua Seedane trên máy/LAN; Dola chỉ ra 16:9 hoặc 9:16.' : 'Chưa nhập token Seedane — Kết nối web → Seedane.'}</p>` +
+          '</div>';
+        return `<h4>${kind === 'image' ? t('provider.createImage') : t('provider.createVideo')}</h4><label>${t('provider.useLabel')}<select data-provider="${kind}"><option value="seedvis" ${cur.type === 'seedvis' ? 'selected' : ''}>Seedvis API</option>${seedaneOpt}${webOpt}${gvidsOpt}${museOpt}<option value="orbit" ${cur.type === 'orbit' ? 'selected' : ''}>${t('provider.orbit')}</option></select></label><div data-seedvis-fields="${kind}" ${cur.type === 'seedvis' ? '' : 'hidden'}>${seedvisFields(n, kind, sv)}</div>${seedaneFields}${webHint}${gvidsHint}${museHint}`;
       })
       .join('') +
     '</section>'
@@ -112,12 +132,16 @@ export function bindProviderSettings(n) {
       if (gvidsHint) gvidsHint.hidden = select.value !== 'gvids';
       const museHint = document.querySelector(`[data-musechat-hint="${kind}"]`);
       if (museHint) museHint.hidden = select.value !== 'musechat';
+      const sdBox = document.querySelector(`[data-seedane-fields="${kind}"]`);
+      if (sdBox) sdBox.hidden = !select.value.startsWith('seedane-');
+      const sdModel = document.querySelector(`[data-seedane-model-row="${kind}"]`);
+      if (sdModel) sdModel.hidden = select.value !== 'seedane-dola';
       // Editing and several versions run on Seedvis only: follow the choice before it is saved.
       const edit = $('#editImage'),
         versions = $('#inspector #nodeVideoVersions');
       if (kind === 'image' && edit) {
         edit.disabled = off;
-        edit.title = off ? 'Chuyển nguồn tạo ảnh của node sang Seedvis để sửa ảnh' : '';
+        edit.title = off ? t('provider.editNeedsSeedvis') : '';
       }
       if (kind === 'video' && versions) {
         if (off) versions.value = '1';
@@ -136,10 +160,32 @@ export function readProviderSettings(n) {
   const seedvis = {},
     web = {},
     gvids = {},
-    musechat = {};
+    musechat = {},
+    seedane = {};
   document.querySelectorAll('[data-provider]').forEach(select => {
     const kind = select.dataset.provider,
       cur = n.providers[kind];
+    // Seedane: its own per-kind binding; any other choice turns it off.
+    if (select.value.startsWith('seedane-')) {
+      if (cur.type !== 'seedane') seedvis[kind] = false;
+      if (cur.type === 'web') web[kind] = false;
+      if (cur.type === 'gvids') gvids[kind] = false;
+      if (cur.type === 'musechat') musechat[kind] = false;
+      const next = {
+        platform: select.value.slice(8),
+        model: document.querySelector(`[data-seedane-model="${kind}"]`)?.value || '2.5',
+        account: document.querySelector(`[data-seedane-account="${kind}"]`)?.value.trim() || '',
+      };
+      if (
+        cur.type !== 'seedane' ||
+        cur.platform !== next.platform ||
+        (next.platform === 'dola' && cur.model !== next.model) ||
+        (cur.account || '') !== next.account
+      )
+        seedane[kind] = next;
+      return;
+    }
+    if (cur.type === 'seedane') seedane[kind] = false;
     if (select.value === 'orbit') {
       if (cur.type !== 'orbit') seedvis[kind] = false;
       if (cur.type === 'web') web[kind] = false;
@@ -191,7 +237,7 @@ export function readProviderSettings(n) {
     )
       seedvis[kind] = next;
   });
-  return { seedvis, web, gvids, musechat };
+  return { seedvis, web, gvids, musechat, seedane };
 }
 function showSeedvis(o) {
   seedvisStatus = o;
@@ -199,19 +245,19 @@ function showSeedvis(o) {
     ? [
         o.message,
         'key ' + o.keyHint,
-        o.account?.plan ? 'gói ' + o.account.plan : '',
-        o.account?.balance != null ? 'số dư ' + o.account.balance : '',
-        o.source === 'env' ? 'lấy từ biến môi trường SEEDVIS_API_KEY' : '',
+        o.account?.plan ? t('provider.accountPlan', { plan: o.account.plan }) : '',
+        o.account?.balance != null ? t('provider.accountBalance', { balance: o.account.balance }) : '',
+        o.source === 'env' ? t('provider.envSource') : '',
         // The exact model ids the account exposes (from /models) — so a model the app's catalog
         // does not list yet (e.g. a distinct "Google Omni Flash" id) is visible for debugging.
         Array.isArray(o.available) && o.available.length
-          ? 'model tài khoản: ' + o.available.join(', ')
+          ? t('provider.accountModels', { models: o.available.join(', ') })
           : '',
       ]
         .filter(Boolean)
         .join(' · ')
     : o.message;
-  $('#seedvisKey').placeholder = o.configured ? 'Dán key mới để thay' : 'Dán API key Seedvis';
+  $('#seedvisKey').placeholder = o.configured ? t('provider.replaceKey') : t('provider.pasteKey');
   $('#removeSeedvis').hidden = !o.configured || o.source === 'env';
 }
 export async function refreshSeedvis() {
@@ -228,7 +274,7 @@ $('#seedvisKeyForm').onsubmit = async e => {
     );
     await refresh();
     toast(
-      seedvisStatus.error ? seedvisStatus.message : 'Đã lưu API key Seedvis',
+      seedvisStatus.error ? seedvisStatus.message : t('provider.seedvisSaved'),
       seedvisStatus.error,
     );
   } catch (err) {
@@ -239,11 +285,11 @@ $('#seedvisKeyForm').onsubmit = async e => {
   }
 };
 $('#removeSeedvis').onclick = async () => {
-  if (!confirm('Xóa API key Seedvis khỏi máy này?')) return;
+  if (!confirm(t('provider.seedvisRemoveConfirm'))) return;
   try {
     showSeedvis(await api('/api/seedvis/key', { method: 'POST', body: { key: null } }));
     await refresh();
-    toast('Đã xóa API key Seedvis');
+    toast(t('provider.seedvisRemoved'));
   } catch (e) {
     toast(e.message, true);
   }
@@ -253,22 +299,15 @@ export function showOrbit(o) {
   orbitStatus = o;
   $('#orbitStatus').textContent = o.message;
   $('#orbitInventory').textContent = o.authenticated
-    ? o.profiles.length +
-      ' nick · ' +
-      (o.apps || []).length +
-      ' App · ' +
-      o.workflows.length +
-      ' kịch bản · ' +
-      o.flows.length +
-      ' khối'
+    ? t('provider.orbitInventory', { profiles: o.profiles.length, apps: (o.apps || []).length, workflows: o.workflows.length, flows: o.flows.length })
     : '';
   $('#orbitLogin').hidden = !!o.authenticated;
   $('#logoutOrbit').hidden = !o.authenticated;
   $('#workerBadge').textContent = store.state.worker?.online
-    ? '● ' + (store.state.worker.count || 1) + ' worker đang nối'
+    ? '● ' + t('provider.workerConnected', { count: store.state.worker.count || 1 })
     : o.authenticated
       ? '● Orbit: ' + o.user.email
-      : '◐ Đăng nhập Orbit';
+      : '◐ ' + t('provider.orbitLogin');
 }
 export async function refreshOrbit() {
   const o = await api('/api/orbit');
@@ -285,7 +324,7 @@ $('#orbitLogin').onsubmit = async e => {
       body: { email: $('#orbitEmail').value, password: $('#orbitPassword').value },
     });
     await refreshOrbit();
-    toast('Đã đăng nhập. Mở node để chọn kịch bản và nick.');
+    toast(t('provider.orbitLoggedIn'));
   } catch (e) {
     toast(e.message, true);
   } finally {
@@ -297,7 +336,7 @@ $('#logoutOrbit').onclick = async () => {
   try {
     await api('/api/orbit/logout', { method: 'POST', body: {} });
     await refreshOrbit();
-    toast('Đã đăng xuất Orbit');
+    toast(t('provider.orbitLoggedOut'));
   } catch (e) {
     toast(e.message, true);
   }
@@ -305,29 +344,29 @@ $('#logoutOrbit').onclick = async () => {
 export function orbitSettings(n, shot) {
   const c = orbitStatus;
   if (!c?.authenticated)
-    return '<section class="inspector-section"><h3>Cài đặt Orbit</h3><p>Đăng nhập trong Kết nối web để chọn kịch bản và nick chạy.</p></section>';
+    return '<section class="inspector-section"><h3>' + t('provider.orbitSettings') + '</h3><p>' + t('provider.orbitLoginHint') + '</p></section>';
   const scripts = [
     ...(c.apps || []).map(s => ({ ...s, type: 'app', label: 'App' })),
     ...c.workflows.map(s => ({ ...s, type: 'workflow', label: 'Kịch bản' })),
     ...c.flows.map(s => ({ ...s, type: 'flow', label: 'Khối' })),
   ];
   return (
-    '<section class="inspector-section"><h3>Cài đặt Orbit</h3><p>Chọn App / kịch bản và nick cho từng loại tác vụ. App cần công khai các biến prompt, mv_prompt… trong public params.</p>' +
+    '<section class="inspector-section"><h3>' + t('provider.orbitSettings') + '</h3><p>' + t('provider.orbitChooseHint') + '</p>' +
     (shot ? ['image', 'video'] : ['image'])
       .map(kind => {
         const saved = n.orbit?.[kind],
           value = saved ? saved.type + ':' + saved.scriptId : '';
         return (
           '<h4>' +
-          (kind === 'image' ? 'Tạo ảnh' : 'Tạo video') +
-          '</h4><label>Kịch bản<select data-orbit-select data-orbit-script="' +
+          (kind === 'image' ? t('provider.createImage') : t('provider.createVideo')) +
+          '</h4><label>' + t('provider.workflow') + '<select data-orbit-select data-orbit-script="' +
           kind +
           '"><option value="">Chọn kịch bản…</option>' +
           (!value || scripts.some(s => s.type + ':' + s.id === value)
             ? ''
             : '<option selected value="' +
               esc(value) +
-              '">Không còn quyền truy cập — chọn lại</option>') +
+              '">' + t('provider.accessRevoked') + '</option>') +
           scripts
             .map(
               s =>
@@ -340,14 +379,14 @@ export function orbitSettings(n, shot) {
                 '</option>',
             )
             .join('') +
-          '</select></label><label>Nick chạy<select data-orbit-select data-orbit-profile="' +
+          '</select></label><label>' + t('provider.profile') + '<select data-orbit-select data-orbit-profile="' +
           kind +
           '"><option value="">Chọn nick…</option>' +
           (!saved?.profileId || c.profiles.some(p => p.id === saved.profileId)
             ? ''
             : '<option selected value="' +
               esc(saved.profileId) +
-              '">Nick không còn quyền truy cập — chọn lại</option>') +
+              '">' + t('provider.profileRevoked') + '</option>') +
           c.profiles
             .map(
               p =>
@@ -364,20 +403,21 @@ export function orbitSettings(n, shot) {
         );
       })
       .join('') +
-    '<p class="muted">Lựa chọn được lưu theo node và đính kèm từng job. Tự mở nick và chạy kịch bản đã chọn. Ảnh đầu vào được truyền bằng mv_input_1_path, mv_input_2_path… Kịch bản cần upload chúng; lưu kết quả tới mv_output_path.</p></section>'
+    '<p class="muted">' + t('provider.orbitJobHint') + '</p></section>'
   );
 }
 
 export function outputSettings(n, shot) {
   return (
-    '<section class="inspector-section"><h3>File đầu ra</h3><p class="field-hint">Thư mục trên máy Orbit: ' +
+    '<section class="inspector-section"><h3>' + t('provider.outputTitle') + '</h3><p class="field-hint">' + t('provider.orbitFolder') + ': ' +
     esc(store.state.outputDirectory) +
     '</p>' +
     (shot ? ['image', 'video'] : ['image'])
       .map(
         kind =>
-          '<label>Tên file ' +
-          (kind === 'image' ? 'ảnh' : 'video') +
+          '<label>' +
+          t('provider.fileName') + ' ' +
+          (kind === 'image' ? t('provider.image') : t('provider.video')) +
           ' <code class="variable-tag">{{mv_output_filename}}</code><input data-output-pattern="' +
           kind +
           '" value="' +
@@ -387,7 +427,7 @@ export function outputSettings(n, shot) {
           ) +
           '"></label><p class="field-hint" data-output-preview="' +
           kind +
-          '">Ví dụ: ' +
+          '">' + t('provider.example') + ': ' +
           esc(
             (
               n.outputNaming?.[kind] ||
@@ -400,13 +440,13 @@ export function outputSettings(n, shot) {
           '</p>',
       )
       .join('') +
-    '<p class="field-hint">Mẫu dùng {node_id}, {kind}, {job_id}. Kịch bản lưu tới <code>{{mv_output_path}}</code>. Đuôi file phải đúng định dạng tải về. App cần công khai các biến đầu ra này. Tự nhận file từ đường dẫn đầu ra khi kịch bản xong.</p></section>'
+    '<p class="field-hint">' + t('provider.outputPatternHint') + '</p></section>'
   );
 }
 export function updateOutputPreview() {
   document.querySelectorAll('[data-output-pattern]').forEach(e => {
     document.querySelector('[data-output-preview="' + e.dataset.outputPattern + '"]').textContent =
-      'Ví dụ: ' +
+      t('provider.example') + ': ' +
       e.value
         .replaceAll('{node_id}', store.selected)
         .replaceAll('{job_id}', 'JOB-ID')
@@ -451,7 +491,9 @@ export function paintDefaults() {
   const hint = $('#defaultsHint');
   if (hint)
     hint.textContent =
-      img.value === 'musechat'
+      img.value.startsWith('seedane-') || vid.value.startsWith('seedane-')
+        ? 'Nguồn Seedane: mở Seedane, bật API nội bộ và nhập token ở Kết nối web → Seedane. Muse cần nick muse.ai đã đăng nhập trong Seedane.'
+        : img.value === 'musechat'
         ? 'Ảnh mặc định tạo bằng Muse chat — cần bật worker Muse chat trong extension và đăng nhập muse.ai.'
         : img.value === 'web'
           ? 'Ảnh mặc định tạo bằng ChatGPT — cần bật worker extension (xem phần ChatGPT).'
@@ -477,7 +519,7 @@ async function saveDefaults() {
       },
     });
     await refresh();
-    toast('Đã lưu nguồn mặc định');
+    toast(t('provider.defaultsSaved'));
   } catch (e) {
     toast(e.message, true);
   }
@@ -508,5 +550,47 @@ if ($('#copyWorkerToken'))
       el.select();
       document.execCommand('copy');
     }
-    toast('Đã sao chép token');
+    toast(t('provider.tokenCopied'));
   };
+
+// --- Seedane connection (Kết nối web) ---------------------------------------------------------
+function showSeedane(o) {
+  const el = $('#seedaneStatus');
+  if (!el) return;
+  if ($('#seedaneUrl') && document.activeElement !== $('#seedaneUrl')) $('#seedaneUrl').value = o.url || '';
+  const acc = o.accounts
+    ? ` · Dola ${o.accounts.dola?.ready ?? 0}/${o.accounts.dola?.total ?? 0} nick sẵn sàng · Muse ${o.accounts.muse?.ready ?? 0}/${o.accounts.muse?.total ?? 0}`
+    : '';
+  el.textContent = !o.ok
+    ? 'Không kết nối được Seedane: ' + (o.error || '')
+    : !o.configured
+      ? `Seedane ${o.version} đang chạy ở ${o.url} — chưa nhập token.`
+      : o.error
+        ? `Seedane ${o.version} · ${o.error}`
+        : `✅ Seedane ${o.version} · ${o.url}${acc}`;
+}
+async function loadSeedane() {
+  try {
+    showSeedane(await api('/api/seedane'));
+  } catch (e) {
+    if ($('#seedaneStatus')) $('#seedaneStatus').textContent = e.message;
+  }
+}
+if ($('#seedaneForm')) {
+  loadSeedane();
+  $('#seedaneForm').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const body = { url: $('#seedaneUrl').value.trim() };
+      if ($('#seedaneToken').value.trim()) body.token = $('#seedaneToken').value.trim();
+      showSeedane(await api('/api/seedane', { method: 'POST', body }));
+      await refresh();
+      toast('Đã lưu cấu hình Seedane.');
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      $('#seedaneToken').value = '';
+    }
+  };
+  $('#testSeedane').onclick = loadSeedane;
+}

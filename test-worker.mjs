@@ -145,6 +145,65 @@ try {
   assert.ok(edNode.image?.url, 'node có ảnh mới sau sửa');
   assert.ok(edNode.prevImage, 'ảnh cũ được giữ để đổi lại');
 
+  // An attachment quota is account-specific. The limited account returns an unsent reference
+  // job to the queue, cannot reclaim it, and another ChatGPT profile receives the same job.
+  const handoffJob = (
+    await api('/api/jobs', 'POST', {
+      nodeId: id,
+      kind: 'image',
+      edit: 'keep the character and change the weather',
+    })
+  ).data.job;
+  assert.equal(handoffJob.payload.references.length, 1, 'job chuyển tài khoản phải có ảnh đính kèm');
+  const limitedClaim = (
+    await authed('/api/worker/claim', {
+      name: 'chatgpt-limited',
+      kinds: ['image', 'recover'],
+      sites: ['chatgpt'],
+    })
+  ).data.job;
+  assert.equal(limitedClaim.id, handoffJob.id);
+  const handoffResult = await authed('/api/worker/fail', {
+    id: limitedClaim.id,
+    lease: limitedClaim.lease,
+    name: 'chatgpt-limited',
+    error: "You've reached the limit for file attachments",
+    needsReview: false,
+    retryOtherWorker: true,
+  });
+  assert.equal(handoffResult.status, 200);
+  assert.equal(handoffResult.data.status, 'queued');
+  assert.equal(handoffResult.data.handedOff, true);
+  const handedOffState = (await api('/api/state')).data.jobs.find(j => j.id === handoffJob.id);
+  assert.deepEqual(handedOffState.excludedWorkers, ['chatgpt-limited']);
+  assert.match(handedOffState.progress, /chờ tài khoản ChatGPT khác/i);
+  assert.equal(
+    (
+      await authed('/api/worker/claim', {
+        name: 'chatgpt-limited',
+        kinds: ['image', 'recover'],
+        sites: ['chatgpt'],
+      })
+    ).data.job,
+    null,
+    'tài khoản hết lượt không được nhận lại cùng job',
+  );
+  const replacementClaim = (
+    await authed('/api/worker/claim', {
+      name: 'chatgpt-replacement',
+      kinds: ['image', 'recover'],
+      sites: ['chatgpt'],
+    })
+  ).data.job;
+  assert.equal(replacementClaim.id, handoffJob.id, 'tài khoản khác phải nhận job được chuyển');
+  await authed('/api/worker/complete', {
+    id: replacementClaim.id,
+    lease: replacementClaim.lease,
+    name: 'handoff.png',
+    mime: 'image/png',
+    base64: png.toString('base64'),
+  });
+
   // The media the worker downloads for references is served with a CORS header for the extension.
   const media = await fetch(BASE + doneNode.image.url, {
     headers: { Origin: 'chrome-extension://abcdefghi' },

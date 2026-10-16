@@ -6,6 +6,7 @@
 import { store } from './store.js';
 import { $, api, esc, toast } from './core.js';
 import { closeInspector, inspect } from './inspector.js';
+import { t } from './i18n.js';
 
 const FRAMING_LABEL = {
   ots_a: 'Qua vai (máy sau người TRÁI)',
@@ -13,6 +14,7 @@ const FRAMING_LABEL = {
   two_shot: 'Trung đôi (máy trước mặt)',
 };
 const FRAMINGS = ['ots_a', 'ots_b', 'two_shot'];
+const framingLabel = fr => t(`staging.framing.${fr}`) || FRAMING_LABEL[fr];
 // Where the camera dot sits for a framing, relative to the two character markers: behind the
 // left person (ots_a), behind the right person (ots_b), or in front of both (two_shot).
 function camPoint(framing, left, right) {
@@ -25,7 +27,7 @@ const clamp01 = v => Math.min(1, Math.max(0, Number(v) || 0));
 export function openStaging(n) {
   const st = n.merged?.stage;
   if (!st || !st.left || !st.right) {
-    toast('Cần đủ bối cảnh + hai nhân vật (nối dây vào các khung) trước khi dàn dựng.', true);
+    toast(t('staging.needInputs'), true);
     return;
   }
   const id = n.id;
@@ -44,7 +46,7 @@ export function openStaging(n) {
     .map(
       (f, i) =>
         `<li data-frame="${f.id}"><div class="stage-frame-head"><b>Khung ${i + 1}</b> · ${esc(f.name)}</div>` +
-        `<div class="stage-framing">${FRAMINGS.map(fr => `<button type="button" class="button small" data-fr="${fr}">${esc(FRAMING_LABEL[fr])}</button>`).join('')}</div></li>`,
+        `<div class="stage-framing">${FRAMINGS.map(fr => `<button type="button" class="button small" data-fr="${fr}">${esc(framingLabel(fr))}</button>`).join('')}</div></li>`,
     )
     .join('');
 
@@ -53,31 +55,31 @@ export function openStaging(n) {
   $('#overlay').hidden = false;
   $('#inspector').hidden = false;
   $('#inspector').innerHTML =
-    `<div class="inspector-head"><h2>🎬 Dàn dựng · ${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div>` +
+    `<div class="inspector-head"><h2>🎬 ${t('staging.title')} · ${esc(n.name)}</h2><button class="close" aria-label="${t('common.close')}">×</button></div>` +
     `<p class="field-hint">Kéo hai nhân vật về vị trí trái/phải trên ảnh bối cảnh (quyết định trục 180°). Với mỗi khung, chọn góc máy. Chỉnh mô tả nền/ánh sáng từng bên. Lưu xong, prompt tự cập nhật và ảnh khung được đánh dấu cần tạo lại.</p>` +
     `<div class="stage-plate${st.place?.image ? '' : ' empty'}" id="stagePlate"${st.place?.image ? ` style="background-image:url('${esc(st.place.image)}')"` : ''}>` +
     (st.place?.image
       ? ''
-      : `<span class="stage-empty-note">Chưa có ảnh bối cảnh — vẫn đặt được vị trí</span>`) +
+      : `<span class="stage-empty-note">${t('staging.noSceneImage')}</span>`) +
     `<div class="stage-marker char" data-char="${st.left.id}">${esc(st.left.name || 'A')}</div>` +
     `<div class="stage-marker char" data-char="${st.right.id}">${esc(st.right.name || 'B')}</div>` +
     `<div class="stage-cams" id="stageCams"></div></div>` +
     `<p class="field-hint" id="sidesHint"></p>` +
-    `<section class="inspector-section"><h3>Góc máy từng khung</h3><ol class="stage-frames">${frameRows}</ol></section>` +
+    `<section class="inspector-section"><h3>${t('staging.frameAngles')}</h3><ol class="stage-frames">${frameRows}</ol></section>` +
     `<section class="inspector-section"><h3>Mô tả bối cảnh (staging)</h3>` +
-    field('stPlace', 'Câu mở bối cảnh', text.place) +
-    `<div class="two"><fieldset class="stage-side"><legend>Bên TRÁI khung</legend>` +
-    field('stLa', 'Đứng cạnh', side(text.left).anchor) +
-    field('stLb', 'Nền phía sau', side(text.left).background) +
-    field('stLl', 'Ánh sáng', side(text.left).light) +
-    `</fieldset><fieldset class="stage-side"><legend>Bên PHẢI khung</legend>` +
-    field('stRa', 'Đứng cạnh', side(text.right).anchor) +
-    field('stRb', 'Nền phía sau', side(text.right).background) +
-    field('stRl', 'Ánh sáng', side(text.right).light) +
+    field('stPlace', t('staging.placeOpening'), text.place) +
+    `<div class="two"><fieldset class="stage-side"><legend>${t('staging.leftSide')}</legend>` +
+    field('stLa', t('staging.nextTo'), side(text.left).anchor) +
+    field('stLb', t('staging.background'), side(text.left).background) +
+    field('stLl', t('staging.light'), side(text.left).light) +
+    `</fieldset><fieldset class="stage-side"><legend>${t('staging.rightSide')}</legend>` +
+    field('stRa', t('staging.nextTo'), side(text.right).anchor) +
+    field('stRb', t('staging.background'), side(text.right).background) +
+    field('stRl', t('staging.light'), side(text.right).light) +
     `</fieldset></div>` +
-    field('stTwo', 'Bố cục trung đôi (two_shot)', text.two_shot) +
+    field('stTwo', t('staging.twoShotLayout'), text.two_shot) +
     `</section>` +
-    `<div class="actions"><button class="button primary" id="stSave">💾 Lưu dàn dựng</button><button class="button" id="stBack">← Quay lại phân cảnh</button></div>`;
+    `<div class="actions"><button class="button primary" id="stSave">💾 ${t('staging.save')}</button><button class="button" id="stBack">← ${t('staging.back')}</button></div>`;
 
   const plate = $('#stagePlate');
   // Draws the two character markers and the per-frame camera dots at their current positions.
@@ -161,7 +163,7 @@ export function openStaging(n) {
     };
     try {
       store.state = await api('/api/merged/staging', { method: 'POST', body });
-      toast('Đã lưu dàn dựng · prompt cập nhật, tạo lại ảnh khung rồi quay video');
+      toast(t('staging.saved'));
       inspect(id); // back to the merged panel, now showing the new prompt + stale frames
     } catch (e) {
       toast(e.message, true);

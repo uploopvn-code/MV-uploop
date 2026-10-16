@@ -1,6 +1,7 @@
 // Wardrobe panel in the inspector (costumes, looks, items).
 import { store } from './store.js';
 import { esc } from './core.js';
+import { t as tx } from './i18n.js';
 
 // Inspector section for the wardrobe zone. Wardrobe node: the costume + items fields that
 // drive its generated prompt, its character and the shots using it. Character node: its
@@ -11,6 +12,7 @@ import { esc } from './core.js';
 const SHEET_COPY = {
   prop: {
     title: '🧰 Vật dụng — model sheet',
+    titleKey: 'wardrobe.sheetPropTitle',
     hint: 'Tool dựng sẵn prompt: <b>một ảnh gồm 1 góc chính lớn + 2 góc xoay</b> của đúng vật này, cùng tỉ lệ, cùng nguồn sáng, nền xám trơn, <b>không có bàn tay và bối cảnh</b> — giống model sheet nhân vật, để vật dụng không đổi hình giữa các shot. Chỉ cần gõ mô tả, không cần viết prompt.',
     placeholder:
       'a tarnished Victorian silver locket, oval, engraved ivy, worn hinge, holding a faded photograph',
@@ -18,6 +20,7 @@ const SHEET_COPY = {
   },
   character: {
     title: '① Nhân vật — model sheet',
+    titleKey: 'wardrobe.sheetCharacterTitle',
     hint: 'Tool dựng sẵn prompt: <b>chân dung lớn + 3 góc toàn thân</b> (trước, nghiêng, sau) cùng tỉ lệ trên một đường chân, nền xám, để Veo giữ đúng khuôn mặt và bộ đồ qua mọi shot.',
     placeholder:
       'a woman in her late thirties, sharp cheekbones, dark hair pinned up, charcoal high-neck mourning dress',
@@ -26,6 +29,7 @@ const SHEET_COPY = {
   },
   scene: {
     title: '③ Bối cảnh — 3 cỡ cảnh / 1 ảnh',
+    titleKey: 'wardrobe.sheetSceneTitle',
     hint: 'Tool dựng sẵn prompt: <b>một ảnh gồm 3 cỡ cảnh</b> — cảnh toàn + cận góc A + cận góc B của cùng một không gian trống người — render một lần (như model sheet nhân vật). Chỉ cần gõ mô tả địa điểm.',
     placeholder:
       'a Victorian study, oak panelling, a desk by the tall window, rain outside, late afternoon',
@@ -36,21 +40,74 @@ const SHEET_COPY = {
 export function sheetPanel(n) {
   const c = SHEET_COPY[n.role];
   if (!c) return '';
+  const title = tx(c.titleKey) || c.title;
   // A node that carries its own written prompt (every character built from a blueprint) keeps
   // it: prompts() prefers a written prompt over the generated sheet, the same way a costume's
   // outfit fields step aside. Offering an editable description there would promise a rebuild
   // that never happens, so say what is actually in force and how to switch.
   if (String(n.prompt || '').trim())
     return (
-      `<section class="inspector-section"><h3>${c.title}</h3>` +
-      `<p class="field-hint">Node này đang dùng <b>prompt riêng</b> (viết trong blueprint hoặc do bạn sửa tay), nên prompt đó thắng và mô tả sẽ không có tác dụng. Muốn chuyển sang model sheet tool dựng sẵn: bấm <b>Dùng prompt kế thừa</b> ở dưới để xóa prompt riêng, rồi quay lại gõ mô tả.</p>` +
+      `<section class="inspector-section"><h3>${title}</h3>` +
+      `<p class="field-hint">${tx('wardrobe.customPromptHint')}</p>` +
       `</section>`
     );
   return (
-    `<section class="inspector-section"><h3>${c.title}</h3>` +
-    `<p class="field-hint">${c.hint}</p>` +
-    `<label>Mô tả (tiếng Anh)<textarea id="sheetDesc" rows="3" placeholder="${esc(c.placeholder)}">${esc(n.desc || '')}</textarea></label>` +
-    `<p class="field-hint">${c.empty} Sửa mô tả rồi bấm <b>Lưu chỉnh sửa</b> — prompt ảnh bên dưới tự dựng lại.</p>` +
+    `<section class="inspector-section"><h3>${title}</h3>` +
+    `<p class="field-hint">${tx('wardrobe.sheet.' + n.role + '.hint')}</p>` +
+    `<label>${tx('wardrobe.descriptionEnglish')}<textarea id="sheetDesc" rows="3" placeholder="${esc(c.placeholder)}">${esc(n.desc || '')}</textarea></label>` +
+    `<p class="field-hint">${tx('wardrobe.sheet.' + n.role + '.empty')} ${tx('wardrobe.editDescriptionHint')}</p>` +
+    `</section>`
+  );
+}
+
+// Character Bible fields the merged over-the-shoulder / two-shot frames read by name: the NV
+// code the prompt calls the person by, a 2–5 word identity label ("the auburn-haired woman"),
+// the back view (hair + shoulder seen from behind) and optional physical anchors. These used to
+// arrive only from a blueprint import, so a character that came in without them left its dialogue
+// frames permanently blocked. Editing them here turns that dead end into a filled-in field.
+// Cùng luật với isCharacter() ở server: một nhân vật có thể nhận ra qua role HOẶC qua cột nó
+// đứng. Chỉ xét role thì những nhân vật cũ (chỉ có zone) không hiện được ô nhập nào.
+export const isCharacterNode = n =>
+  !!n && n.role !== 'look' && (n.role === 'character' || n.zone === 'character');
+export function identityPanel(n) {
+  if (!isCharacterNode(n)) return '';
+  return (
+    `<section class="inspector-section"><h3>② Nhận dạng — cho phân cảnh ghép (qua vai)</h3>` +
+    `<p class="field-hint">Khung qua vai (OTS) và two-shot của phân cảnh ghép gọi nhân vật bằng các trường này. Thiếu <b>Nhãn nhận dạng</b> hoặc <b>Tả lưng</b> → phân cảnh ghép báo lỗi và không tạo được ảnh khung.</p>` +
+    `<div class="two"><label>Mã (NV1, NV2…)<input id="charCode" value="${esc(n.code || '')}" placeholder="NV1"></label>` +
+    `<label>Nhãn nhận dạng (tiếng Anh, 2–5 chữ)<input id="charLabel" value="${esc(n.label || '')}" placeholder="the auburn-haired woman"></label></div>` +
+    `<label>Tả lưng · back view (tiếng Anh) <span class="field-hint">tóc sau + vai của bộ đang mặc; cần cho khung qua vai</span><input id="charBack" value="${esc(n.back || '')}" placeholder="her auburn bun and charcoal shoulder"></label>` +
+    `<label>Neo ngoại hình · physical anchors (tiếng Anh, cách nhau dấu phẩy) <span class="field-hint">tùy chọn</span><input id="charAnchors" value="${esc(n.anchors || '')}" placeholder="red hair, green eyes"></label>` +
+    `</section>` +
+    voicePanel(n)
+  );
+}
+
+// DNA giọng nói: sáu thành phần làm nên một giọng, ghép thành câu "Voice lock" mà MỌI đường
+// render đọc (shot thường, phân cảnh ghép, nhóm Seedance). Không có nó thì mỗi lần render model
+// tự nghĩ ra một giọng khác — đó là lý do giọng nhân vật không đồng nhất giữa các clip.
+const VOICE_FIELDS = [
+  ['gender', 'Giới tính giọng', 'Male / Female'],
+  ['age_sound', 'Tuổi nghe thấy', 'Late 30s'],
+  ['timbre', 'Âm sắc', 'Low, slightly gravelly, dry'],
+  ['accent', 'Giọng vùng / cách phát âm', 'Southern Vietnamese (Saigon), everyday, not polished'],
+  ['pacing', 'Nhịp nói', 'Slow and clipped; sentences get shorter as he loses control'],
+  ['emotional_baseline', 'Nền cảm xúc', 'Controlled irritation over fear of being made a fool'],
+];
+export function voicePanel(n) {
+  const p = n.voiceProfile || {};
+  const rows = VOICE_FIELDS.map(
+    ([k, label, ph]) =>
+      `<label>${esc(label)}<input id="voice_${k}" value="${esc(p[k] || '')}" placeholder="${esc(ph)}"></label>`,
+  ).join('');
+  const locked = String(n.voice || '').trim();
+  return (
+    `<section class="inspector-section"><h3>🎙 DNA giọng nói</h3>` +
+    `<p class="field-hint">Viết bằng <b>tiếng Anh</b>. Sáu ô này ghép thành câu <code>Voice lock</code> gắn vào prompt của mọi shot nhân vật này nói — nhờ đó giọng không đổi giữa các clip. Bỏ trống hết thì không có khoá giọng và mỗi lần render model tự chọn một giọng khác.</p>` +
+    rows +
+    (locked
+      ? `<p class="field-hint">Câu khoá giọng đang dùng:</p><textarea id="voiceRaw" rows="3">${esc(locked)}</textarea><p class="field-hint">Sửa thẳng ô này nếu muốn tự viết; nội dung ở đây <b>thắng</b> sáu ô trên.</p>`
+      : `<textarea id="voiceRaw" rows="3" placeholder="Hoặc tự viết cả câu khoá giọng ở đây"></textarea>`) +
     `</section>`
   );
 }
@@ -81,14 +138,14 @@ export function wardrobePanel(n) {
     const looks = outs.filter(x => x.role === 'look');
     const shots = outs.filter(x => x.role !== 'look');
     return (
-      `<section class="inspector-section"><h3>👗 Trang phục (bộ đồ)</h3>` +
+      `<section class="inspector-section"><h3>${tx('wardrobe.costumeTitle')}</h3>` +
       `<p class="field-hint">Nhân vật: ${chars.length ? '<b>' + esc(chars.map(c => c.name).join(', ')) + '</b>' : '<b>chưa gắn</b> — tạo trang phục từ node nhân vật để gắn'}. ` +
-      `Node này render <b>bộ đồ</b> trên ma-nơ-canh, <b>không nhận ảnh đầu vào</b> (đưa ảnh người vào chỉ khiến model vẽ lại người). Để Veo thấy đúng người mặc đúng bộ, tạo node <b>nhân vật đã mặc</b> từ đây (ghép ảnh nhân vật + ảnh bộ đồ, prompt tool đặt sẵn) rồi nối node đó vào shot — không nối node này thẳng vào shot.</p>` +
+      `${tx('wardrobe.costumeHint')}</p>` +
       `<label>Trang phục (tiếng Anh)<textarea id="wardrobeOutfit" rows="2" placeholder="charcoal high-neck mourning dress, black gloves, onyx brooch">${esc(n.outfit || '')}</textarea></label>` +
       `<label>Vật dụng / phụ kiện (tiếng Anh)<textarea id="wardrobeItems" rows="2" placeholder="black umbrella, antique silver locket">${esc(n.items || '')}</textarea></label>` +
       (looks.length
-        ? `<p class="field-hint">Nhân vật đã mặc: ${looks.map(l => `<button type="button" class="link" data-open="${l.id}">${esc(l.name)}</button> · ${l.image ? 'đã có ảnh' : 'chưa có ảnh'}`).join(', ')}</p>`
-        : `<button type="button" class="button" id="addLookFor">＋ Tạo node nhân vật đã mặc bộ này</button>`) +
+        ? `<p class="field-hint">${tx('wardrobe.looksLabel')}: ${looks.map(l => `<button type="button" class="link" data-open="${l.id}">${esc(l.name)}</button> · ${l.image ? tx('wardrobe.hasImage') : tx('wardrobe.noImage')}`).join(', ')}</p>`
+        : `<button type="button" class="button" id="addLookFor">＋ ${tx('wardrobe.createLook')}</button>`) +
       (shots.length
         ? `<p class="field-hint">⚠ Đang nối thẳng vào shot: ${esc(shots.map(s => s.name).join(', '))} — nên nối qua node nhân vật đã mặc.</p>`
         : '') +
@@ -107,7 +164,7 @@ export function wardrobePanel(n) {
       .map(e => byId(e.target))
       .filter(Boolean);
     return (
-      `<section class="inspector-section"><h3>👤 Nhân vật đã mặc trang phục</h3>` +
+      `<section class="inspector-section"><h3>${tx('wardrobe.lookTitle')}</h3>` +
       `<p class="field-hint">Ghép <b>ảnh nhân vật</b> (khuôn mặt, vóc dáng) với <b>ảnh trang phục</b> (bộ đồ) thành chính người đó mặc bộ này, ra đúng bố cục model sheet như nhân vật (chân dung + 3 góc toàn thân, cùng model ảnh và tỉ lệ khung với node nhân vật) — prompt tool đặt sẵn, không cần sửa. Cả hai node đầu vào phải có ảnh trước. Nối cổng Ra của node này vào các shot dùng look này.</p>` +
       `<p class="field-hint">Nhân vật: ${ch.length ? '<b>' + esc(ch.map(c => c.name).join(', ')) + '</b>' : '<b>chưa nối</b>'} · Trang phục: ${cs.length ? '<b>' + esc(cs.map(c => c.name).join(', ')) + '</b>' : '<b>chưa nối</b>'} · Dùng ở: ${shots.length ? esc(shots.map(s => s.name).join(', ')) : 'chưa nối shot nào'}</p></section>`
     );
@@ -124,7 +181,7 @@ export function wardrobePanel(n) {
       (angles.length
         ? `<p class="field-hint">Góc máy từ node này:</p><ul class="wardrobe-list">${angles.map(item).join('')}</ul>`
         : '') +
-      `<div class="actions"><button type="button" class="button" id="addReverseAngles">＋ 2 góc cận đối nghịch A/B</button><button type="button" class="button" id="addAngleFor">＋ Góc máy khác</button></div>`
+      `<div class="actions"><button type="button" class="button" id="addReverseAngles">＋ ${tx('wardrobe.reverseAngles')}</button><button type="button" class="button" id="addAngleFor">＋ ${tx('wardrobe.otherAngle')}</button></div>`
     );
   };
   if (n.role === 'angle') {
@@ -137,7 +194,7 @@ export function wardrobePanel(n) {
       .map(e => byId(e.target))
       .filter(x => x && x.role !== 'angle');
     return (
-      `<section class="inspector-section"><h3>◧ Góc máy của bối cảnh</h3>` +
+      `<section class="inspector-section"><h3>${tx('wardrobe.angleTitle')}</h3>` +
       `<p class="field-hint">Render <b>từ ảnh bối cảnh gốc</b> (${master ? '<b>' + esc(master.name) + '</b>' + (master.image ? '' : ' — chưa có ảnh, tạo ảnh gốc trước') : '<b>chưa nối</b> — nối cổng Ra của node bối cảnh vào đây'}): cùng kiến trúc, bài trí, ánh sáng, chỉ đổi vị trí máy, không có người. Prompt tool đặt sẵn từ mô tả góc dưới đây. Góc A = cái máy OTS A nhìn thấy (sau vai A nhìn B), góc B ngược lại 180°. <b>Ảnh ra giống cảnh toàn?</b> Tả góc cụ thể hơn (máy đứng cạnh vật gì, nhìn về vật gì, cỡ cận) rồi bấm Tạo ảnh lại.</p>` +
       `<label>Góc máy (tiếng Anh)<textarea id="angleText" rows="3" placeholder="camera at the fireplace looking toward the desk, medium-close, eye level">${esc(n.angle || '')}</textarea></label>` +
       `<p class="field-hint">Dùng ở: ${shots.length ? esc(shots.map(s => s.name).join(', ')) : 'chưa nối shot nào'}</p>` +
@@ -167,7 +224,7 @@ export function wardrobePanel(n) {
       .map(e => byId(e.source))
       .find(x => x?.stageOnly && x.stage3d?.performers?.length);
     return (
-      `<section class="inspector-section"><h3>📌 Ghim vị trí trên sân khấu (3D)</h3>` +
+      `<section class="inspector-section"><h3>${tx('wardrobe.stagePinTitle')}</h3>` +
       (n.stageOnly
         ? `<p class="field-hint">Node <b>sân khấu 3D</b>: chỉ giữ chỗ đứng và hướng mặt của từng người (không tạo ảnh). Ghim <b>một lần</b>, rồi nối node này vào các shot — hoặc vào bối cảnh của chúng: mọi node ở đó tự nhận đúng vị trí, kể cả node thêm sau, nhập lại CSV hay sửa tay. Cỡ cảnh, góc máy và ai ở giữa khung: tool tự tính theo từng node.</p>`
         : `<p class="field-hint">Đặt chỗ đứng và hướng mặt của từng người <b>một lần</b> — hoặc nối một node <b>🧍 Sân khấu 3D</b> vào bối cảnh này. Mọi node quay ở đây tự nhận đúng vị trí, kể cả node thêm sau, nhập lại CSV hay sửa tay. Cỡ cảnh, góc máy và ai ở giữa khung: tool tự tính theo từng node.</p>`) +
@@ -186,8 +243,8 @@ export function wardrobePanel(n) {
             : '')
         : from
           ? `<p class="field-hint">📌 Vị trí lấy từ node sân khấu 3D <b>${esc(from.name)}</b> nối vào đây.</p>`
-          : `<p class="field-hint">Chưa ghim.</p>`) +
-      `<div class="actions"><button type="button" class="button primary" id="openStage3d">${k ? '🧍 Sửa vị trí (mở 3D)' : '📌 Ghim vị trí (mở 3D)'}</button></div></section>` +
+          : `<p class="field-hint">${tx('inspector.notPinned')}.</p>`) +
+      `<div class="actions"><button type="button" class="button primary" id="openStage3d">${tx('wardrobe.stagePinTitle')}</button></div></section>` +
       // (a 3D stage node has no picture to render angles from)
       (n.stageOnly
         ? ''
@@ -214,7 +271,7 @@ export function wardrobePanel(n) {
       (looks.length
         ? `<p class="field-hint">👤 Nhân vật đã mặc:</p><ul class="wardrobe-list">${looks.map(item).join('')}</ul>`
         : '') +
-      `<button type="button" class="button" id="addWardrobeFor">＋ Thêm trang phục cho nhân vật này</button></section>`
+      `<button type="button" class="button" id="addWardrobeFor">＋ ${tx('wardrobe.addOutfit')}</button></section>`
     );
   }
   return '';

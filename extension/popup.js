@@ -3,6 +3,11 @@
 const $ = id => document.getElementById(id);
 const send = msg => chrome.runtime.sendMessage(msg);
 
+// Show the running version right in the popup header — always know which build is loaded.
+try {
+  $('ver').textContent = 'v' + chrome.runtime.getManifest().version;
+} catch {}
+
 let runChatgpt = false;
 let runVids = false;
 let runMuseChat = false;

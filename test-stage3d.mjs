@@ -67,6 +67,30 @@ assert.deepEqual(
   'clamped to the floor, facing in -180…180, seated gear seats, unknown gear / ids dropped',
 );
 
+// Dialogue coverage is pinned to one side of the line between two speakers. Both close-ups
+// are distinct positions on that same side, with opposing eyelines; swapping the side moves
+// both cameras together. The OTS view uses the other speaker's shoulder without re-crossing.
+const pair = M.cleanStage({ performers: [
+  { id: 'a', x: -1.5, z: 0, facing: 90 }, { id: 'b', x: 1.5, z: 0, facing: -90 },
+], dialogue: { a: 'a', b: 'b', side: 1 } }, id => ['a', 'b'].includes(id));
+assert.deepEqual(pair.dialogue, { a: 'a', b: 'b', side: 1 });
+assert.equal(M.cleanStage({ performers: pair.performers, dialogue: { a: 'a', b: 'missing' } }, id => ['a', 'b'].includes(id)).dialogue, undefined);
+const pairSpec = id => ({ target: pair.performers.find(p => p.id === id), size: 'CU', angle: { kind: 'eye', side: 0 } });
+const pairA = M.shotCamera(pair, pairSpec('a'));
+const pairB = M.shotCamera(pair, pairSpec('b'));
+assert.ok(pairA.pos[2] > 0 && pairB.pos[2] > 0, 'both cameras stay on the same side');
+assert.notEqual(pairA.pos[0], pairB.pos[0], 'shot/reverse uses two camera positions');
+assert.match(M.blockingText(pair, pairSpec('a'), id => id), /a [^;]*toward frame right/);
+assert.match(M.blockingText(pair, pairSpec('b'), id => id), /b [^;]*toward frame left/);
+const ots = M.shotCamera(pair, { ...pairSpec('a'), angle: { kind: 'ots', side: 0 } });
+assert.ok(ots.pos[0] > pairA.pos[0] && ots.pos[2] > 0, 'A is filmed over B’s shoulder on the same side');
+assert.match(M.blockingText(pair, { ...pairSpec('a'), angle: { kind: 'ots', side: 0 } }, id => id), /over b's shoulder toward a/);
+const flipped = { ...pair, dialogue: { ...pair.dialogue, side: -1 } };
+assert.ok(M.shotCamera(flipped, pairSpec('a')).pos[2] < 0 && M.shotCamera(flipped, pairSpec('b')).pos[2] < 0);
+assert.deepEqual(M.arrangeDialogue(pair).map(p => [p.x, p.facing]), [[-1.5, 90], [1.5, -90]]);
+assert.equal(M.angleOf('Over the shoulder', true).kind, 'ots');
+assert.equal(M.angleOf('qua vai nhân vật B', true).kind, 'ots');
+
 // --- Unit: cameras and what they see ----------------------------------------------------------
 assert.equal(M.normSize('EWS'), 'EWS');
 assert.equal(M.normSize('Medium'), 'MS');

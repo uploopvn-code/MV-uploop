@@ -125,7 +125,37 @@ export function cleanStage(input, isPerson) {
       gear,
     });
   }
-  return { v: 2, size: { w, d }, performers };
+  const a = String(input?.dialogue?.a || '');
+  const b = String(input?.dialogue?.b || '');
+  const dialogue = a !== b && performers.some(p => p.id === a) && performers.some(p => p.id === b)
+    ? { a, b, side: input.dialogue.side === -1 ? -1 : 1 }
+    : null;
+  return { v: 2, size: { w, d }, performers, ...(dialogue ? { dialogue } : {}) };
+}
+
+// A pinned line between two speakers. The camera side is stored relative to A→B so moving
+// either actor rotates the coverage with them without silently crossing the 180° line.
+export function dialogueAxis(stage) {
+  const { a, b, side } = stage?.dialogue || {};
+  const A = stage?.performers?.find(p => p.id === a);
+  const B = stage?.performers?.find(p => p.id === b);
+  if (!A || !B || A === B) return null;
+  const dx = B.x - A.x, dz = B.z - A.z;
+  const length = Math.hypot(dx, dz);
+  if (length < 0.5) return null;
+  const sign = side === -1 ? -1 : 1;
+  return { A, B, side: sign, length, normal: { x: (-dz / length) * sign, z: (dx / length) * sign } };
+}
+
+// Suggested marks for a two-person exchange; preserves wardrobe/pose/gear and other actors.
+export function arrangeDialogue(stage) {
+  const a = stage?.dialogue?.a, b = stage?.dialogue?.b;
+  const gap = Math.min(3, Math.max(1.6, (stage?.size?.w || STAGE.w) - 1));
+  return (stage?.performers || []).map(p =>
+    p.id === a ? { ...p, x: round(-gap / 2, 2), z: 0, facing: 90 }
+      : p.id === b ? { ...p, x: round(gap / 2, 2), z: 0, facing: -90 }
+        : p,
+  );
 }
 
 // --- Cameras ------------------------------------------------------------------------------------
@@ -194,6 +224,7 @@ export function angleOf(a, text = false) {
   const side = L.test(t) || vL.test(t) ? -1 : R.test(t) || vR.test(t) ? 1 : 0;
   const K = text
     ? {
+        ots: /\bots\b|over[- ]the[- ]shoulder|qua vai/,
         rear: /\brear\b|from behind|behind (the |her |his |their )?(back|singer|band|performers?)|back of (the |her |his )?head|\breverse\b|from (the )?stage|looking (out )?(at|toward|towards|over) (the )?(audience|crowd|hall|arena)|sau lung|phia sau/,
         overhead:
           /\boverhead (shot|angle|view|camera)\b|from overhead|top[- ]down|bird'?s?[- ]eye|aerial (shot|view)|drone (shot|view|camera)|flycam|tu tren cao/,
@@ -204,6 +235,7 @@ export function angleOf(a, text = false) {
         eye: /eye[- ]level|\bfrontal\b|straight[- ]on|ngang tam mat|chinh dien/,
       }
     : {
+        ots: /\bots\b|over[- ]the[- ]shoulder|qua vai/,
         rear: /\brear\b|behind|\bback\b|\breverse\b|sau lung|phia sau/,
         overhead: /overhead|\btop\b|bird|aerial|drone|flycam|tren cao/,
         profile: /profile|\bside\b|nghieng/,
@@ -212,7 +244,9 @@ export function angleOf(a, text = false) {
         high: /\bhigh\b|goc cao/,
         eye: /\beye\b|\bfront\b|straight|ngang|chinh dien/,
       };
-  const kind = ['rear', 'overhead', 'profile', '34', 'low', 'high', 'eye'].find(k => K[k].test(t));
+  const kind = K.rear.test(t) && /looking (out )?(at|toward|towards) (the )?(audience|crowd|hall|arena)/.test(t)
+    ? 'rear'
+    : ['ots', 'rear', 'overhead', 'profile', '34', 'low', 'high', 'eye'].find(k => K[k].test(t));
   return { kind: kind || null, side };
 }
 // A CSV angle → { kind, side }, eye level when it names none.
@@ -286,6 +320,34 @@ export function shotCamera(stage, spec) {
     };
     base = { x: Math.sin(rad(p.facing || 0)), z: Math.cos(rad(p.facing || 0)) };
     dist = FRAME_H[size] / 2 / Math.tan(rad(VFOV) / 2);
+  }
+  const dialogue = dialogueAxis(stage);
+  if (dialogue && (!p || p.id === dialogue.A.id || p.id === dialogue.B.id)) {
+    const { A, B, normal, length } = dialogue;
+    let pos, fov = VFOV;
+    if (p && size !== 'EWS') {
+      const other = p.id === A.id ? B : A;
+      const shoulder = angle.kind === 'ots' || angle.kind === 'rear';
+      const bias = length * 0.2;
+      const x = shoulder ? other.x + normal.x * 0.75 :
+        (A.x + B.x) / 2 + normal.x * Math.max(1.2, length * 0.55) + (other.x - p.x) * bias / length;
+      const z = shoulder ? other.z + normal.z * 0.75 :
+        (A.z + B.z) / 2 + normal.z * Math.max(1.2, length * 0.55) + (other.z - p.z) * bias / length;
+      const reach = Math.hypot(x - T.x, z - T.z);
+      const e = rad(ELEVATION[angle.kind] ?? 0);
+      pos = { x, y: angle.kind === 'ots' || angle.kind === 'rear' ? faceY(other) :
+        ELEVATION[angle.kind] ? T.y + reach * Math.sin(e) : T.y, z };
+      const height = shoulder ? Math.max(FRAME_H[size] || 1, 1.25) : FRAME_H[size] || 1.3;
+      fov = clamp((2 * Math.atan(height / (2 * Math.hypot(reach, pos.y - T.y))) * 180) / Math.PI, 10, 55);
+    } else {
+      pos = { x: T.x + normal.x * dist, y: 1.7, z: T.z + normal.z * dist };
+    }
+    return {
+      pos: [round(pos.x), round(Math.max(0.2, pos.y)), round(pos.z)],
+      target: [round(T.x), round(T.y), round(T.z)],
+      fov: round(fov, 2),
+      aspect: ASPECT,
+    };
   }
   // 3/4 and profile swing to the side the CSV named, else to the audience side (the camera stays
   // downstage, the set behind the subject), toward centre stage on a tie; rear looks out from
@@ -528,6 +590,7 @@ const ANGLE_VI = {
   34: '3/4',
   profile: 'nghiêng',
   rear: 'sau lưng',
+  ots: 'qua vai',
   low: 'góc thấp',
   high: 'góc cao',
   overhead: 'từ trên cao',
@@ -638,10 +701,18 @@ export function blockingText(stage, spec, labelOf) {
       const gear = GEAR[s.p.gear] ? ', ' + GEAR[s.p.gear] : '';
       return `${labelOf(s.p.id)} ${where}, ${facing}${gear}`;
     });
+  const axis = dialogueAxis(stage);
+  const a = axis && labelOf(axis.A.id), b = axis && labelOf(axis.B.id);
+  const axisText = a && b
+    ? ` Dialogue axis — ${a} and ${b} face each other; all coverage stays on the same side of their 180-degree line, preserving their left/right screen positions and opposing eyelines.` +
+      (spec.target && (spec.angle.kind === 'ots' || spec.angle.kind === 'rear')
+        ? ` Camera looks over ${labelOf(spec.target.id === axis.A.id ? axis.B.id : axis.A.id)}'s shoulder toward ${labelOf(spec.target.id)}.`
+        : '')
+    : '';
   return (
     'Stage blocking — every performer keeps the same mark in every shot of this set; nobody changes place or swaps sides. Seen from this camera: ' +
     parts.join('; ') +
-    '.'
+    '.' + axisText
   );
 }
 // Performers this camera sees one behind the other (the one behind hidden by the one in front):

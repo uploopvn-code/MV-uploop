@@ -747,7 +747,7 @@ try {
   let node = musicNodes(r.data).at(-1);
   assert.ok(node, 'music node created');
   assert.equal(node.kind, 'music');
-  assert.equal(node.zone, 'audio', 'music node lives in the Âm thanh column');
+  assert.equal(node.zone, 'start', 'music node lives in the ⓪ START column, beside the script node');
   assert.equal(node.resolvedPrompts.image, '', 'no image prompt');
   assert.equal(node.resolvedPrompts.video, '', 'no video prompt');
   assert.equal(node.analysis, null, 'not analyzed yet');
@@ -1158,7 +1158,7 @@ try {
     SHOT_LIST_HEADER +
     '\n' +
     Array.from(
-      { length: 220 },
+      { length: 420 },
       (_, i) =>
         `${i + 1},${i},${i + 1},Verse,,NO,3,calm,Singer,Main stage,CU,eye level,locked,Sings`,
     ).join('\n');
@@ -1169,7 +1169,7 @@ try {
     targetSeconds: 0,
   });
   assert.equal(bad.status, 400);
-  assert.match(bad.data.error, /Vượt giới hạn 200 node/);
+  assert.match(bad.data.error, /Vượt giới hạn 400 node/);
   r = await api('/api/state');
   assert.equal(
     r.data.nodes.filter(n => n.zone === 'production' && !n.terminal).length,

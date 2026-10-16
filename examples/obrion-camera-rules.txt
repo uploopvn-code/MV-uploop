@@ -1,0 +1,31 @@
+OBRION CAMERA RULES — STARTER (bản gốc cho project, có thể sửa)
+
+Mục tiêu chung
+- Gritty realism: máy quay quan sát, chuyển động có động cơ câu chuyện; tránh camera bay vô cớ.
+- Giữ hướng màn hình của nhân vật và vật thể trong cùng một cuộc đối thoại. Chỉ đổi trục khi có wide/reset rõ ràng.
+- Một shot chỉ có một ý chính. Chọn cỡ cảnh theo thông tin cần nhìn, không chọn chỉ để “đẹp”.
+
+Rig và chuyển động
+- Locked Tripod / Static hold: dùng cho căng thẳng bị dồn nén, lời thú nhận, chi tiết quan trọng. Không có pan/tilt.
+- Slow push-in: chỉ dùng khi nhân vật nhận ra, quyết định hoặc không thể giấu cảm xúc. Dừng trước khi thành kịch.
+- Slow pull-out: dùng khi nhân vật bị cô lập hoặc hậu quả của sự việc lộ ra.
+- Handheld restrained: dùng lúc nguy hiểm, hoảng loạn hoặc chủ quan; biên độ nhỏ, không rung máy liên tục.
+- Lateral track: theo chuyển động trong không gian; duy trì khoảng cách và tốc độ ổn định.
+- Whip pan / staccato: chỉ dành cho cú sốc hoặc thay đổi thông tin tức thì; sau đó cắt về shot ổn định.
+
+Ống kính và cỡ cảnh
+- 24–32mm wide: thiết lập không gian hoặc nhấn môi trường; tránh sát mặt gây méo.
+- 40–50mm medium: đối thoại tự nhiên, dễ duy trì eyeline.
+- 65–85mm close-up: nội tâm, chi tiết phản ứng; nền nén vừa phải.
+- Extreme close-up: chỉ dùng cho vật chứng, tay, mắt hoặc một phản ứng không thể nói thành lời.
+
+Liên tục dựng cảnh
+- Dialogue coverage: giữ screen_direction nhất quán và eyeline đối xứng. Cắt giữa phản ứng và lời nói khi cảm xúc đổi nhịp.
+- Trước khi qua trục 180°, dùng establishing wide, nhân vật/đối tượng di chuyển qua trục, hoặc shot chuyển tiếp có lý do.
+- Match action khi cắt giữa hai cỡ cảnh. Không lặp cùng một framing/movement ở hai shot liên tiếp nếu không có chủ ý.
+- Hard cut mặc định. Dùng dissolve, fade hoặc match cut khi thời gian/nhận thức thay đổi rõ ràng.
+
+Ánh sáng và khung hình
+- Ưu tiên động cơ ánh sáng trong bối cảnh: cửa sổ, đèn công nghiệp, màn hình, đèn xe.
+- Chừa look room theo hướng nhìn; chừa lead room theo hướng di chuyển.
+- Với shot căng thẳng, có thể đặt nhân vật lệch khung và dùng negative space có chủ đích.

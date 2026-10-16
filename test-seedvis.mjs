@@ -284,14 +284,16 @@ try {
   assert.equal(j.status, 'completed', j.error);
   const sentEdit = submits.at(-1).body;
   assert.equal(sentEdit.mode, 'image-to-image');
-  assert.equal(sentEdit.reference_images.length, 1, 'only the image being edited is sent');
+  // The image being edited is image 1; the node's wired references (singer, stage) go with it so
+  // the model can edit against them (e.g. a face to match). Image 1 is the node's current image.
+  assert.equal(sentEdit.reference_images.length, 3, 'the node image + its two wired references');
   assert.ok(
     Buffer.from(sentEdit.reference_images[0].data, 'base64').equals(originalBytes),
-    'and it is the node’s current image, not its inputs',
+    'image 1 is the node’s current image',
   );
   assert.match(
     sentEdit.input,
-    /^Edit the attached image\. Change only this: make the sky darker\. Keep everything else exactly as it is/,
+    /^3 images are attached\. Image 1 is the photo to edit; image 2 .* image 3 .* are references for the change\. Change only this, using the reference images: make the sky darker\./,
   );
   const edited = s.nodes.find(n => n.id === 'scene');
   assert.notEqual(edited.image.url, original.url, 'the new image replaced the old one');
@@ -456,8 +458,10 @@ try {
   assert.equal(submits.at(-1).body.mode, 'multi-image-to-video');
   assert.equal(submits.at(-1).body.referenceImages.length, 2);
 
-  // Once a refs-mode shot has composed its own image, video uses that exact keyframe
-  // (one image, keyframe-prefixed), not the connected parent images.
+  // The "video input" choice is honoured literally. A refs-mode shot that has since composed
+  // its own image KEEPS sending the connected parent images — the choice decides, not whether
+  // an image happens to exist. (It used to flip to the keyframe here, which made the dropdown
+  // look broken: see test-video-input.mjs.)
   await api('/api/node', 'PATCH', {
     id: clip,
     seedvis: { image: { model: 'GEM_PIX_2', aspectRatio: '16:9' } },
@@ -469,10 +473,16 @@ try {
   r = await api('/api/jobs', 'POST', { nodeId: clip, kind: 'video' });
   ({ j } = await settle(r.data.job.id));
   assert.equal(j.status, 'completed', j.error);
+  assert.equal(submits.at(-1).body.referenceImages.length, 2, 'still the two parent images');
+  // Switching back to the node's own image is what uses the keyframe.
+  await api('/api/node', 'PATCH', { id: clip, videoInput: 'self' });
+  r = await api('/api/jobs', 'POST', { nodeId: clip, kind: 'video' });
+  ({ j } = await settle(r.data.job.id));
+  assert.equal(j.status, 'completed', j.error);
   assert.equal(submits.at(-1).body.mode, 'image-to-video');
   assert.ok(
     submits.at(-1).body.image.file_name.startsWith('keyframe-'),
-    'uses the shot own keyframe, not the parent refs',
+    'self mode uses the shot own keyframe',
   );
 
   // A rejected request is a definite failure; a failed job too. Neither is resent.
@@ -503,6 +513,45 @@ try {
   ({ s, j } = await settle(j.id));
   assert.equal(j.status, 'completed', j.error);
   assert.equal(submits.length, sent, 'Resume must not resubmit');
+
+  // Per-zone image batch covers nodes whose image timed out (needs_review, Seedvis still has it):
+  // it re-checks them (free, same id) instead of saying "no eligible nodes" or paying twice.
+  {
+    const G = (await api('/api/nodes', 'POST', { name: 'Shot chờ ảnh' })).data.nodes.at(-1).id;
+    await api('/api/node', 'PATCH', { id: G, zone: 'production', videoPrompt: 'a quiet room' });
+    mode = 'stuck';
+    ({ j } = await settle(
+      (await api('/api/jobs', 'POST', { nodeId: G, kind: 'image' })).data.job.id,
+    ));
+    assert.equal(j.status, 'needs_review', 'its image timed out');
+    assert.ok(j.remote.id || j.remote.pollUrl, 'Seedvis gave it an id');
+    assert.ok(!(await api('/api/state')).data.nodes.find(n => n.id === G).image, 'no image yet');
+    const sentBefore = submits.length;
+    const pendingJobId = j.id;
+    mode = 'ok';
+    // The batch does NOT refuse the zone just because the only node has a pending job.
+    const rb = await api('/api/auto/images/start', 'POST', { zone: 'production' });
+    assert.equal(rb.status, 200, 'batch re-checks instead of refusing: ' + JSON.stringify(rb.data)?.slice(0, 150));
+    assert.equal(rb.data.imageBatchSummary.rechecked, 1, 'one pending image re-checked');
+    ({ j } = await settle(pendingJobId));
+    assert.equal(j.status, 'completed', 'the pending image came back');
+    const stateAfter = (await api('/api/state')).data;
+    // No NEW image job was created for G (re-check resumed the one it had, same id = no 2nd charge).
+    assert.equal(
+      stateAfter.jobs.filter(x => x.nodeId === G && x.kind === 'image').length,
+      1,
+      're-check resumed the pending job, never created a second (no double charge)',
+    );
+    assert.ok(stateAfter.jobs.find(x => x.id === pendingJobId), 'the same job, resumed');
+    assert.ok(stateAfter.nodes.find(n => n.id === G).image, 'image now on the node');
+    void sentBefore;
+    // let the batch's other renders (template shots) finish before the next test touches a node
+    for (let i = 0; i < 400; i++) {
+      const st2 = (await api('/api/state')).data;
+      if (!st2.jobs.some(x => ['queued', 'running'].includes(x.status))) break;
+      await new Promise(r2 => setTimeout(r2, 50));
+    }
+  }
 
   // Switching a node to Orbit keeps Seedvis out of it.
   r = await api('/api/node', 'PATCH', { id: 'stage', seedvis: { image: false } });
@@ -581,7 +630,8 @@ try {
   // An invalid zone is rejected.
   assert.equal((await api('/api/auto/images/start', 'POST', { zone: 'setup' })).status, 400);
 
-  // --- Auto video run, 2 versions, scoped to node A → 2 output branch nodes.
+  // --- Auto video run, target 2 versions, scoped to node A. A already has v1,
+  // so the batch creates only the missing v2 output branch.
   const nap = ms => new Promise(r => setTimeout(r, ms));
   const settleAuto = async () => {
     for (let i = 0; i < 300; i++) {
@@ -599,7 +649,7 @@ try {
   assert.equal(run.status, 'completed', JSON.stringify(run.errors));
   s = (await api('/api/state')).data;
   let branches = branchesOf(s);
-  assert.equal(branches.length, branchesBefore + 2, 'two versions → two more output nodes');
+  assert.equal(branches.length, 2, 'target 2 versions → fill only the missing output');
   assert.ok(branches.every(n => n.video && n.terminal && n.video.mime === 'video/mp4'));
   assert.ok(branches.every(n => s.edges.some(e => e.source === A && e.target === n.id)));
   // A clip node feeds nothing and is fed only by its shot.
@@ -615,7 +665,7 @@ try {
   assert.match(r.data.error, /chỉ nhận dây từ shot/);
   r = await api('/api/edges', 'PUT', { edges: s.edges });
   assert.equal(r.status, 200, 'the existing wires still save');
-  branches = branches.slice(-2); // the two this run produced
+  branches = branches.slice(-2); // the two versions now available for the shot
 
   // Download several videos as one ZIP named by shot.
   const zr = await fetch('http://127.0.0.1:17793/api/videos/zip', {
@@ -636,8 +686,8 @@ try {
     );
   assert.deepEqual(
     branches.map(b => b.version),
-    [branchesBefore + 1, branchesBefore + 2],
-    'versions continue after the clips the shot already had',
+    [1, 2],
+    'target versions preserve v1 and add the missing v2',
   );
   // Empty / unknown selection is rejected.
   const zbad = await fetch('http://127.0.0.1:17793/api/videos/zip', {
@@ -658,12 +708,12 @@ try {
   assert.match(dls.headers.get('content-disposition') || '', /filename\*=UTF-8''/);
   await dls.arrayBuffer();
 
-  // Re-run adds more versions (keeps the old ones).
-  r = await api('/api/auto/video/start', 'POST', { target: A, versions: 1 });
+  // Raising the target to 3 adds only v3 and keeps the old versions.
+  r = await api('/api/auto/video/start', 'POST', { target: A, versions: 3 });
   assert.equal(r.status, 200);
   await settleAuto();
   s = (await api('/api/state')).data;
-  assert.equal(branchesOf(s).length, branchesBefore + 3, 'rerun adds a version');
+  assert.equal(branchesOf(s).length, 3, 'higher target adds only the missing version');
 
   // Auto-video is scoped to the production zone: a character/scene node with its own
   // image is never auto-filmed, even when targeted directly.
@@ -1118,7 +1168,7 @@ try {
   assert.equal(r.status, 200);
   assert.ok(!r.data.nodes.some(n => n.id === term));
   assert.ok(!r.data.edges.some(e => e.target === term));
-  assert.equal(branchesOf(r.data).length, branchesBefore + 2, 'one version node removed');
+  assert.equal(branchesOf(r.data).length, 2, 'one of the three version nodes was removed');
 
   // --- Seedance groups: consecutive shots filmed in ONE Seedance render, from a storyboard.
   // A fresh project: scene → wide, medium (10 s), close (5 s); stage → S4, S5 (10 s), S6 (23 s).
@@ -1559,26 +1609,42 @@ try {
   // The clip's prompt: 8 seconds split by how long each line takes (5 / 2 / 5 words → 3/2/3 s).
   const cut = mergedNode.resolvedPrompts.video;
   assert.match(cut, /The 3 attached images are the 3 camera setups of one conversation/);
-  assert.match(cut, /NV1 is always on the left of frame, NV3 always on the right/);
-  assert.match(cut, /3 shots with clean hard cuts at 00:03 and 00:05/);
+  // Each image is numbered and each person is identified ONCE, here; the cut list below then
+  // calls them by code only, so nothing repeats the identity label per beat.
   assert.match(
     cut,
-    /\[00:00-00:03\] Shot A\. NV3, the platinum-blonde woman, says coolly, bright and brittle: "He changed the will, Eleanor\." Only NV3 speaks; NV1's face stays turned away, lips closed\./,
+    /Image 1 = shot A: the platinum-blonde woman \(NV3\) faces camera over NV1's blurred shoulder\./,
+  );
+  assert.match(cut, /Image 3 = the medium two-shot of both women\./);
+  assert.match(cut, /NV1 is always frame left, NV3 always frame right/);
+  assert.match(cut, /3 shots, clean hard cuts at 00:03, 00:05/);
+  // The lip rule is stated once for the whole clip, not after every cut.
+  assert.match(cut, /In every shot only the named speaker’s lips move/);
+  assert.equal(
+    (cut.match(/only the named speaker/g) || []).length,
+    1,
+    'the lip rule is said once, not per beat',
+  );
+  assert.equal(
+    (cut.match(/the platinum-blonde woman/g) || []).length,
+    1,
+    'an identity label is said once, not on every beat',
   );
   assert.match(
     cut,
-    /\[00:03-00:05\] Hard cut to shot B\. NV1, the auburn-haired woman, says low and slow: "I know\."/,
+    /\[00:00-00:03\] Shot A\. NV3: "He changed the will, Eleanor\." — coolly, bright and brittle\./,
   );
+  assert.match(cut, /\[00:03-00:05\] Shot B\. NV1: "I know\." — low and slow\./);
   assert.match(
     cut,
-    /\[00:05-00:08\] Hard cut to the medium two-shot\. NV3, on the right, takes one step toward NV1 and says: "Then you leave with nothing\." Only NV3 speaks; NV1, on the left, does not move, lips closed\./,
+    /\[00:05-00:08\] Two-shot\. NV3, on the right, takes one step toward NV1: "Then you leave with nothing\."/,
   );
   assert.match(cut, /Voice lock for NV3: Female, Late 30s; timbre: bright and brittle\./);
   assert.match(
     cut,
     /Room sound runs unbroken across the cuts: rain on the windows, the fire crackling\./,
   );
-  assert.match(cut, /no subtitles, no captions, no on-screen text/);
+  assert.match(cut, /no subtitles, no captions, no watermarks/);
   // A merged scene has no image of its own, and its frames are never filmed on their own.
   r = await api('/api/jobs', 'POST', { nodeId: mergedNode.id, kind: 'image' });
   assert.equal(r.status, 400);
@@ -1673,6 +1739,127 @@ try {
   assert.equal(omniSent.body.images.length, 3, 'the frames go in Omni Flash’s images field');
   assert.ok(!('duration' in omniSent.body), 'Omni Flash sends no duration field');
 
+  // Rapid dialogue: more cuts than images. Five beats reuse the three setups (A/B/A/B/two-shot)
+  // in ONE 8-second clip — Veo still gets only 3 reference images, the prompt cuts among them.
+  const rapid = JSON.parse(JSON.stringify(bible));
+  rapid.shots[0].setups = [
+    { framing: 'ots_a', dialogue: 'Vivienne: "He changed the will."', audio_delivery: 'cool' },
+    { framing: 'ots_b', dialogue: 'Eleanor: "I know that."', audio_delivery: 'low' },
+    { framing: 'ots_a', dialogue: 'Vivienne: "You knew?"', audio_delivery: 'sharp' },
+    { framing: 'ots_b', dialogue: 'Eleanor: "I did."', audio_delivery: 'flat' },
+    { framing: 'two_shot', dialogue: 'Vivienne: "Then leave."', action: 'steps toward NV1' },
+  ];
+  r = await api('/api/director/build', 'POST', { blueprint: rapid });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  st = r.data;
+  const reuseNode = st.nodes.find(n => n.zone === 'merged');
+  const reuseFrames = st.nodes
+    .filter(n => n.role === 'frame')
+    .sort((a, b) => a.frameNo - b.frameNo);
+  assert.equal(
+    reuseFrames.length,
+    3,
+    'reuse builds ONE frame image per distinct framing, not per beat',
+  );
+  assert.deepEqual(
+    reuseFrames.map(n => n.framing),
+    ['ots_a', 'ots_b', 'two_shot'],
+  );
+  assert.equal(reuseNode.beats.length, 5, 'the 5 beats live on the merged node');
+  assert.deepEqual(
+    reuseNode.beats.map(b => b.framing),
+    ['ots_a', 'ots_b', 'ots_a', 'ots_b', 'two_shot'],
+  );
+  assert.equal(reuseNode.merged.images, 3, 'three reference images');
+  assert.equal(reuseNode.merged.beats, 5, 'five cuts');
+  assert.ok(reuseNode.merged.frames[2].reuses, 'beat 3 returns to an image beat 1 already shows');
+  assert.match(reuseNode.merged.problem, /chưa có ảnh/, 'blocked until the 3 setup images exist');
+  for (const f of reuseFrames)
+    await api('/api/upload', 'POST', {
+      nodeId: f.id,
+      kind: 'image',
+      mime: 'image/png',
+      base64: png.toString('base64'),
+    });
+  st = (await api('/api/state')).data;
+  const reuseNow = st.nodes.find(n => n.id === reuseNode.id);
+  assert.equal(reuseNow.merged.problem, '', 'three images cover five beats — ready to film');
+  const rcut = reuseNow.resolvedPrompts.video;
+  assert.match(rcut, /The 3 attached images are the 3 camera setups/, 'only 3 images described');
+  assert.match(rcut, /5 shots, clean hard cuts at/, 'five cuts in the 8-second clip');
+  assert.match(rcut, /Cuts return to setups already seen/, 'tells Veo to reuse the image');
+  assert.equal(
+    (rcut.match(/^\[\d\d:\d\d-\d\d:\d\d\] Shot A\./gm) || []).length,
+    2,
+    'shot A is cut to twice from the one image',
+  );
+  assert.equal(
+    (rcut.match(/^\[\d\d:\d\d-\d\d:\d\d\] Shot B\./gm) || []).length,
+    2,
+    'shot B is reused too',
+  );
+  submits = [];
+  r = await api('/api/jobs', 'POST', { nodeId: reuseNode.id, kind: 'video' });
+  assert.equal(r.status, 201, JSON.stringify(r.data));
+  ({ s, j } = await settle(r.data.job.id));
+  assert.equal(j.status, 'completed', j.error);
+  const reuseSent = submits.find(x => x.body.mode === 'multi-image-to-video');
+  assert.equal(reuseSent.body.referenceImages.length, 3, 'only the 3 distinct images go to Veo');
+
+  // A re-import from an OLDER Bible that never had identity_label / back_view must not wipe
+  // what this project already knows: the library keeps the identity by asset key, the same way
+  // it keeps images. Without this every rebuild re-broke the dialogue frames.
+  const older = JSON.parse(JSON.stringify(rapid));
+  for (const a of older.assets) {
+    delete a.identity_label;
+    delete a.back_view;
+  }
+  r = await api('/api/director/build', 'POST', { blueprint: older });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  st = r.data;
+  const keptChar = st.nodes.find(n => n.assetKey === 'eleanor');
+  assert.equal(
+    keptChar.label,
+    'the auburn-haired woman',
+    'identity label survived a blueprint that omits it',
+  );
+  assert.match(keptChar.back, /auburn bun/, 'and so did the back view');
+  // Replacing that character's picture by upload leaves its frames renderable (the whole
+  // point: a swapped reference must not dead-end the nodes that take it as input).
+  r = await api('/api/upload', 'POST', {
+    nodeId: keptChar.id,
+    kind: 'image',
+    mime: 'image/png',
+    base64: png.toString('base64'),
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  st = (await api('/api/state')).data;
+  const afterSwap = st.nodes.find(n => n.id === keptChar.id);
+  assert.ok(afterSwap.image, 'the uploaded image is on the character');
+  const someFrame = st.nodes.find(n => n.role === 'frame');
+  assert.equal(
+    (st.nodes.find(n => n.zone === 'merged').merged.problem || '').includes('identity_label'),
+    false,
+    'no identity_label block after the swap',
+  );
+  // A still is built from its inputs, so they all need a picture first (the location plate and
+  // the other character here) — that is the normal rule, not the swap's doing.
+  for (const p of st.nodes.filter(
+    x => !x.image && ['character', 'scene', 'angle'].includes(x.role),
+  ))
+    await api('/api/upload', 'POST', {
+      nodeId: p.id,
+      kind: 'image',
+      mime: 'image/png',
+      base64: png.toString('base64'),
+    });
+  r = await api('/api/jobs', 'POST', { nodeId: someFrame.id, kind: 'image' });
+  assert.equal(
+    r.status,
+    201,
+    'a frame still renders after its character image was replaced: ' + JSON.stringify(r.data),
+  );
+
   // The key never reaches the browser state.
   assert.ok(!JSON.stringify((await api('/api/state')).data).includes(KEY));
   const projRoot = path.join(dir, 'projects');
@@ -1682,7 +1869,7 @@ try {
     .join('');
   assert.ok(!projJson.includes(KEY));
   console.log(
-    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency (push max), zone image batch, auto-video versions+branch+rerun+delete, retry failed videos (latest job only), edit image + swap (staleness kept per image, shape kept, edit vs re-roll), clip after an edit stays flagged, old project: missing videos re-checked (polled or same Idempotency-Key) or filmed, never paid twice, refusal before sending is a plain failure, hidden/stopped/lost old jobs re-checked before any new render, Seedance groups (fill toward 30 s across scenes, capped by length + images, timeline + still tail, storyboard + refs, exact duration, multi-location prompt names the scene image per shot, over-size references fail for free, staleness, column guard, re-split keeps rendered groups), merged scenes (setups → frame nodes + one Veo clip, still prompt per setup, 8 s split by line length, frames never filmed alone, column guard), deleted shot keeps its clip on the job, key not exposed',
+    'PASS: key setup, image-to-image (Nano Banana), Veo/Seedance video, idempotency key, reject/fail without resend, video from connected node (refs, single+multi), timeout resume, provider switch, concurrency (push max), zone image batch, auto-video versions+branch+rerun+delete, retry failed videos (latest job only), edit image + swap (staleness kept per image, shape kept, edit vs re-roll), clip after an edit stays flagged, old project: missing videos re-checked (polled or same Idempotency-Key) or filmed, never paid twice, refusal before sending is a plain failure, hidden/stopped/lost old jobs re-checked before any new render, Seedance groups (fill toward 30 s across scenes, capped by length + images, timeline + still tail, storyboard + refs, exact duration, multi-location prompt names the scene image per shot, over-size references fail for free, staleness, column guard, re-split keeps rendered groups), merged scenes (setups → frame nodes + one Veo clip, still prompt per setup, 8 s split by line length, frames never filmed alone, column guard, rapid dialogue reuses ≤3 images across up to 6 cuts), deleted shot keeps its clip on the job, key not exposed',
   );
 } finally {
   proc.kill();

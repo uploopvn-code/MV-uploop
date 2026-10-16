@@ -2,6 +2,11 @@
 
 Mở http://127.0.0.1:7788 hoặc dùng file khởi động nhanh.
 
+## Tài liệu theo module
+
+Hướng dẫn cập nhật được chia tại [docs/README.md](docs/README.md), gồm workflow, batch video,
+extension workers và timeline dựng video.
+
 ## Khởi động nhanh (Windows)
 Nhấp đúp **`start.cmd`** (hoặc chuột phải **`Start-MV-Director.ps1`** → Run with PowerShell).
 File sẽ tự: tắt server cũ ở cổng 7788 → `git pull` cập nhật code → chạy server → mở trình duyệt.

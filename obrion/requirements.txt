@@ -1,0 +1,5 @@
+langgraph>=1.0,<2
+langchain-openai>=1.0,<2
+langchain-anthropic>=1.0,<2
+pydantic>=2.10,<3
+opentimelineio>=0.17,<0.19

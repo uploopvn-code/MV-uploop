@@ -43,6 +43,18 @@ try {
   assert.equal(node(s, 'wide').videoRefLimit, 3, 'Veo takes 3 reference images');
   assert.equal(node(s, 'wide').videoNeedsKeyframe, false);
 
+  // /api/revision: the cheap heartbeat the UI polls before pulling the full ~1.8 MB state. It
+  // reports the graph revision (bumped by every mutate) and how many jobs are live.
+  assert.equal(typeof s.revision, 'number', 'state carries a revision');
+  let rev = (await api('/api/revision')).data;
+  assert.equal(rev.revision, s.revision, '/api/revision matches the state revision');
+  assert.equal(rev.active, 0, 'no jobs running yet');
+  const beforeRev = rev.revision;
+  await api('/api/node', 'PATCH', { id: 'wide', name: 'Toàn cảnh (rev)' }); // a real change → mutate
+  rev = (await api('/api/revision')).data;
+  assert.ok(rev.revision > beforeRev, 'a mutation bumps the revision the poll watches');
+  await api('/api/node', 'PATCH', { id: 'wide', name: node(s, 'wide').name }); // restore the name
+
   // Zones: image/setting nodes in design, shots in production.
   // 5 zones: singer=character, stage/scene=design, style/camera=setup, shots=production.
   assert.equal(node(s, 'singer').zone, 'character');
@@ -244,6 +256,48 @@ try {
     [2, 4, 5],
     'max + 1, never a duplicate (v1 and v3 were deleted)',
   );
+  // A marquee selection deletes several nodes in one call (`ids`). Two added sound nodes, one wired
+  // into a shot: the batch removes both and the wire the deleted node held, leaves the shot it fed
+  // out of date, dedups a repeated id, and a fixed template node anywhere in the list refuses the
+  // whole batch (nothing half-deleted). (No clip is filmed here — that would consume a version
+  // number the later tests depend on.)
+  const a1 = (
+    await api('/api/nodes', 'POST', {
+      kind: 'setting',
+      settingType: 'audio',
+      name: 'SFX A',
+      config: 'wind',
+    })
+  ).data.nodes.at(-1);
+  const a2 = (
+    await api('/api/nodes', 'POST', {
+      kind: 'setting',
+      settingType: 'audio',
+      name: 'SFX B',
+      config: 'rain',
+    })
+  ).data.nodes.at(-1);
+  assert.ok(a1.id.startsWith('node-') && a2.id.startsWith('node-'), 'added nodes get node- ids');
+  let bs = (await api('/api/state')).data;
+  bs = (
+    await api('/api/edges', 'PUT', {
+      edges: [...bs.edges, { source: a1.id, target: 'wide' }],
+    })
+  ).data;
+  assert.ok(
+    bs.edges.some(e => e.source === a1.id && e.target === 'wide'),
+    'the sound node is wired into the shot',
+  );
+  const bad = await api('/api/nodes/delete', 'POST', { ids: [a1.id, 'wide'] });
+  assert.equal(bad.status, 400, 'a fixed template node in the batch is refused');
+  bs = (await api('/api/state')).data;
+  assert.ok(node(bs, a1.id) && node(bs, a2.id), 'a refused batch deletes nothing');
+  assert.ok(bs.edges.some(e => e.source === a1.id), 'and leaves its wires in place');
+  bs = (await api('/api/nodes/delete', 'POST', { ids: [a1.id, a2.id, a1.id] })).data;
+  assert.ok(!node(bs, a1.id) && !node(bs, a2.id), 'both sound nodes removed in one call');
+  assert.ok(!bs.edges.some(e => e.source === a1.id), 'the batch removed the deleted node’s wire');
+  assert.equal(node(bs, 'wide').videoStale, true, 'the shot the batch fed is out of date');
+  cs = (await api('/api/state')).data;
   // A wire into a clip is only legal from its own shot: cutting and re-adding it works…
   const wClip = clipsOf(cs, 'wide')[0].id;
   const without = cs.edges.filter(e => !(e.source === 'wide' && e.target === wClip));

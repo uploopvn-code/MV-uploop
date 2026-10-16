@@ -1,0 +1,55 @@
+{
+  "film": {
+    "title": "OBRION",
+    "format": "short sci-fi drama",
+    "style": "gritty realism, industrial desert colony, practical red emergency lighting, worn materials, restrained performances"
+  },
+  "characters": [
+    {
+      "key": "ami",
+      "role": "character",
+      "name": "Ami",
+      "description": "Nữ phi công châu Á 29 tuổi, tóc đen ngắn bết nhẹ vì bụi, gương mặt góc cạnh, vết xước nhỏ ở lông mày trái. Mặc flight suit xám than cũ, phù hiệu Obrion sờn ở vai trái, áo khoác kỹ thuật mở nửa khóa, găng tay không ngón.",
+      "character_lora_tag": "<lora:ami_v2:0.85>",
+      "first_frame_reference_url": ""
+    },
+    {
+      "key": "ken",
+      "role": "character",
+      "name": "Ken",
+      "description": "Nam kỹ sư 34 tuổi, tóc cắt ngắn, râu lún phún, quầng mắt thâm, áo khoác công nhân màu olive phủ bụi cát, đèn pin nhỏ gắn ngực. Cơ thể gầy, chuyển động tiết kiệm.",
+      "character_lora_tag": "<lora:ken_v1:0.8>",
+      "first_frame_reference_url": ""
+    }
+  ],
+  "scenes": [
+    {
+      "key": "abandoned_hangar_night",
+      "role": "scene",
+      "name": "Nhà chứa tàu bỏ hoang — đêm",
+      "description": "Nhà chứa tàu công nghiệp rộng nhưng hẹp chiều sâu, tấm thép rỉ, bê tông lấm dầu, cột chống lớn ở trung cảnh, cửa trượt kim loại ở cuối khung phải. Đèn khẩn cấp đỏ nhấp nháy, một nguồn sáng xanh rất yếu từ cửa hông, bụi sa mạc lùa qua khe hở. Không có người ngoài Ami và Ken.",
+      "staging": "Ami bắt đầu frame-left, di chuyển tới cột chống ở trung tâm. Ken vào từ cửa frame-right. Cả hai nhìn về cửa khi nghe tiếng động cuối cảnh.",
+      "first_frame_reference_url": ""
+    }
+  ],
+  "props": [
+    {
+      "key": "titanium_data_card",
+      "role": "prop",
+      "name": "Thẻ dữ liệu titanium",
+      "description": "Thẻ dữ liệu titanium kích thước bằng hai ngón tay, cạnh xước, ký tự serial phát sáng xanh lục rất mờ, đủ nóng để người cầm giữ bằng đầu ngón tay. Không phải điện thoại hay USB hiện đại."
+    }
+  ],
+  "continuity_anchors": [
+    "Ami luôn cầm thẻ bằng tay phải cho tới khi cất vào túi áo trong.",
+    "Ken vào từ cửa bên phải và không vượt qua Ami.",
+    "Đèn đỏ nhấp nháy là nguồn sáng chính; một đèn tắt ở gần cuối cảnh.",
+    "Sau khi Ami cất thẻ, không được nhìn thấy thẻ nữa.",
+    "Không thêm nhân vật, vũ khí, drone hoặc phương tiện vào khung hình."
+  ],
+  "audio_palette": {
+    "ambience": ["desert_wind_through_metal", "distant_patrol_engine", "emergency_light_electrical_hum"],
+    "foley": ["titanium_card_friction", "fabric_pocket_rustle", "soft_metal_door_close", "distant_hallway_metal_tick"],
+    "music": "Không có nhạc nền cho đến khi cắt đen."
+  }
+}

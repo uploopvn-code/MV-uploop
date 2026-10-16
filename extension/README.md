@@ -10,12 +10,11 @@ bằng chính phiên đăng nhập của bạn. Có **ba worker bật/tắt riê
 - **🎬 Google Vids** — `kind: video` (job gắn `site: googlevids`): node video đặt nguồn
   "Google Vids (extension)" → extension điều khiển Google Vids, điền prompt, chọn 1080p, bấm Tạo,
   bắt URL video 1080p rồi tải MP4 về node. **Không cần API key** — dùng phiên Google của bạn.
-- **🎥 Muse chat** — `kind: image` hoặc `kind: video` (job gắn `site: musechat`): node ảnh/video đặt nguồn
-  "Muse chat (extension)" → extension mở một tab muse.ai riêng cho từng job, điền prompt và ảnh tham
-  chiếu tùy chọn, bắt asset mới rồi tải về node. **Không cần API key** — dùng phiên Muse của bạn.
+- **Muse Chat** — `kind: image` hoặc `kind: video` (job gắn `site: musechat`): extension tạo
+  ảnh/video trong tab Muse riêng, rồi tải kết quả về node. **Không cần API key** — dùng phiên Muse.
 
 Cả ba dùng chung giao thức worker có sẵn (`/api/worker/claim` → `heartbeat` → `complete`), xác
-thực bằng **worker token** (một token dùng chung cho cả ba).
+thực bằng **worker token**.
 
 ## 1. Cài extension (chế độ Developer)
 
@@ -51,9 +50,10 @@ vài phút. Worker xử lý như sau:
 - **Lỗi trước khi gửi** (chưa đăng nhập, tải ảnh tham chiếu lỗi, tab không mở…): job thành *lỗi*,
   chạy lại an toàn. **Lỗi sau khi gửi** (không thấy ảnh, quá giờ, mất kết nối tab): job thành *cần
   kiểm tra* kèm link hội thoại và đoạn chữ ChatGPT trả lời (nếu có) — ảnh có thể vẫn đang được vẽ.
-- **Lấy lại ảnh** (job `recover`): app tự xếp lại job đó sau ít phút (tối đa 2 lần, chỉ khi đúng
+- **Lấy lại ảnh** (job `recover`): app tự xếp lại job đó sau ít phút (tối đa 3 lần, chỉ khi đúng
   worker đã chạy nó còn online) hoặc khi bạn bấm nút trong hàng đợi. Extension mở lại **đúng hội
   thoại đó** và lấy ảnh mới nhất — **không gửi prompt lại, không tốn thêm lượt**.
+
 - **Gửi kết quả bền hơn**: nếu app đang bận/khởi động lại, extension gửi lại kết quả sau 2, 5, 15,
   30, 60 giây; ảnh về muộn vẫn được app nhận (chỉ gắn vào node nếu node chưa đổi ảnh / chưa có job
   mới hơn).
@@ -61,6 +61,15 @@ vài phút. Worker xử lý như sau:
   ảnh hiện tại" thay vì ảnh). Mỗi lệnh có giới hạn: 10 phút cho ảnh / lấy lại ảnh, 12 phút cho
   Đạo diễn.
 - Tab worker được đặt **không bị Memory Saver loại bỏ** (`autoDiscardable: false`).
+
+### Muse Chat: ảnh, video và lấy lại kết quả cũ (0.5.35)
+
+Đăng nhập `muse.ai`, bật worker Muse Chat trong popup, rồi chọn Muse Chat làm nguồn ảnh hoặc video
+trên node. Mỗi job mới dùng một tab riêng. Sau khi gửi prompt, extension lưu link hội thoại vào
+hàng đợi. Nếu kết quả chưa về, nút **Lấy lại ảnh** hoặc **Kiểm tra lại** mở link đó, tìm đúng
+kết quả và tải về mà không gửi prompt thêm lần nữa. Luồng tự động tạo video còn thiếu kiểm tra
+job Muse cũ tối đa ba lần; nếu cả ba lần vẫn chưa xác định được kết quả, luồng báo lỗi và giữ
+nguyên job để tránh tạo trùng. Job lỗi chắc chắn trước khi gửi prompt có thể được tạo lại tự động.
 
 ## 4. Bật worker Google Vids (tạo video)
 
@@ -102,39 +111,7 @@ một request "generate" thật (URL + header + payload) làm **mẫu**, rồi n
   được chấp nhận nhưng không trả preview đồng bộ, worker **tắt replay cho hết phiên** (các job sau
   dùng giao diện) để không phí thêm lượt.
 
-## 5. Bật worker Muse chat (tạo video)
-
-1. Đăng nhập **https://muse.ai** trong trình duyệt này.
-2. Trong popup extension: bật **worker Muse chat**. Worker Muse mở **một tab nền riêng cho từng job**,
-   nên có thể chạy song song nhiều video.
-3. Trong app: node video → **Nguồn tạo** → **Muse chat (extension)** → Lưu → **Tạo video**.
-   Hoặc đặt nguồn mặc định video của project là Muse chat.
-4. Extension tự điền prompt và ảnh tham chiếu tùy chọn, chờ video khoảng 10 giây, tải MP4 về node rồi
-   đóng tab. `MUSECHAT_NEW_CHAT_URL` trong `background.js` có thể chỉnh nếu Muse đổi URL chat mới.
-
-### Job/site routing
-
-Claim có thể gửi `sites` để server chỉ giao đúng site:
-
-```json
-{ "name": "Drama worker #a1b2c3", "kinds": ["video"], "sites": ["musechat"] }
-```
-
-Job Muse có `kind: "video"`, `payload.site: "musechat"`, `prompt` và `references`. Worker Vids không
-claim nhầm job Muse; heartbeat/complete/fail giữ nguyên giao thức cũ.
-
-### Hiệu chỉnh giao diện Muse
-
-Các selector trong `museChatDriveUi` là heuristic. Nếu Muse đổi giao diện, mở F12 trên chat đã đăng nhập:
-
-```js
-document.querySelectorAll('textarea, [contenteditable="true"], [role="textbox"]').length
-```
-
-Nếu không có ô chat hoặc nút gửi, chỉnh hàm `museChatDriveUi` trong `background.js`. Hook
-`content-musechat-hook.js` bắt URL từ network/DOM theo `queueId`, sau đó worker tải MP4 bằng phiên Muse.
-
-## 6. Chạy song song (nhiều luồng / nhiều tài khoản / nhiều project)
+## 5. Chạy song song (nhiều luồng / nhiều tài khoản / nhiều project)
 
 - **Số luồng ChatGPT**: mỗi luồng một tab, tối đa 6 mỗi tài khoản nhưng **nên để 1–2** (ChatGPT giới
   hạn số ảnh vẽ cùng lúc mỗi tài khoản). Nhiều hơn: cài extension ở nhiều **profile trình duyệt**,
@@ -146,14 +123,10 @@ Nếu không có ô chat hoặc nút gửi, chỉnh hàm `museChatDriveUi` trong
 - **Trần phía app**: `MV_WORKER_CONCURRENCY` (mặc định 12) chỉ là van an toàn mỗi cửa sổ; trần thật
   của ChatGPT là số tab ở trên.
 
-## 7. Khi lỗi
+## 6. Khi lỗi
 
 - **Token sai / không gọi được máy chủ**: kiểm tra app đang chạy và token đúng.
-- **Chưa đăng nhập ChatGPT/Muse/Google**: mở trang tương ứng, đăng nhập, thử lại.
-- **Muse chat: không điều khiển được giao diện**: kiểm tra đã đăng nhập muse.ai; nếu Muse đổi layout,
-  hiệu chỉnh `museChatDriveUi` và selector trong `background.js`.
-- **Muse chat: hết 10 phút không có video**: kiểm tra quota Muse và hook `content-musechat-hook.js`;
-  job sẽ chuyển sang cần kiểm tra.
+- **Chưa đăng nhập ChatGPT/Google**: mở trang, đăng nhập, thử lại.
 - **Google Vids: "Chưa mở tài liệu Google Vids"**: worker chỉ dùng tab Vids bạn mở sẵn — mở một
   video và để tab đó mở.
 - **Google Vids: không thấy ô prompt / nút Tạo**: mở đúng một video và bảng tạo video (Video AI),
@@ -173,16 +146,15 @@ Nếu không có ô chat hoặc nút gửi, chỉnh hàm `museChatDriveUi` trong
   hoặc bấm nút lấy lại (cần worker ChatGPT bật, đúng profile). Đổi **tên worker** trong popup sẽ làm
   job lấy lại của tên cũ không còn ai nhận.
 
-## 8. Quyền (manifest)
+## 7. Quyền (manifest)
 
 - `http://127.0.0.1/*`, `http://localhost/*`: gọi API worker + tải ảnh tham chiếu của app.
 - `https://chatgpt.com/*`, `https://chat.openai.com/*`, `https://*.oaiusercontent.com/*`: điều khiển
   ChatGPT và tải ảnh vừa tạo.
 - `https://docs.google.com/*`, `https://*.google.com/*`, `https://*.googleusercontent.com/*`: điều
   khiển Google Vids và tải video 1080p đã ký.
-- `https://muse.ai/*`: điều khiển Muse chat và tải video bằng phiên đăng nhập.
 - `storage` (cấu hình), `alarms` (đánh thức worker), `tabs`/`scripting` (điều khiển tab).
 
 Extension **không** đọc mật khẩu và **không** gửi dữ liệu đi đâu ngoài máy chủ Drama Tool cục bộ,
-ChatGPT, Google Vids và Muse. Việc tự động hóa các dịch vụ bằng phiên của bạn có thể vi phạm điều
+ChatGPT và Google Vids. Việc tự động hóa ChatGPT/Google Vids bằng phiên của bạn có thể vi phạm điều
 khoản dịch vụ của họ và có rủi ro cho tài khoản — cân nhắc dùng tài khoản phụ.

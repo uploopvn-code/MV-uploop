@@ -2,7 +2,7 @@
 import { store } from './store.js';
 import { addAngle, addLook, addReverseAngles, addWardrobe } from './add-nodes.js';
 import { pickClip, videosOf } from './cards.js';
-import { $, api, copy, dlUrl, downloadName, esc, toast, workflowBusy } from './core.js';
+import { $, api, copy, dlUrl, downloadName, esc, toast, workflowNodeLocked } from './core.js';
 import { editImage, editPanel, swapImage } from './edit-image.js';
 import {
   bindProviderSettings,
@@ -18,10 +18,16 @@ import {
 import { refresh, render, view } from './render.js';
 import { inspectGroup } from './seedance.js';
 import { inspectMerged } from './merged.js';
-import { sheetPanel, wardrobePanel } from './wardrobe.js';
-import { ZONES, nodeTime } from './zones.js';
+import { inspectScript } from './script.js';
+import { identityPanel, sheetPanel, wardrobePanel } from './wardrobe.js';
+import { ZONES, nodeTime, zoneLabel } from './zones.js';
 import { capturesReady } from './stage-keeper.js';
 import { framingLabel } from './stage-math.js';
+import { t as tx } from './i18n.js';
+
+document.addEventListener('localechange', () => {
+  if (store.selected && !$('#inspector')?.hidden) inspect(store.selected);
+});
 
 // Everything wired into this node: the image inputs first, in the order the model receives
 // them (the same [1] [2] [3] the prompt names), then the style / camera / sound presets.
@@ -35,15 +41,15 @@ function inputChips(n) {
   const sent = new Map(n.references.map((r, i) => [r.role, i + 1]));
   const row = (p, inner) =>
     `<div class="ref-chip"><button type="button" class="ref-open" data-open="${esc(p.id)}" ` +
-    `title="Mở ${esc(p.name)}">${inner}</button>` +
-    `<button type="button" class="ref-cut" data-cut="${esc(p.id)}" title="Bỏ nối node này">×</button></div>`;
+    `title="${tx('inspector.openNode')} ${esc(p.name)}">${inner}</button>` +
+    `<button type="button" class="ref-cut" data-cut="${esc(p.id)}" title="${tx('inspector.disconnectNode')}">×</button></div>`;
   const image = p => {
     const i = sent.get(p.id);
     return row(
       p,
       (p.image
         ? `<img src="${esc(p.image.url)}" alt="${esc(p.name)}" loading="lazy">`
-        : '<span class="ref-blank">chưa có ảnh</span>') +
+        : `<span class="ref-blank">${tx('inspector.noImage')}</span>`) +
         `<span class="ref-name">${i ? '[' + i + '] ' : ''}${esc(p.name)}</span>` +
         (i ? `<code>{{mv_input_${i}_path}}</code>` : ''),
     );
@@ -53,7 +59,7 @@ function inputChips(n) {
     row(
       p,
       '<span class="ref-icon">🧍</span>' +
-        `<span class="ref-name">${esc(p.name)} · vị trí 3D (không gửi ảnh)</span>`,
+        `<span class="ref-name">${esc(p.name)} · ${tx('inspector.stagePosition')} </span>`,
     );
   const pin = n.stagePin;
   const capture =
@@ -96,15 +102,15 @@ export function videoResults(n) {
       t =>
         `<div class="video-result"><video controls src="${esc(t.video.url)}"></video>` +
         `<p class="field-hint">v${t.version || 1} · <code>${esc(downloadName(t))}</code></p>` +
-        `<div class="actions"><button type="button" class="button" data-open="${esc(t.id)}">Mở node video</button>` +
-        `<a class="button" href="${esc(dlUrl(t.video.url, downloadName(t)))}" download="${esc(downloadName(t))}">↓ Tải video</a></div></div>`,
+        `<div class="actions"><button type="button" class="button" data-open="${esc(t.id)}">${tx('inspector.openVideoNode')}</button>` +
+        `<a class="button" href="${esc(dlUrl(t.video.url, downloadName(t)))}" download="${esc(downloadName(t))}">↓ ${tx('inspector.downloadVideo')}</a></div></div>`,
     )
     .join('');
   return own + made ? `<div class="video-results">${own}${made}</div>` : '';
 }
 // Cuts one wire into the inspected node, then reopens it so the list refreshes.
 async function cutInput(source, target) {
-  if (workflowBusy()) return toast('Đợi hàng đợi chạy xong trước khi sửa dây nối.', true);
+  if (workflowNodeLocked(target)) return toast('Node này đang nằm trong chuỗi tự động.', true);
   try {
     store.state = await api('/api/edges', {
       method: 'PUT',
@@ -112,14 +118,14 @@ async function cutInput(source, target) {
     });
     render();
     inspect(target);
-    toast('Đã bỏ một đầu vào');
+    toast(tx('inspector.inputRemoved'));
   } catch (err) {
     toast(err.message, true);
   }
 }
 // Zone picker (design/production) for a non-output node.
 const zoneSelect = n =>
-  '<label>Khu vực<select id="nodeZone">' +
+  `<label>${tx('inspector.zoneLabel')}<select id="nodeZone">` +
   ZONES.filter(
     z =>
       !['merged', 'output', 'seedance', 'seedance-video', 'lipsync', 'lipsync-video'].includes(
@@ -127,34 +133,25 @@ const zoneSelect = n =>
       ),
   )
     .map(
-      z => `<option value="${z.id}" ${n.zone === z.id ? 'selected' : ''}>${esc(z.label)}</option>`,
+      z =>
+        `<option value="${z.id}" ${n.zone === z.id ? 'selected' : ''}>${esc(zoneLabel(z))}</option>`,
     )
     .join('') +
   '</select></label>';
-function paintCanvasFocus(id) {
-  const edges = store.state.edges;
-  document.querySelectorAll('[data-graph-id]').forEach(el => {
-    const nodeId = el.dataset.graphId;
-    const related = edges.some(
-      e => (e.source === id && e.target === nodeId) || (e.target === id && e.source === nodeId),
-    );
-    el.classList.toggle('selected', nodeId === id);
-    el.classList.toggle('related', !!id && related);
-    el.classList.toggle('dimmed', !!id && nodeId !== id && !related);
-  });
-  document.querySelectorAll('.wire[data-edge-source][data-edge-target]').forEach(el => {
-    el.classList.toggle(
-      'focus',
-      !!id && (el.dataset.edgeSource === id || el.dataset.edgeTarget === id),
-    );
-  });
-}
+// The canvas spotlight (dim the rest + a light running along the focused node's wires) now lives in
+// canvas.js as its own state (focusedNodeId), pinned by a single click and independent of this
+// Inspector — opening the editor no longer dims the graph.
 
 let inspectorTrigger = null;
 let inspectorCloseTimer = null;
 let inspectorEscapeBound = false;
 
-function inspectorHeader({ eyebrow = 'NODE INSPECTOR', title, subtitle = '', status = '' } = {}) {
+function inspectorHeader({
+  eyebrow = tx('inspector.nodeInspector'),
+  title,
+  subtitle = '',
+  status = '',
+} = {}) {
   return (
     '<div class="inspector-head">' +
     '<div class="inspector-heading"><span class="inspector-eyebrow">' +
@@ -164,7 +161,9 @@ function inspectorHeader({ eyebrow = 'NODE INSPECTOR', title, subtitle = '', sta
     '</h2>' +
     (subtitle ? '<p class="inspector-subtitle">' + subtitle + '</p>' : '') +
     (status ? '<span class="inspector-status">' + status + '</span>' : '') +
-    '</div><button class="close" aria-label="Đóng">×</button></div>'
+    '</div><button class="close" aria-label="' +
+    tx('common.close') +
+    '">×</button></div>'
   );
 }
 
@@ -207,7 +206,8 @@ function bindInspectorEscape() {
       ),
     ].filter(el => el.getClientRects().length);
     if (!items.length) return;
-    const first = items[0], last = items.at(-1);
+    const first = items[0],
+      last = items.at(-1);
     if (e.shiftKey && document.activeElement === first) {
       e.preventDefault();
       last.focus();
@@ -231,9 +231,13 @@ export function normalizeInspectorLayout() {
       const eyebrow = document.createElement('span');
       eyebrow.className = 'inspector-eyebrow';
       eyebrow.textContent =
-        ({ node: 'NODE INSPECTOR', stage: 'SÂN KHẤU 3D', setting: 'THIẾT LẬP NODE', brief: 'PROJECT BRIEF', project: 'PROJECT SETTINGS' }[
-          panel.dataset.inspectorContext
-        ] || 'WORKFLOW INSPECTOR');
+        {
+          node: tx('inspector.nodeInspector'),
+          stage: tx('inspector.stage3d'),
+          setting: tx('inspector.setting'),
+          brief: tx('inspector.brief'),
+          project: tx('inspector.projectSettings'),
+        }[panel.dataset.inspectorContext] || 'WORKFLOW INSPECTOR';
       heading.append(eyebrow, h2);
       head.insertBefore(heading, head.querySelector('.close'));
     }
@@ -251,6 +255,12 @@ export function normalizeInspectorLayout() {
   });
   panel.append(scroll);
   if (footer) panel.append(footer);
+  // A few action labels are rendered by legacy templates; normalize them here so
+  // they follow the active locale without changing the template/interpolation logic.
+  const deleteButton = panel.querySelector('#deleteNode');
+  if (deleteButton) deleteButton.textContent = tx('common.deleteNode');
+  const copyVideo = panel.querySelector('#copyVideo');
+  if (copyVideo) copyVideo.textContent = tx('inspector.copyPrompt');
 }
 
 function inspectorMarkup(body, context, header, footer = '') {
@@ -275,7 +285,6 @@ function mountInspector(body, context, header, footer = '') {
 export function closeInspector() {
   store.selected = null;
   store.dirty = false;
-  paintCanvasFocus(null);
   const panel = $('#inspector');
   const overlay = $('#overlay');
   panel.classList.remove('is-open');
@@ -316,12 +325,16 @@ function stageSets() {
   );
   if (!sets.length) return '';
   return (
-    '<h3>📌 Ghim vị trí trên sân khấu (3D)</h3>' +
-    '<p class="field-hint">Mỗi bối cảnh ghim một lần — đặt từng người đúng chỗ (piano, trống, guitar…). Mọi node quay ở đó tự nhận vị trí, kể cả node thêm hay sửa sau; cỡ cảnh và góc máy tool tự tính theo từng node, nên trái/phải không bị đảo giữa các shot. Dùng node sân khấu 3D riêng cũng được: nối nó vào các shot, hoặc vào bối cảnh của chúng.</p>' +
+    '<h3>📌 ' +
+    tx('inspector.stagePinTitle') +
+    '</h3>' +
+    '<p class="field-hint">' +
+    tx('inspector.stagePinHint') +
+    '</p>' +
     `<div class="actions">${sets
       .map(s => {
         const k = s.stage3d?.performers?.length;
-        return `<button type="button" class="button" data-stage3d="${esc(s.id)}">${k ? '📌' : '🧍'} ${esc(s.name)} · ${k ? k + ' người · ' + (uses.get(s.id) || 0) + ' node' : 'chưa ghim'}</button>`;
+        return `<button type="button" class="button" data-stage3d="${esc(s.id)}">${k ? '📌' : '🧍'} ${esc(s.name)} · ${k ? k + ' ' + tx('inspector.people') + ' · ' + (uses.get(s.id) || 0) + ' node' : tx('inspector.notPinned')}</button>`;
       })
       .join('')}</div>`
   );
@@ -331,15 +344,40 @@ export function openStage(setId) {
   closeInspector();
   import('./stage3d.js')
     .then(m => m.openStage3d(setId))
-    .catch(e => toast('Không mở được dàn dựng 3D: ' + e.message, true));
+    .catch(e => toast(tx('inspector.stageOpenFailed') + ': ' + e.message, true));
 }
 // Every 🧍 button of the inspector (music step 3, a node's pinned position) opens its set's stage.
 $('#inspector').addEventListener('click', e => {
   const b = e.target.closest('[data-stage3d]');
   if (b && !b.disabled) openStage(b.dataset.stage3d);
 });
+// Render a camera-only 3D trajectory preview for this node (empty stage, no Trợ lý needed).
+$('#inspector').addEventListener('click', async e => {
+  const b = e.target.closest('[data-cam-only]');
+  if (!b || b.disabled) return;
+  const move = $('#camOnlyMove')?.value || 'orbit';
+  const framing = $('#camOnlyFraming')?.value || 'medium';
+  const id = b.dataset.camOnly;
+  b.disabled = true;
+  const label = b.textContent;
+  b.textContent = '⏳ Đang render…';
+  try {
+    store.state = await api('/api/stage3d/topview-camera', {
+      method: 'POST',
+      body: { shotId: id, move, seconds: 2.5, framing },
+    });
+    const r = store.state.topview3dCamera || {};
+    toast(`🎥 Xong video quỹ đạo máy (${r.move || move}) — đã gắn vào node.`);
+    render();
+    inspect(id);
+  } catch (err) {
+    toast(err.message, true);
+    b.disabled = false;
+    b.textContent = label;
+  }
+});
 export function lockInspectorIfBusy(alsoKeep = []) {
-  if (!workflowBusy()) return;
+  if (!workflowNodeLocked(store.selected)) return;
   const insp = $('#inspector');
   const keep = new Set(['copyImage', 'copyVideo', ...alsoKeep]);
   insp.querySelectorAll('input, textarea, select, button').forEach(el => {
@@ -350,14 +388,12 @@ export function lockInspectorIfBusy(alsoKeep = []) {
   if (head && !insp.querySelector('.busy-note')) {
     const note = document.createElement('div');
     note.className = 'note busy-note';
-    note.textContent =
-      '🔒 Hàng đợi đang chạy — node ở chế độ chỉ xem. Đợi xong hoặc bấm Dừng để sửa.';
+    note.textContent = tx('inspector.queueBusy');
     head.after(note);
   }
 }
 export function inspect(id) {
   store.selected = id;
-  paintCanvasFocus(id);
   store.dirty = false;
   const n = store.state.nodes.find(n => n.id === id),
     shot = n && 'duration' in n && !n.terminal && n.kind !== 'setting';
@@ -369,6 +405,7 @@ export function inspect(id) {
     openInspector('merged');
     return inspectMerged(n);
   }
+  if (n.kind === 'script') return inspectScript(n);
   if (n.kind === 'music') {
     openInspector('music');
     return inspectMusic(n);
@@ -379,11 +416,11 @@ export function inspect(id) {
   }
   if (n.stageOnly) {
     $('#inspector').innerHTML =
-      `<div class="inspector-head"><h2>🧍 ${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div>` +
-      `<div class="inspector-preview">${n.stage3d?.capture ? `<img src="${esc(n.stage3d.capture.url)}" alt="Ảnh toàn cảnh 3D">` : 'Chưa ghim — mở 3D để đặt từng người'}</div>` +
-      `<label>Tên node<input id="stageName" value="${esc(n.name)}"></label>` +
+      `<div class="inspector-head"><h2>🧍 ${esc(n.name)}</h2><button class="close" aria-label="${tx('common.close')}">×</button></div>` +
+      `<div class="inspector-preview">${n.stage3d?.capture ? `<img src="${esc(n.stage3d.capture.url)}" alt="${tx('inspector.stageCaptureAlt')}">` : tx('inspector.openStageToPin')}</div>` +
+      `<label>${tx('inspector.nodeNameLabel')}<input id="stageName" value="${esc(n.name)}"></label>` +
       wardrobePanel(n) +
-      `<section class="inspector-section"><button class="button wide" id="saveStageName">Lưu tên</button>${id.startsWith('node-') ? '<button class="button wide danger" id="deleteNode">Xóa node này</button>' : ''}</section>`;
+      `<section class="inspector-section"><button class="button wide" id="saveStageName">${tx('common.saveName')}</button>${id.startsWith('node-') ? `<button class="button wide danger" id="deleteNode">${tx('common.deleteNode')}</button>` : ''}</section>`;
     openInspector('stage');
     normalizeInspectorLayout();
     $('.close').onclick = closeInspector;
@@ -409,15 +446,21 @@ export function inspect(id) {
       .map(e => store.state.nodes.find(x => x.id === e.target)?.name)
       .filter(Boolean);
     const body =
-      `<p class="field-hint">Node ${{ camera: 'máy quay', audio: 'âm thanh' }[n.settingType] || 'style'}: nội dung dưới đây được chèn vào prompt của mọi node bạn nối ra. Nối cổng Ra của node này vào node cần áp.</p>` +
-      `<label>Tên<input id="settingName" value="${esc(n.name)}"></label>` +
-      `<label>Nội dung ${{ camera: '(mô tả máy quay, góc, ống kính…)', audio: '(nhạc nền + tiếng hiện trường, tiếng Anh: "low cello drone, rain on umbrellas, distant bell; no dialogue")' }[n.settingType] || '(mô tả phong cách, màu, chất liệu…)'}<textarea id="settingConfig" rows="5">${esc(n.config || '')}</textarea></label>` +
+      `<p class="field-hint">${tx('inspector.settingHint', { type: tx('inspector.settingType.' + (n.settingType || 'style')) })}</p>` +
+      `<label>${tx('inspector.nameLabel')}<input id="settingName" value="${esc(n.name)}"></label>` +
+      `<label>${tx('inspector.contentLabel')} ${tx('inspector.settingDescription.' + (n.settingType || 'style'))}<textarea id="settingConfig" rows="5">${esc(n.config || '')}</textarea></label>` +
       zoneSelect(n) +
-      `<p class="field-hint">Đang áp cho: ${targets.length ? esc(targets.join(', ')) : 'chưa nối node nào'}</p>`;
+      `<p class="field-hint">${tx('inspector.appliedTo')}: ${targets.length ? esc(targets.join(', ')) : tx('inspector.noConnectedNodes')}</p>`;
     const icon = { camera: '🎥', audio: '🔊' }[n.settingType] || '🎨';
     $('#inspector').innerHTML =
-      inspectorHeader({ eyebrow: 'THIẾT LẬP NODE', title: icon + ' ' + esc(n.name), subtitle: 'Nội dung áp dụng cho node được nối' }) +
-      '<div class="inspector-scroll">' + body + '</div>' +
+      inspectorHeader({
+        eyebrow: 'THIẾT LẬP NODE',
+        title: icon + ' ' + esc(n.name),
+        subtitle: 'Nội dung áp dụng cho node được nối',
+      }) +
+      '<div class="inspector-scroll">' +
+      body +
+      '</div>' +
       `<div class="inspector-footer"><button class="button wide primary" id="saveSetting">Lưu</button>${id.startsWith('node-') ? '<button class="button wide danger" id="deleteNode">Xóa node này</button>' : ''}</div>`;
     openInspector('setting');
     normalizeInspectorLayout();
@@ -435,7 +478,7 @@ export function inspect(id) {
         });
         render();
         inspect(id);
-        toast('Đã lưu');
+        toast(tx('common.saved'));
       } catch (e) {
         toast(e.message, true);
       }
@@ -451,16 +494,16 @@ export function inspect(id) {
     const k = stack.findIndex(x => x.id === n.id);
     const others = stack.filter(x => x.id !== n.id);
     $('#inspector').innerHTML =
-      `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div>` +
-      `<div class="inspector-scroll"><p class="field-hint">Phiên bản video${src ? ' từ node “' + esc(src.name) + '”' : ''}. Node này chỉ để xem/tải; tạo lại từ node nguồn.</p>` +
+      `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="${tx('common.close')}">×</button></div>` +
+      `<div class="inspector-scroll"><p class="field-hint">${tx('inspector.videoVersion')}${src ? ' ' + tx('inspector.fromNode') + ' “' + esc(src.name) + '”' : ''}. ${tx('inspector.viewDownloadOnly')}</p>` +
       (stack.length > 1
-        ? `<div class="prompt-tools"><button id="clipPrev" ${k > 0 ? '' : 'disabled'}>‹ Bản trước</button><span class="field-hint">bản ${k + 1}/${stack.length}</span><button id="clipNext" ${k < stack.length - 1 ? '' : 'disabled'}>Bản sau ›</button></div>`
+        ? `<div class="prompt-tools"><button id="clipPrev" ${k > 0 ? '' : 'disabled'}>‹ ${tx('inspector.previousVersion')}</button><span class="field-hint">${tx('inspector.version')} ${k + 1}/${stack.length}</span><button id="clipNext" ${k < stack.length - 1 ? '' : 'disabled'}>${tx('inspector.nextVersion')} ›</button></div>`
         : '') +
       (n.video
-        ? `<video controls src="${esc(n.video.url)}" style="width:100%;border-radius:8px"></video><p class="field-hint">Tên file tải về: <code>${esc(downloadName(n))}</code></p><div class="actions"><a class="button" href="${esc(dlUrl(n.video.url, downloadName(n)))}" download="${esc(downloadName(n))}">↓ Tải video</a></div>`
-        : '<p>Chưa có video.</p>') +
+        ? `<video controls src="${esc(n.video.url)}" style="width:100%;border-radius:8px"></video><p class="field-hint">${tx('inspector.downloadFile')}: <code>${esc(downloadName(n))}</code></p><div class="actions"><a class="button" href="${esc(dlUrl(n.video.url, downloadName(n)))}" download="${esc(downloadName(n))}">↓ ${tx('inspector.downloadVideo')}</a></div>`
+        : `<p>${tx('inspector.noVideo')}</p>`) +
       '</div><div class="inspector-footer">' +
-      `${others.length ? `<button class="button wide" id="keepClip">Giữ bản này, xóa ${others.length} bản khác</button>` : ''}<button class="button wide danger" id="deleteNode">Xóa phiên bản này</button></div>`;
+      `${others.length ? `<button class="button wide" id="keepClip">${tx('inspector.keepVersion')} ${others.length} ${tx('inspector.otherVersions')}</button>` : ''}<button class="button wide danger" id="deleteNode">${tx('inspector.deleteVersion')}</button></div>`;
     openInspector('video');
     normalizeInspectorLayout();
     const go = t => {
@@ -473,13 +516,21 @@ export function inspect(id) {
     if ($('#clipNext')) $('#clipNext').onclick = () => go(stack[k + 1]);
     if ($('#keepClip'))
       $('#keepClip').onclick = async () => {
-        if (!confirm(`Giữ bản này và xóa ${others.length} bản khác?`)) return;
+        if (!confirm(tx('inspector.keepVersionConfirm') + ' ' + others.length + '?')) return;
         try {
           for (const o of others)
             store.state = await api('/api/nodes/delete', { method: 'POST', body: { id: o.id } });
           render();
           inspect(n.id);
-          toast('Đã xóa ' + others.length + ' bản, giữ ' + n.name);
+          toast(
+            tx('inspector.versionsRemoved') +
+              ' ' +
+              others.length +
+              ' · ' +
+              tx('inspector.keptVersion') +
+              ' ' +
+              n.name,
+          );
         } catch (e) {
           toast(e.message, true);
         }
@@ -488,28 +539,45 @@ export function inspect(id) {
     lockInspectorIfBusy();
     return;
   }
-    $('#inspector').innerHTML =
-      `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="Đóng">×</button></div>` +
-      '<div class="inspector-scroll">' +
-      `<div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Ảnh ${esc(n.name)}">` : 'Ảnh của node sẽ xuất hiện ở đây'}</div>` +
-      editPanel(n) +
-      (n.stale ? '<div class="note">Đầu vào đã đổi. Tạo lại ảnh hoặc tải ảnh đã duyệt trước khi làm video.</div>' : '') +
-      `<div class="two"><label>STT trong khu vực<input id="nodeSeq" type="number" min="1" value="${n.seq || ''}"></label><label>Tên node<input id="nodeName" value="${esc(n.name)}"></label></div>` +
-      `<p class="field-hint">File tải về của node này: <code>${esc(downloadName({ ...n, terminal: false }, n.video ? 'video' : 'image'))}</code></p>` +
-      zoneSelect(n) + sheetPanel(n) + wardrobePanel(n) + inputsSummary(n, shot) + inputChips(n) + stagePanel(n) +
-      `<label>Prompt ảnh <code class="variable-tag" title="Biến Orbit nhận khi chạy tác vụ tạo ảnh">{{prompt}}</code><textarea id="imagePrompt" rows="5">${esc(n.resolvedPrompts.image)}</textarea></label>` +
-      '<p class="field-hint">Orbit nhận nội dung này qua <code>{{prompt}}</code> hoặc <code>{{mv_prompt}}</code> khi tạo ảnh. Khi tạo video, hai biến này chứa prompt video.</p>' +
-      '<div class="prompt-tools"><button id="copyImage">Sao chép prompt</button><button id="resetPrompt">Dùng prompt kế thừa</button></div>' +
-      `<div class="actions"><label class="button">↑ Tải ảnh<input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" hidden></label><button class="button primary" id="generateImage">${generateLabel(n, 'image')}</button></div>` +
-      `<p class="queue-hint">${n.providers.image.type === 'seedvis' ? 'Gửi prompt và ' + imagesSent(n) + ' ảnh đầu vào tới Seedvis · ' + esc(n.providers.image.modelName) + '.' : n.providers.image.type === 'web' ? 'Gửi prompt' + (imagesSent(n) ? ' + ' + imagesSent(n) + ' ảnh đầu vào' : '') + ' sang ChatGPT qua extension (bật worker trong trình duyệt).' : 'Tác vụ sẽ mở nick và chạy kịch bản bằng phiên Orbit đã đăng nhập.'}</p>` +
-      (shot ? `<section class="inspector-section"><h3>Video của shot</h3><label>Ảnh đầu vào cho video<select id="videoInput"><option value="self" ${!videoUsesRefs(n) ? 'selected' : ''}>Ảnh của node này (keyframe)</option><option value="refs" ${videoUsesRefs(n) ? 'selected' : ''}>Ảnh từ node nối vào (${n.imageInputs} ảnh tham chiếu${n.videoRefLimit ? ', model nhận tối đa ' + n.videoRefLimit : ''})</option></select></label><p class="field-hint" id="videoInputHint">${esc(videoInputHint(n))}</p><div class="two"><label>Bắt đầu (giây) <code class="variable-tag">{{mv_start}}</code><input id="start" type="number" min="0" value="${n.start}"></label><label>Thời lượng (giây) <code class="variable-tag">{{mv_duration}}</code><input id="duration" type="number" min="1" value="${n.duration}"></label></div><label>Lời hát đúng đoạn này <span class="field-hint">Nhúng trong prompt video, không có biến riêng</span><textarea id="lyric" rows="2" placeholder="Để trống nếu chưa căn lời">${esc(n.lyric)}</textarea></label><details><summary>Prompt chuyển động <code class="variable-tag">{{prompt}}</code></summary><label>Prompt video <code class="variable-tag">{{prompt}}</code><textarea id="videoPrompt" rows="5">${esc(n.resolvedPrompts.video)}</textarea></label><p class="field-hint">Tool tự thêm dòng Reference subjects và Voice lock vào prompt video.</p><button id="copyVideo" class="button">Sao chép</button></details>${videoResults(n)}${n.providers.video.type === 'seedvis' ? `<label>Số phiên bản<select id="nodeVideoVersions"><option value="1">1 bản</option><option value="2">2 bản</option><option value="3">3 bản</option><option value="4">4 bản</option></select></label>` : ''}<div class="actions"><label class="button">↑ Tải video<input type="file" id="videoUpload" accept="video/mp4,video/webm" hidden></label><button class="button primary" id="generateVideo" ${videoReady(n) ? '' : 'disabled'}>${generateLabel(n, 'video')}</button></div></section>` : '') +
-      providerSettings(n, shot) +
-      (usesOrbit(n, shot) ? outputSettings(n, shot) + orbitSettings(n, shot) : '<details class="inspector-section"><summary>Cài đặt Orbit</summary>' + outputSettings(n, shot) + orbitSettings(n, shot) + '</details>') +
-      '</div><div class="inspector-footer"><button class="button wide" id="saveNode">Lưu chỉnh sửa</button>' +
-      (id.startsWith('node-') ? '<button class="button wide danger" id="deleteNode">Xóa node này</button>' : '') +
-      '</div>';
-    openInspector('node');
-    normalizeInspectorLayout();
+  $('#inspector').innerHTML =
+    `<div class="inspector-head"><h2>${esc(n.name)}</h2><button class="close" aria-label="${tx('common.close')}">×</button></div>` +
+    '<div class="inspector-scroll">' +
+    `<div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="${tx('inspector.imageAlt')} ${esc(n.name)}">` : tx('inspector.imagePlaceholder')}</div>` +
+    editPanel(n) +
+    (n.stale ? `<div class="note">${tx('inspector.staleInput')}</div>` : '') +
+    `<div class="two"><label>${tx('inspector.sequenceLabel')}<input id="nodeSeq" type="number" min="1" value="${n.seq || ''}"></label><label>${tx('inspector.nodeNameLabel')}<input id="nodeName" value="${esc(n.name)}"></label></div>` +
+    `<p class="field-hint">File tải về của node này: <code>${esc(downloadName({ ...n, terminal: false }, n.video ? 'video' : 'image'))}</code></p>` +
+    zoneSelect(n) +
+    sheetPanel(n) +
+    identityPanel(n) +
+    wardrobePanel(n) +
+    inputsSummary(n, shot) +
+    inputChips(n) +
+    stagePanel(n) +
+    cameraOnlyPanel(n) +
+    `<label>${tx('inspector.imagePrompt')} <code class="variable-tag" title="${tx('inspector.orbitPromptVar')}">{{prompt}}</code><textarea id="imagePrompt" rows="5">${esc(n.resolvedPrompts.image)}</textarea></label>` +
+    '<p class="field-hint">Orbit nhận nội dung này qua <code>{{prompt}}</code> hoặc <code>{{mv_prompt}}</code> khi tạo ảnh. Khi tạo video, hai biến này chứa prompt video.</p>' +
+    `<div class="prompt-tools"><button id="copyImage">${tx('inspector.copyPrompt')}</button><button id="resetPrompt">${tx('inspector.resetPrompt')}</button></div>` +
+    `<div class="actions"><label class="button">↑ ${tx('inspector.uploadImage')}<input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" hidden></label><button class="button primary" id="generateImage">${generateLabel(n, 'image')}</button></div>` +
+    `<p class="queue-hint">${n.providers.image.type === 'seedvis' ? 'Gửi prompt và ' + imagesSent(n) + ' ảnh đầu vào tới Seedvis · ' + esc(n.providers.image.modelName) + '.' : n.providers.image.type === 'web' ? 'Gửi prompt' + (imagesSent(n) ? ' + ' + imagesSent(n) + ' ảnh đầu vào' : '') + ' sang ChatGPT qua extension (bật worker trong trình duyệt).' : 'Tác vụ sẽ mở nick và chạy kịch bản bằng phiên Orbit đã đăng nhập.'}</p>` +
+    (shot
+      ? `<section class="inspector-section"><h3>Video của shot</h3><label>Ảnh đầu vào cho video<select id="videoInput"><option value="self" ${!videoUsesRefs(n) ? 'selected' : ''}>Ảnh của node này (keyframe)</option><option value="refs" ${videoUsesRefs(n) ? 'selected' : ''}>Ảnh từ node nối vào (${n.imageInputs} ảnh tham chiếu${n.videoRefLimit ? ', model nhận tối đa ' + n.videoRefLimit : ''})</option><option value="mix" ${n.videoInput === 'mix' ? 'selected' : ''}>Ảnh của node này + ảnh nhân vật chọn thêm (tối đa ${(n.mixedRoom ?? 0) + 1} ảnh)</option></select></label>${mixPicker(n)}<p class="field-hint" id="videoInputHint">${esc(videoInputHint(n))}</p><div class="two"><label>Bắt đầu (giây) <code class="variable-tag">{{mv_start}}</code><input id="start" type="number" min="0" value="${n.start}"></label><label>Thời lượng (giây) <code class="variable-tag">{{mv_duration}}</code><input id="duration" type="number" min="1" value="${n.duration}"></label></div><label>Lời hát đúng đoạn này <span class="field-hint">Nhúng trong prompt video, không có biến riêng</span><textarea id="lyric" rows="2" placeholder="Để trống nếu chưa căn lời">${esc(n.lyric)}</textarea></label><details><summary>Prompt chuyển động <code class="variable-tag">{{prompt}}</code></summary><label>Prompt video <code class="variable-tag">{{prompt}}</code><textarea id="videoPrompt" rows="5">${esc(n.resolvedPrompts.video)}</textarea></label><p class="field-hint">Tool tự thêm dòng Reference subjects và Voice lock vào prompt video.</p><button id="copyVideo" class="button">Sao chép</button></details>${videoResults(n)}${n.providers.video.type === 'seedvis' ? `<label>Số phiên bản<select id="nodeVideoVersions"><option value="1">1 bản</option><option value="2">2 bản</option><option value="3">3 bản</option><option value="4">4 bản</option></select></label>` : ''}<div class="actions"><label class="button">↑ Tải video<input type="file" id="videoUpload" accept="video/mp4,video/webm" hidden></label><button class="button primary" id="generateVideo" ${videoReady(n) ? '' : 'disabled'}>${generateLabel(n, 'video')}</button></div></section>`
+      : '') +
+    promptFixPanel(n) +
+    providerSettings(n, shot) +
+    (usesOrbit(n, shot)
+      ? outputSettings(n, shot) + orbitSettings(n, shot)
+      : '<details class="inspector-section"><summary>Cài đặt Orbit</summary>' +
+        outputSettings(n, shot) +
+        orbitSettings(n, shot) +
+        '</details>') +
+    '</div><div class="inspector-footer"><button class="button wide" id="saveNode">Lưu chỉnh sửa</button>' +
+    (id.startsWith('node-')
+      ? '<button class="button wide danger" id="deleteNode">Xóa node này</button>'
+      : '') +
+    '</div>';
+  openInspector('node');
+  normalizeInspectorLayout();
   $('#nodeName').oninput = () => (store.dirty = true);
   document.querySelectorAll('[data-output-pattern]').forEach(
     e =>
@@ -534,6 +602,10 @@ export function inspect(id) {
   if ($('#swapImage')) $('#swapImage').onclick = () => swapImage(id);
   if ($('#angleText')) $('#angleText').oninput = () => (store.dirty = true);
   if ($('#sheetDesc')) $('#sheetDesc').oninput = () => (store.dirty = true);
+  for (const f of ['#charCode', '#charLabel', '#charBack', '#charAnchors', '#voiceRaw'])
+    if ($(f)) $(f).oninput = () => (store.dirty = true);
+  for (const el of document.querySelectorAll('#inspector [id^="voice_"]'))
+    el.oninput = () => (store.dirty = true);
   if ($('#addReverseAngles')) $('#addReverseAngles').onclick = () => addReverseAngles(id);
   if ($('#addAngleFor')) $('#addAngleFor').onclick = () => addAngle(id);
   if ($('#openStage3d')) $('#openStage3d').onclick = () => openStage(id);
@@ -549,16 +621,47 @@ export function inspect(id) {
     $('#start').oninput = () => (store.dirty = true);
     $('#duration').oninput = () => (store.dirty = true);
     $('#videoPrompt').oninput = () => (store.dirty = true);
-    $('#videoInput').onchange = () => {
+    $('#videoInput').onchange = async () => {
       store.dirty = true;
       const preview = { ...n, videoInput: $('#videoInput').value };
       $('#videoInputHint').textContent = videoInputHint(preview);
       $('#generateVideo').disabled = !videoReady(preview);
+      // Đây là ô chọn CHẾ ĐỘ, không phải ô chữ: lưu ngay. Để chờ nút "Lưu" thì người dùng đổi
+      // xong, rời đi, và lựa chọn biến mất không báo gì — trông hệt như tool phớt lờ lựa chọn.
+      try {
+        await saveNode();
+        inspect(id);
+      } catch (e) {
+        toast(e.message, true);
+      }
     };
+    // Tick nhân vật gửi kèm: lưu ngay như ô chọn chế độ, rồi vẽ lại để cập nhật số đếm và
+    // khoá các ô còn lại khi đã đủ chỗ.
+    for (const box of document.querySelectorAll('[data-mix]'))
+      box.onchange = async () => {
+        const pick = [...document.querySelectorAll('[data-mix]')]
+          .filter(b => b.checked)
+          .map(b => b.dataset.mix);
+        try {
+          store.state = await api('/api/node', {
+            method: 'PATCH',
+            body: { id, videoRefPick: pick },
+          });
+          inspect(id);
+        } catch (e) {
+          toast(e.message, true);
+        }
+      };
     $('#videoUpload').onchange = e => upload(e.target.files[0], id, 'video');
     $('#copyVideo').onclick = () => copy($('#videoPrompt').value);
     $('#generateVideo').onclick = () => generate(id, 'video');
   }
+  if ($('#undoPromptFix'))
+    $('#undoPromptFix').onclick = async () => {
+      await api('/api/node', { method: 'PATCH', body: { id, promptFix: null } });
+      await refresh();
+      inspect(id);
+    };
   $('#imageUpload').onchange = e => upload(e.target.files[0], id, 'image');
   $('#copyImage').onclick = () => copy($('#imagePrompt').value);
   $('#resetPrompt').onclick = async () => {
@@ -576,7 +679,7 @@ export function inspect(id) {
   $('#saveNode').onclick = async () => {
     try {
       await saveNode();
-      toast('Đã lưu');
+      toast(tx('common.saved'));
       inspect(id);
     } catch (e) {
       toast(e.message, true);
@@ -626,12 +729,31 @@ export async function saveNode() {
   if (Object.keys(prov.web).length) b.web = prov.web;
   if (Object.keys(prov.gvids).length) b.gvids = prov.gvids;
   if (Object.keys(prov.musechat).length) b.musechat = prov.musechat;
+  if (Object.keys(prov.seedane).length) b.seedane = prov.seedane;
   if ($('#wardrobeOutfit')) {
     if ($('#wardrobeOutfit').value !== (n.outfit || '')) b.outfit = $('#wardrobeOutfit').value;
     if ($('#wardrobeItems').value !== (n.items || '')) b.items = $('#wardrobeItems').value;
   }
   if ($('#angleText') && $('#angleText').value !== (n.angle || '')) b.angle = $('#angleText').value;
   if ($('#sheetDesc') && $('#sheetDesc').value !== (n.desc || '')) b.desc = $('#sheetDesc').value;
+  // Character identity fields (for merged over-the-shoulder / two-shot frames).
+  for (const [sel, key] of [
+    ['#charCode', 'code'],
+    ['#charLabel', 'label'],
+    ['#charBack', 'back'],
+    ['#charAnchors', 'anchors'],
+  ])
+    if ($(sel) && $(sel).value.trim() !== (n[key] || '')) b[key] = $(sel).value.trim();
+  // Voice DNA: the six parts compose the lock line; a hand-written line in #voiceRaw wins.
+  if (document.querySelector('#inspector [id^="voice_"]')) {
+    const prof = {};
+    for (const el of document.querySelectorAll('#inspector [id^="voice_"]'))
+      prof[el.id.slice(6)] = el.value.trim();
+    const was = n.voiceProfile || {};
+    if (Object.keys(prof).some(k => prof[k] !== (was[k] || ''))) b.voiceProfile = prof;
+    const raw = $('#voiceRaw');
+    if (raw && raw.value.trim() !== (n.voice || '').trim()) b.voice = raw.value.trim();
+  }
   // (edited = differs from what the box was opened with — the prompt the tool makes may have moved
   // since, e.g. a 3D capture arrived; that is not the user's edit)
   const edited = el => el.value !== el.defaultValue;
@@ -657,7 +779,7 @@ export async function generate(id, kind) {
     if (kind === 'image') await capturesReady();
     await api('/api/jobs', { method: 'POST', body: { nodeId: id, kind, count } });
     await refresh();
-    toast(count > 1 ? 'Đã xếp ' + count + ' phiên bản vào hàng đợi' : 'Đã xếp vào hàng đợi');
+    toast(count > 1 ? tx('queue.versionsQueued') + ' ' + count : tx('queue.queuedOne'));
     closeInspector();
     view('queue');
   } catch (e) {
@@ -668,7 +790,7 @@ export async function generate(id, kind) {
 export async function upload(file, nodeId, kind) {
   if (!file) return;
   try {
-    if (file.size > 100 * 1024 * 1024) throw new Error('File tối đa 100 MB');
+    if (file.size > 100 * 1024 * 1024) throw new Error(tx('inspector.fileTooLarge'));
     const base64 = await new Promise((ok, no) => {
       const r = new FileReader();
       r.onload = () => ok(r.result.split(',')[1]);
@@ -681,7 +803,7 @@ export async function upload(file, nodeId, kind) {
     });
     render();
     if (store.selected) inspect(store.selected);
-    toast('Đã lưu file trên máy bạn');
+    toast(tx('project.fileSaved'));
   } catch (e) {
     toast(e.message, true);
   }
@@ -690,7 +812,7 @@ const usesOrbit = (n, shot) => kindsFor(shot).some(kind => n.providers[kind].typ
 function generateLabel(n, kind) {
   const type = n.providers[kind].type;
   return (
-    (kind === 'image' ? 'Tạo ảnh' : 'Tạo video') +
+    (kind === 'image' ? tx('provider.createImage') : tx('provider.createVideo')) +
     (type === 'seedvis'
       ? ' · Seedvis'
       : type === 'web'
@@ -707,19 +829,82 @@ function generateLabel(n, kind) {
 const videoReady = n => (videoFromRefs(n) ? n.references.length > 0 : !!n.image);
 // What the auto-video run can take on: ready to film, or a refs-mode shot over the limit
 // whose refs are in — the run composes its keyframe first, then films.
+// Bác sĩ prompt đã sửa node này sau khi model từ chối 3 lần liên tiếp: nói rõ nó đã đổi gì và
+// cho một đường lui. Không có nút gỡ thì người dùng bị kẹt với cờ do máy tự đặt.
+function promptFixPanel(n) {
+  const log = n.fixLog || [];
+  // Chưa tới 3 lần thì cũng phải thấy bộ đếm — nếu không, người dùng không biết chế độ tự sửa
+  // có đang theo dõi hay không, và lỗi KHÔNG phải kiểm duyệt (hết credit, vượt trần ảnh…) sẽ bị
+  // chờ đợi một bản sửa không bao giờ tới.
+  if (!n.promptFix && !log.length)
+    return n.rejects
+      ? `<section class="inspector-section"><h3>🩺 Tự sửa prompt</h3><p class="field-hint">Bộ lọc nội dung đã từ chối shot này <b>${n.rejects}/3</b> lần liên tiếp. Đủ 3 lần thì tool tự soi prompt, sửa và chạy lại. Chạy được một lần là bộ đếm về 0.</p></section>`
+      : '';
+  const rounds = log
+    .map(
+      r =>
+        `<li>Vòng ${r.round}: ${esc(r.changes.join('; '))} <span class="field-hint">${esc(new Date(r.at).toLocaleString())}</span></li>`,
+    )
+    .join('');
+  return `<section class="inspector-section"><h3>🩺 Prompt đã tự sửa</h3><p class="field-hint">Model video từ chối dựng shot này, nên tool đã sửa prompt và chạy lại. Prompt vẫn được sinh lại từ node — sửa Bible hay thoại thì nó vẫn cập nhật theo.</p><ul class="wardrobe-list">${rounds}</ul><div class="actions"><button class="button" id="undoPromptFix">↺ Gỡ bản sửa</button></div></section>`;
+}
+
+// Chế độ "ảnh khung + nhân vật chọn thêm": tick nhân vật nào gửi kèm. Ảnh khung luôn chiếm một
+// suất, nên còn lại `mixedRoom` chỗ; tick quá thì ô còn lại bị khoá thay vì để model từ chối.
+function mixPicker(n) {
+  if (n.videoInput !== 'mix') return '';
+  const picked = new Set(n.videoRefPick || []);
+  const room = n.mixedRoom ?? 0;
+  const parents = (store.state.nodes || []).filter(p =>
+    (n.references || []).some(r => r.role === p.id),
+  );
+  if (!parents.length)
+    return '<p class="field-hint">Chưa có node nối vào nào có ảnh để gửi kèm.</p>';
+  const rows = parents
+    .map(p => {
+      const on = picked.has(p.id);
+      const full = !on && picked.size >= room;
+      return `<li><label class="mix-pick"><input type="checkbox" data-mix="${esc(p.id)}" ${on ? 'checked' : ''} ${full ? 'disabled' : ''}> ${esc(p.name)}</label></li>`;
+    })
+    .join('');
+  return `<p class="field-hint">Ảnh khung hình là ảnh 1; tick thêm tối đa <b>${room}</b> ảnh nhận dạng — dùng khi shot quay qua vai mà nhân vật quay mặt lại trong lúc thoại. Đang chọn ${picked.size}/${room}.</p><ul class="wardrobe-list">${rows}</ul>`;
+}
+// Model video nào nhận đủ chừng này ảnh. Trần là của MODEL, không phải của tool: Veo nhận 3 mà
+// Seedance nhận 10, nên "vượt giới hạn" thường chỉ cần đổi model chứ không phải bỏ bớt ảnh.
+const modelsTaking = count =>
+  (store.state.seedvisCatalog?.video || [])
+    .filter(m => (m.maxImages ?? 0) >= count)
+    .map(m => m.name || m.id);
+
 function videoInputHint(n) {
-  if (n.videoNeedsKeyframe && !n.image)
-    return `${n.imageInputs} ảnh tham chiếu > giới hạn ${n.videoRefLimit} ảnh của model video: phải tạo ảnh khung hình trước (gộp các ảnh tham chiếu; model ảnh nhận tới 10), video sẽ dùng ảnh đó. "▶ Tạo video" tự động làm bước này, hoặc bấm Tạo ảnh rồi Tạo video.`;
-  if (!videoUsesRefs(n))
+  // Vượt trần ảnh của model là ngoại lệ DUY NHẤT không chiều theo ô chọn được — gửi hết thì
+  // model không nhận. Nói thẳng ra, kể cả khi node đã có ảnh keyframe.
+  if (videoUsesRefs(n) && n.videoNeedsKeyframe) {
+    const fits = modelsTaking(n.imageInputs);
+    return (
+      tx('inspector.keyframeRequired')
+        .replace('{inputs}', n.imageInputs)
+        .replace('{limit}', n.videoRefLimit) +
+      (fits.length
+        ? ' ' +
+          tx('inspector.modelsTakingAll')
+            .replace('{count}', n.imageInputs)
+            .replace('{models}', fits.join(', '))
+        : '')
+    );
+  }
+  if (n.videoInput === 'mix')
     return n.image
-      ? 'Dùng ảnh đã duyệt của node này làm keyframe.'
-      : 'Node này chưa có ảnh. Tạo hoặc tải ảnh trước, hoặc chuyển sang dùng ảnh node nối vào.';
-  // refs mode
-  if (n.image)
-    return 'Node đã có ảnh — video dùng đúng ảnh này (keyframe), không gửi lại ảnh node nối vào.';
+      ? `Gửi ${1 + (n.videoRefPick || []).length} ảnh: ảnh khung hình của shot (ảnh 1) + ảnh nhận dạng của nhân vật đã tick. Prompt nói rõ các ảnh sau CHỈ để giữ đúng mặt, không phải cảnh để cắt sang.`
+      : tx('inspector.nodeNeedsImage');
+  if (!videoUsesRefs(n))
+    return n.image ? tx('inspector.useApprovedKeyframe') : tx('inspector.nodeNeedsImage');
+  // Chế độ refs trong trần: gửi ảnh các node nối vào — ảnh render của node này bị bỏ qua.
   return n.references.length
-    ? `Chưa có ảnh của node — gửi thẳng ${n.references.length} ảnh tham chiếu (trong giới hạn ${n.videoRefLimit ?? '—'} của model) vào tạo video. Tạo ảnh của node này nếu muốn video bám đúng một khung hình.`
-    : 'Chưa có node nào đã có ảnh nối vào. Nối một node đã có ảnh, hoặc tải ảnh lên node đó.';
+    ? tx('inspector.referenceVideoInput')
+        .replace('{count}', n.references.length)
+        .replace('{limit}', n.videoRefLimit ?? '—')
+    : tx('inspector.noReferenceImages');
 }
 // Inspector line: the node's inputs split into reference images and style / camera text.
 function inputsSummary(n, shot) {
@@ -743,21 +928,44 @@ function stagePanel(n) {
     full: 'Node đã dùng đủ 10 ảnh tham chiếu — chỉ gửi câu vị trí, không gửi ảnh chụp 3D.',
   };
   return (
-    `<section class="inspector-section"><h3>📌 Vị trí đã ghim · ${esc(pin.setName)}</h3>` +
+    `<section class="inspector-section"><h3>📌 Vị trí đã ghim · ${esc(pin.setName)}${pin.override ? ' · <b>riêng khung này</b>' : ''}</h3>` +
     (pin.sig
       ? `<p class="field-hint">Khung hình tool tự chọn: <b>${esc(framingLabel({ size: pin.size, angle: pin.angle, target: pin.target, group: pin.group }, nameOf))}</b> — lấy từ cỡ cảnh, góc máy, chủ thể của chính node này. Prompt ảnh đã có câu vị trí (ai trái/phải, trước/sau, quay mặt hướng nào).</p>` +
         `<p class="field-hint">${capture[pin.capture] || ''}</p>`
       : `<p class="field-hint">Ảnh của node này là cận đồ vật / chi tiết — không cần vị trí.${pin.map ? ' Video của node nhận sơ đồ sân khấu.' : ''}</p>`) +
-    `<div class="actions"><button type="button" class="button" data-stage3d="${esc(pin.setId)}">🧍 Sửa vị trí trên sân khấu</button></div></section>`
+    `<div class="actions">` +
+    `<button type="button" class="button" data-stage3d="${esc(pin.setId)}">🧍 Sửa vị trí cả cảnh</button>` +
+    `<button type="button" class="button" data-stage3d="${esc(n.id)}" title="Dàn dựng 3D riêng cho khung hình này, đè lên bố cục của cảnh">🎞 Dàn dựng riêng khung này</button>` +
+    `</div></section>`
+  );
+}
+// A camera-only 3D preview: render a camera MOVE over an empty stage (no people) just to plan the
+// trajectory. Works on any shot or scene node, staged or not — it never touches the node's prompt.
+function cameraOnlyPanel(n) {
+  const shot = 'duration' in n && !n.terminal && n.kind !== 'setting';
+  if (!shot && n.role !== 'scene') return '';
+  const opts = (list, sel) =>
+    list.map(([v, l]) => `<option value="${v}"${v === sel ? ' selected' : ''}>${l}</option>`).join('');
+  const moves = [
+    ['orbit', 'Orbit'], ['arc_left', 'Lia trái'], ['arc_right', 'Lia phải'], ['dolly_in', 'Dolly vào'],
+    ['pull_back', 'Kéo lùi'], ['push_in', 'Đẩy nhẹ'], ['crane_up', 'Cẩu nâng'], ['reveal', 'Mở cảnh'],
+  ];
+  const frames = [['wide', 'Rộng'], ['medium', 'Vừa'], ['close', 'Gần']];
+  return (
+    `<section class="inspector-section"><h3>🎥 Quỹ đạo máy 3D (trống)</h3>` +
+    `<p class="field-hint">Render một cú máy chuyển động trên sàn trống (không nhân vật) để tham chiếu quỹ đạo/tốc độ. Gắn vào video của node này. Chạy ~30–40 giây.</p>` +
+    `<div class="two"><label>Kiểu máy<select id="camOnlyMove">${opts(moves, 'orbit')}</select></label>` +
+    `<label>Khung<select id="camOnlyFraming">${opts(frames, 'medium')}</select></label></div>` +
+    `<div class="actions"><button type="button" class="button" data-cam-only="${esc(n.id)}">🎥 Render quỹ đạo</button></div></section>`
   );
 }
 export async function deleteNode(id) {
-  if (!confirm('Xóa node này?')) return;
+  if (!confirm(tx('inspector.deleteConfirm'))) return;
   try {
     store.state = await api('/api/nodes/delete', { method: 'POST', body: { id } });
     closeInspector();
     render();
-    toast('Đã xóa node');
+    toast(tx('inspector.nodeDeleted'));
   } catch (e) {
     toast(e.message, true);
   }
@@ -821,7 +1029,7 @@ function readAudioDuration(file) {
     };
     audio.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error('Không đọc được thời lượng file nhạc'));
+      reject(new Error(tx('inspector.audioDurationError')));
     };
     audio.src = url;
   });
@@ -829,7 +1037,7 @@ function readAudioDuration(file) {
 async function uploadMusicFile(file, id) {
   if (!file) return;
   try {
-    if (file.size > 100 * 1024 * 1024) throw new Error('File tối đa 100 MB');
+    if (file.size > 100 * 1024 * 1024) throw new Error(tx('inspector.fileTooLarge'));
     const duration = await readAudioDuration(file).catch(() => null);
     const base64 = await new Promise((ok, no) => {
       const r = new FileReader();
@@ -881,30 +1089,28 @@ function inspectMusic(n) {
   const separating = task.status === 'running';
   const song = n.audio || store.state.audio;
   $('#inspector').innerHTML =
-    inspectorHeader({ eyebrow: 'NHẠC / MV', title: '🎼 ' + esc(n.name), subtitle: 'Phân tích bài hát và dựng shot list' }) +
+    inspectorHeader({
+      eyebrow: tx('inspector.musicEyebrow'),
+      title: '🎼 ' + esc(n.name),
+      subtitle: tx('inspector.musicSubtitle'),
+    }) +
     '<div class="inspector-scroll">' +
-    '<p class="field-hint">Quy trình MV — 3 bước: <b>1</b> Tải nhạc (tool tự tách vocal) → <b>2</b> Viết shot list bằng master prompt, ' +
-    'nhập <b>một</b> file CSV (tool tự đọc lời trên vocal bằng GPU, căn timecode, dựng cả hai luồng) → ' +
-    '<b>3</b> Tạo hình dàn biểu diễn. Sau đó tạo ảnh và quay như thường.</p>' +
-    '<p class="field-hint">Một file CSV sinh ra <b>hai luồng dữ liệu song song</b> để dựng:<br>' +
-    '· <b>Luồng A · Phủ cảnh</b> (cột ⑥ → video ⑧): band toàn / trung / cận, nhạc cụ đang chơi, toàn cảnh sân khấu, cảm xúc khán giả — ' +
-    'phủ kín cả bài, mỗi shot tối đa 8 giây, các hàng ngắn liền nhau được gộp thành MỘT prompt kèm đủ ảnh tham chiếu.<br>' +
-    '· <b>Luồng B · Câu hát nhép</b> (cột ⑪ → video ⑫): từng câu ca sĩ hát, gộp các câu liền nhau cho mỗi take dài 7–10 giây, ' +
-    'một cỡ cảnh + một ảnh khung mỗi take, Omni Flash làm ảnh tĩnh + vocal thành clip hát nhép.<br>' +
-    'Hai luồng chạy trên cùng một dòng thời gian nên khi dựng có thể cắt qua band ở bất kỳ giây nào. ' +
-    'Xem thanh 2 làn dưới canvas; tải bảng kê từng luồng (.csv) ở tab Đạo diễn, bước 4.</p>' +
-    '<section class="inspector-section"><h3>Bước 1 · Nhạc</h3>' +
-    `<label>Tên<input id="musicName" value="${esc(n.name)}"></label>` +
-    `<label>Link YouTube / nhạc<input id="musicUrl" placeholder="https://youtu.be/… hoặc link mp3" value="${esc(n.youtubeUrl || '')}"></label>` +
-    `<div class="actions"><label class="button ${n.audio ? '' : 'primary'}">↑ Tải file nhạc<input type="file" id="musicUpload" accept="audio/*" hidden></label>${n.audio ? `<span class="field-hint">🎵 ${esc(n.audio.name)}${n.audioDuration ? ' · ~' + Math.round(n.audioDuration) + ' giây' : ''}</span>` : ''}</div>` +
+    `<p class="field-hint">${tx('inspector.musicWorkflow')}</p>` +
+    '<p class="field-hint">' +
+    tx('inspector.musicStreams') +
+    '</p>' +
+    `<section class="inspector-section"><h3>${tx('inspector.musicStep1')}</h3>` +
+    `<label>${tx('inspector.musicName')}<input id="musicName" value="${esc(n.name)}"></label>` +
+    `<label>${tx('inspector.musicUrl')}<input id="musicUrl" placeholder="https://youtu.be/… or mp3 link" value="${esc(n.youtubeUrl || '')}"></label>` +
+    `<div class="actions"><label class="button ${n.audio ? '' : 'primary'}">↑ ${tx('inspector.uploadMusic')}<input type="file" id="musicUpload" accept="audio/*" hidden></label>${n.audio ? `<span class="field-hint">🎵 ${esc(n.audio.name)}${n.audioDuration ? ' · ~' + Math.round(n.audioDuration) + ' s' : ''}</span>` : ''}</div>` +
     (n.audio
       ? `<audio controls src="${esc(n.audio.url)}" style="width:100%;margin-top:6px"></audio>`
       : '') +
-    `<label>Lời bài hát đúng như bản thu (mỗi câu một dòng, ghi đủ các lần hát lặp — chép kèm master prompt ở bước 2)<textarea id="musicLyrics" rows="5" placeholder="Dán lời bài hát, mỗi câu một dòng…">${esc(n.lyrics || '')}</textarea></label>` +
-    '<div class="actions"><button class="button" id="musicSave">Lưu</button></div>' +
+    `<label>${tx('inspector.musicLyrics')}<textarea id="musicLyrics" rows="5" placeholder="${tx('inspector.musicLyricsPlaceholder')}">${esc(n.lyrics || '')}</textarea></label>` +
+    `<div class="actions"><button class="button" id="musicSave">${tx('common.save')}</button></div>` +
     vocalsStatus(n) +
     '</section>' +
-    '<section class="inspector-section"><h3>Bước 2 · Shot list CSV</h3>' +
+    `<section class="inspector-section"><h3>${tx('inspector.musicStep2')}</h3>` +
     '<div class="music-auto"><p class="field-hint"><b>Cách nhanh — một nút:</b> tool tự tách vocal, đo nhạc cụ + Energy, chia hàng theo lời, ' +
     'gọi LLM điền cảm xúc / góc máy / cách hát, tự kiểm và sửa, rồi dựng luôn cả hai luồng. Cần có file nhạc (và nên có lời) ở bước 1' +
     (viaWeb
@@ -983,7 +1189,7 @@ function inspectMusic(n) {
       store.state = await saveMusic();
       render();
       inspect(id);
-      toast('Đã lưu');
+      toast(tx('common.saved'));
     } catch (e) {
       toast(e.message, true);
     }
@@ -1005,7 +1211,7 @@ function inspectMusic(n) {
       });
       render();
       inspect(id);
-      toast('Đã phân tích bài hát');
+      toast(tx('music.analyzed'));
     } catch (e) {
       toast(e.message, true);
       btn.disabled = false;
@@ -1028,11 +1234,7 @@ function inspectMusic(n) {
       const replace = store.state.nodes.some(
         x => !x.terminal && x.zone === 'production' && Array.isArray(x.parts),
       );
-      if (
-        replace &&
-        !confirm('Tạo tự động sẽ dựng lại storyboard và xóa các shot hiện có. Tiếp tục?')
-      )
-        return;
+      if (replace && !confirm(tx('music.autoConfirm'))) return;
       btn.disabled = true;
       btn.textContent = '⏳ Tách vocal, đo nhạc, gọi LLM… (vài phút)';
       try {
@@ -1047,7 +1249,7 @@ function inspectMusic(n) {
           },
         });
         const a = store.state.autoSummary;
-        if (!a?.csv) throw new Error('Không nhận được CSV từ bước tạo tự động.');
+        if (!a?.csv) throw new Error(tx('music.autoCsvMissing'));
         // 2) import that CSV the usual way (re-times to the vocal, builds luồng A + luồng B)
         btn.textContent = '⏳ Đọc lời trên vocal & dựng hai luồng…';
         store.state = await api('/api/music/import', {
@@ -1076,13 +1278,7 @@ function inspectMusic(n) {
     e.target.value = '';
     if (!file) return;
     const replaceShots = !!$('#musicReplace')?.checked;
-    if (
-      replaceShots &&
-      !confirm(
-        'Xóa các shot hiện có rồi dựng lại storyboard từ CSV?\nẢnh khung của shot mở đầu cùng hàng CSV được giữ; video của các shot cũ bị bỏ (file đã xuất vẫn còn trong thư mục làm việc).',
-      )
-    )
-      return;
+    if (replaceShots && !confirm(tx('music.replaceShotsConfirm'))) return;
     const btnLabel = e.target.closest('label');
     try {
       const csv = await file.text();
@@ -1141,7 +1337,7 @@ function inspectMusic(n) {
         );
       } else {
         inspect(id);
-        toast(`Đã nhập ${sum?.sections || 0} đoạn lời (cấu trúc bài hát)`);
+        toast(tx('music.sectionsImported') + ' ' + (sum?.sections || 0));
       }
     } catch (err) {
       toast(err.message, true);
@@ -1270,8 +1466,10 @@ function lipsyncSection(n, csvShots) {
         '</p>' +
         '<div class="actions">' +
         `<button class="button" id="lsImages" ${withImage < takes.length ? '' : 'disabled'}>Tạo ảnh khung các take</button>` +
+        `<button class="button" id="lsRewritePrompts">✍ Viết lại prompt Omni (chuẩn mới)</button>` +
         `<button class="button primary" id="lsRender" ${ready ? '' : 'disabled'}>Quay lip-sync Omni (${ready} take)</button>` +
-        '</div>'
+        '</div>' +
+        '<p class="field-hint">“Viết lại prompt Omni”: cập nhật prompt gửi Omni của mọi take theo chuẩn mới — đa dạng cú máy + ánh sáng sân khấu, GIỮ ảnh khung (không tạo lại ảnh); video cũ bị đánh dấu cần quay lại.</p>'
       : '') +
     '<div class="actions">' +
     `<button class="button" id="lsMake" ${n.vocals && csvShots && n.vocalTask?.status !== 'running' && !old ? '' : 'disabled'}>${takes.length ? '↻ Cắt lại luồng B theo vocal' : 'Cắt luồng B · câu hát nhép 7–10s'}</button>` +
@@ -1340,7 +1538,7 @@ function bindLipsyncSection(n) {
     store.state = await api('/api/music/vocals', { method: 'POST', body: { id } });
     render();
     inspect(id);
-    toast('Đang tách vocal (Demucs) — khoảng một phút cho cả bài trên GPU.');
+    toast(tx('music.separatingVocal'));
   });
   const makeTakes = async (prefix = '') => {
     // re-cutting merges the sung lines into 7–10s takes anew: a keyframe-only take whose line moved
@@ -1348,14 +1546,7 @@ function bindLipsyncSection(n) {
     const withImg = store.state.nodes.filter(
       n => n.role === 'lipsync' && n.musicId === id && n.image && !n.video,
     ).length;
-    if (
-      withImg &&
-      !confirm(
-        `Cắt lại luồng B sẽ gộp các câu hát thành take 7–10s. ${withImg} take đang có ảnh khung — ` +
-          'take nào không còn khớp cửa sổ mới sẽ bị bỏ (take đã có video thì giữ lại). Tiếp tục?',
-      )
-    )
-      return;
+    if (withImg && !confirm(tx('music.resplitConfirm', { count: withImg }))) return;
     store.state = await api('/api/music/lipsync', { method: 'POST', body: { id } });
     const s = store.state.lipsyncSummary || {};
     render();
@@ -1416,12 +1607,12 @@ function bindLipsyncSection(n) {
     render();
     closeInspector();
     view('queue');
-    toast('Đang tạo ảnh khung cho các take lip-sync');
+    toast(tx('music.generatingTakeFrames'));
   });
   run('#lsRender', '⏳ Đang xếp hàng…', async () => {
     const ready = takesOf(id).filter(t => t.image && !t.stale && !videosOf(t).length).length;
-    if (!confirm(`Gửi ${ready} take sang Omni Flash (video-to-video)? Mỗi clip Omni đắt ~10× Veo.`))
-      throw new Error('Đã hủy.');
+    if (!confirm(tx('music.omniConfirm', { count: ready })))
+      throw new Error(tx('common.cancelled'));
     store.state = await api('/api/music/lipsync-render', { method: 'POST', body: { id } });
     const r = store.state.lipsyncRender || {};
     await refresh();
@@ -1432,6 +1623,13 @@ function bindLipsyncSection(n) {
         (r.errors?.length ? ` · ${r.errors.length} lỗi: ${r.errors[0]}` : ''),
       !!r.errors?.length,
     );
+  });
+  run('#lsRewritePrompts', '⏳ Đang viết lại prompt…', async () => {
+    store.state = await api('/api/music/relipsync-prompts', { method: 'POST', body: { id } });
+    const r = store.state.relipsyncSummary || {};
+    await refresh();
+    inspect(id);
+    toast(`Đã viết lại prompt Omni cho ${r.updated}/${r.total} take (chuẩn mới) — video cũ cần quay lại.`);
   });
 }
 // One lip-sync take: its line, where the vocal really is, the cut sent to Omni (adjustable), its
@@ -1444,24 +1642,28 @@ function inspectLipsync(n) {
   const dur = (n.clipEnd || 0) - (n.clipStart || 0);
   const edge = ok => (ok ? '✓' : n.align ? '· giữ mốc căn lời' : '· giữ mốc CSV');
   $('#inspector').innerHTML =
-    inspectorHeader({ eyebrow: 'HÁT NHÉP / TAKE', title: '🎤 ' + esc(n.name), subtitle: 'Chi tiết câu hát và video đầu ra' }) +
+    inspectorHeader({
+      eyebrow: tx('inspector.lipsyncTake'),
+      title: '🎤 ' + esc(n.name),
+      subtitle: tx('inspector.lipsyncSubtitle'),
+    }) +
     '<div class="inspector-scroll">' +
     '<p class="field-hint">Take của <b>luồng B · câu hát nhép</b> (chạy song song với luồng A phủ cảnh ở cột ⑥): Omni Flash (video-to-video) ' +
     'làm ca sĩ hát nhép đúng đoạn vocal tách riêng của (các) câu này — một cỡ cảnh, một ảnh khung cho cả take. ' +
     'Video nguồn = ảnh khung (ca sĩ, miệng khép) + đoạn vocal cắt bên dưới; clip trả về dài đúng bằng đoạn cắt — đặt vào timeline tại mốc “Bắt đầu đoạn”.</p>' +
-    `<div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="Ảnh ${esc(n.name)}">` : 'Ảnh khung (ca sĩ) sẽ xuất hiện ở đây'}</div>` +
-    (n.stale ? '<div class="note">Đầu vào đã đổi. Tạo lại ảnh khung trước khi quay.</div>' : '') +
+    `<div class="inspector-preview">${n.image ? `<img src="${esc(n.image.url)}" alt="${tx('inspector.imageAlt')} ${esc(n.name)}">` : tx('inspector.lipsyncImagePlaceholder')}</div>` +
+    (n.stale ? `<div class="note">${tx('inspector.lipsyncStale')}</div>` : '') +
     '<table class="music-params"><tbody>' +
-    `<tr><td>Câu hát</td><td>“${esc(n.lyric || '')}”</td></tr>` +
+    `<tr><td>${tx('inspector.lyricLine')}</td><td>“${esc(n.lyric || '')}”</td></tr>` +
     `<tr><td>Theo CSV</td><td>${clock(n.csvStart)} → ${clock(n.csvEnd)}</td></tr>` +
     `<tr><td>Căn lời theo vocal</td><td>${n.align ? `${clock(n.align.start)} → ${clock(n.align.end)} · tin cậy ${Math.round((n.align.score || 0) * 100)}%${n.align.score < 0.5 ? ' ⚠ thấp — nghe lại video nguồn' : ''}` : 'không căn được — dùng mốc CSV'}</td></tr>` +
     `<tr><td>Mép giọng thật (đọc vocal)</td><td>${clock(n.lsStart)} ${edge(n.snappedStart)} → ${clock(n.lsEnd)} ${edge(n.snappedEnd)}</td></tr>` +
     `<tr><td>Có giọng hát</td><td>${Math.round((n.voiced || 0) * 100)}%${n.voiced < 0.3 ? ' ⚠ ít giọng — kiểm tra mốc cắt' : ''}</td></tr>` +
     `<tr><td>Đoạn gửi Omni</td><td>${clock(n.clipStart)} → ${clock(n.clipEnd)} (${dur.toFixed(2)} s)</td></tr>` +
     '</tbody></table>' +
-    `<div class="two"><label>Bắt đầu đoạn (giây)<input id="lsClipStart" type="number" step="0.01" min="0" value="${n.clipStart}"></label>` +
-    `<label>Kết thúc đoạn (giây)<input id="lsClipEnd" type="number" step="0.01" min="0" value="${n.clipEnd}"></label></div>` +
-    '<div class="actions"><button class="button" id="lsSaveCut">Lưu đoạn cắt</button></div>' +
+    `<div class="two"><label>${tx('inspector.clipStart')}<input id="lsClipStart" type="number" step="0.01" min="0" value="${n.clipStart}"></label>` +
+    `<label>${tx('inspector.clipEnd')}<input id="lsClipEnd" type="number" step="0.01" min="0" value="${n.clipEnd}"></label></div>` +
+    `<div class="actions"><button class="button" id="lsSaveCut">${tx('inspector.saveCut')}</button></div>` +
     (dur > 10
       ? '<p class="field-hint">⚠ Đoạn dài hơn 10 giây — ngoài khoảng 7–10 s của luồng B; nếu Omni từ chối thời lượng, rút ngắn đoạn cắt.</p>'
       : dur < 7
@@ -1473,16 +1675,22 @@ function inspectLipsync(n) {
       : '') +
     inputChips(n) +
     stagePanel(n) +
+    // Pick the platform + model for THIS lipsync keyframe image right here (image only — the
+    // video is always Omni Flash). The choice is saved on the node, so the zone batch uses it too.
+    providerSettings(n, false) +
     `<label>Prompt ảnh khung<textarea id="lsImagePrompt" rows="4">${esc(n.resolvedPrompts.image)}</textarea></label>` +
     `<div class="actions"><label class="button">↑ Tải ảnh<input type="file" id="imageUpload" accept="image/png,image/jpeg,image/webp" hidden></label><button class="button primary" id="generateImage">${generateLabel(n, 'image')}</button></div>` +
-    '<section class="inspector-section"><h3>Video lip-sync · Omni Flash</h3>' +
+    `<section class="inspector-section"><h3>${tx('inspector.lipsyncVideoTitle')}</h3>` +
     (inputCurrent
       ? `<p class="field-hint">Video nguồn (ảnh + vocal) — nghe thử đúng câu chưa trước khi gửi Omni:</p><div class="video-result"><video controls src="${esc(n.lsInput.url)}"></video></div><div class="actions"><a class="button" href="${esc(dlUrl(n.lsInput.url, n.name.replace(/[^\w.\- ]+/g, '_') + '-input.mp4'))}">↓ Tải video nguồn</a></div>`
       : `<p class="field-hint">${n.lsInput ? 'Ảnh khung hoặc đoạn cắt đã đổi — ghép lại để xem.' : 'Chưa ghép video nguồn.'} Khi bấm Tạo video, tool tự ghép lại.</p>`) +
     `<div class="actions"><button class="button" id="lsBuildInput" ${n.image ? '' : 'disabled'}>🎬 Ghép ảnh + vocal (xem trước)</button></div>` +
     `<details><summary>Prompt gửi Omni</summary><textarea id="lsVideoPrompt" rows="6">${esc(n.videoPrompt || '')}</textarea><div class="actions"><button class="button" id="lsSavePrompt">Lưu prompt</button></div></details>` +
-    '<label>Số phiên bản<select id="nodeVideoVersions"><option value="1">1 bản</option><option value="2">2 bản</option><option value="3">3 bản</option><option value="4">4 bản</option></select></label>' +
-    `<div class="actions"><button class="button primary" id="generateVideo" ${n.image && !n.stale ? '' : 'disabled'}>Tạo video lip-sync · Omni Flash</button></div>` +
+    `<label>Nguồn tạo video<select id="lsVideoSource"><option value="omni" ${n.providers.video.type === 'gvids' ? '' : 'selected'}>Omni Flash · Seedvis (khớp miệng, video-to-video)</option><option value="gvids" ${n.providers.video.type === 'gvids' ? 'selected' : ''}>Google Vids (extension)</option></select></label>` +
+    (n.providers.video.type === 'gvids'
+      ? '<p class="field-hint">Google Vids chạy video-to-video qua extension: mở tab “AI video clip”, vào <b>Edit</b>, tải LÊN video nguồn (ảnh khung + vocal đã ghép) rồi điền prompt Omni. Bật worker Google Vids; mức khớp miệng tùy Google Vids.</p>'
+      : '<label>Số phiên bản<select id="nodeVideoVersions"><option value="1">1 bản</option><option value="2">2 bản</option><option value="3">3 bản</option><option value="4">4 bản</option></select></label>') +
+    `<div class="actions"><button class="button primary" id="generateVideo" ${n.image && !n.stale ? '' : 'disabled'}>${n.providers.video.type === 'gvids' ? 'Tạo video lip-sync · Google Vids' : 'Tạo video lip-sync · Omni Flash'}</button></div>` +
     videoResults(n) +
     '</section>' +
     '</div>' +
@@ -1499,6 +1707,23 @@ function inspectLipsync(n) {
       toast(e.message, true);
     }
   };
+  // Platform + model picker for the keyframe image: toggle fields instantly, save the choice on
+  // the node as soon as it changes (keeping any pending image-prompt edit).
+  bindProviderSettings(n);
+  const saveLipsyncProvider = async () => {
+    const prov = readProviderSettings(n);
+    const b = {};
+    for (const k of ['seedvis', 'web', 'gvids', 'musechat', 'seedane'])
+      if (Object.keys(prov[k]).length) b[k] = prov[k];
+    const pv = $('#lsImagePrompt');
+    if (pv && pv.value !== pv.defaultValue) b.prompt = pv.value;
+    if (Object.keys(b).length) await patch(b, 'Đã lưu nguồn tạo ảnh');
+  };
+  document
+    .querySelectorAll(
+      '[data-provider], [data-sv-model], [data-sv-aspect], [data-sv-upscale], [data-seedane-model], [data-seedane-account]',
+    )
+    .forEach(el => el.addEventListener('change', saveLipsyncProvider));
   $('#lsSaveCut').onclick = () =>
     patch(
       { clipStart: Number($('#lsClipStart').value), clipEnd: Number($('#lsClipEnd').value) },
@@ -1535,6 +1760,15 @@ function inspectLipsync(n) {
     }
   };
   $('#generateVideo').onclick = () => generate(id, 'video');
+  // Video source for this take: Omni Flash (Seedvis v2v, default) or Google Vids (extension).
+  if ($('#lsVideoSource'))
+    $('#lsVideoSource').onchange = () =>
+      patch(
+        $('#lsVideoSource').value === 'gvids'
+          ? { gvids: { video: true }, seedvis: { video: false } }
+          : { gvids: { video: false }, seedvis: { video: { model: 'Omni-Flash', aspectRatio: store.state.defaults?.aspect || '16:9', upscale: null } } },
+        $('#lsVideoSource').value === 'gvids' ? 'Nguồn video: Google Vids' : 'Nguồn video: Omni Flash',
+      );
   document
     .querySelectorAll('#inspector [data-open]')
     .forEach(e => (e.onclick = () => inspect(e.dataset.open)));

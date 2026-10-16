@@ -27,9 +27,15 @@
 // that arrives late can still be accepted or recovered from that conversation, and a failure
 // before the send is reported as safe to re-run (needsReview false).
 
-// CALIBRATE: the URL that opens a fresh empty Muse web chat while logged in.
-// Open it once by hand and paste the exact URL here.
-const MUSECHAT_NEW_CHAT_URL = 'https://muse.ai/';
+// Verified 2026-10-08: the worker opens this home page, then clicks the "+"
+// new-chat button in the sidebar — navigating to a "new thread" URL directly does not
+// open a fresh thread, the click is required.
+const MUSECHAT_HOME_URL = 'https://muse.ai/';
+// Print the loaded build on startup so you can confirm a reload picked up the new code:
+// open chrome://extensions → Drama Tool → "service worker" → Console. Must show 0.5.38.
+try {
+  console.log('[Drama Tool worker] build', chrome.runtime.getManifest().version_name || chrome.runtime.getManifest().version, '— gvids: upload ảnh qua Ingredients');
+} catch (_) {}
 
 const DEFAULTS = {
   baseUrl: 'http://127.0.0.1:7788',
@@ -55,7 +61,7 @@ const DEFAULTS = {
 let cfg = { ...DEFAULTS };
 // jobId -> { sub:'chatgpt'|'vids', tabId, sent, conversationUrl, progress } for running jobs
 const active = new Map();
-let tabPool = []; // free ChatGPT tab ids, reused across jobs
+let tabPool = []; // legacy saved pool; drained on startup (tabs are no longer reused)
 let polling = false;
 let pollTimer = null;
 let lastMsg = '';
@@ -217,24 +223,35 @@ const completeText = (job, text) =>
   });
 const completeVideo = (job, out) =>
   sendComplete(job, {
-    name: (job.nodeId || 'googlevids') + '.mp4',
+    name: (job.nodeId || 'video') + (out.mime === 'video/webm' ? '.webm' : '.mp4'),
     mime: out.mime || 'video/mp4',
     base64: out.base64,
   });
+// Attachment limits are tied to the signed-in ChatGPT account. Before the prompt is sent the job
+// can safely move to another extension/profile; after sending it must stay for recovery/review.
+const isAttachmentLimit = value =>
+  /(?:reached|hit).*limit.*(?:file|attachment)|(?:file|attachment).*limit|giới hạn.*(?:tệp|file|đính kèm)/i.test(
+    String(value || ''),
+  );
+
 // needsReview = the prompt was sent: the site may still deliver (and has spent a generation), so
 // the server keeps the job for review / recovery. Not sent = nothing happened there, safe to
 // re-run. Without st (Google Vids) it stays the old always-review behaviour.
-const fail = (job, error, st, replyText) =>
-  api(job.__base, '/api/worker/fail', {
+const fail = (job, error, st, replyText) => {
+  const message = String(error).slice(0, 2000);
+  return api(job.__base, '/api/worker/fail', {
     id: job.id,
     lease: job.lease,
-    error: String(error).slice(0, 2000),
+    name: effName(),
+    error: message,
     needsReview: st ? !!st.sent : true,
+    retryOtherWorker: !!st && !st.sent && isAttachmentLimit(message),
     ...(st && {
       conversationUrl: st.conversationUrl || undefined,
       replyText: replyText ? String(replyText).slice(0, 2000) : undefined,
     }),
   });
+};
 
 const extFor = mime => (mime === 'image/webp' ? '.webp' : mime === 'image/jpeg' ? '.jpg' : '.png');
 
@@ -266,17 +283,27 @@ function bytesToBase64(bytes) {
     bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
   return btoa(bin);
 }
-async function downloadRef(base, asset) {
+async function downloadRef(base, asset, timeoutMs = 60000) {
   const url = asset.url.startsWith('http') ? asset.url : base + asset.url;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('Không tải được ảnh tham chiếu ' + asset.url);
-  const buf = new Uint8Array(await r.arrayBuffer());
-  const mime = r.headers.get('content-type') || asset.mime || 'image/png';
-  return {
-    dataUrl: 'data:' + mime + ';base64,' + bytesToBase64(buf),
-    mime,
-    name: asset.name || asset.id || 'ref.png',
-  };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    if (!r.ok) throw new Error('Không tải được ảnh tham chiếu ' + asset.url);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    const mime = r.headers.get('content-type') || asset.mime || 'image/png';
+    return {
+      dataUrl: 'data:' + mime + ';base64,' + bytesToBase64(buf),
+      mime,
+      name: asset.name || asset.id || 'ref.png',
+    };
+  } catch (e) {
+    if (e && e.name === 'AbortError')
+      throw new Error('Tải ảnh tham chiếu quá lâu (>' + Math.round(timeoutMs / 1000) + 's): ' + asset.url);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 // The image type from the bytes themselves (a 200 challenge / error page is not an image).
 const sniffMime = b =>
@@ -296,25 +323,19 @@ async function fetchImageAsBase64(url) {
   return { base64: bytesToBase64(buf), mime };
 }
 
-// ---- ChatGPT tab pool -----------------------------------------------------
+// ---- ChatGPT job tabs -----------------------------------------------------
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function loadPool() {
   const { tabPool: saved } = await chrome.storage.local.get('tabPool');
-  tabPool = Array.isArray(saved) ? saved : [];
+  // Before v0.5.29 completed ChatGPT tabs were kept in a pool. Close those legacy worker tabs once,
+  // then keep the persisted pool empty: every new job must own a brand-new tab.
+  const stale = Array.isArray(saved) ? saved : [];
+  tabPool = [];
+  await chrome.storage.local.set({ tabPool: [] });
+  await Promise.allSettled(stale.map(id => chrome.tabs.remove(id)));
 }
-const savePool = () => chrome.storage.local.set({ tabPool });
 async function acquireTab() {
-  let id = null;
-  while (tabPool.length && id == null) {
-    const t = tabPool.shift();
-    try {
-      await chrome.tabs.get(t);
-      id = t;
-    } catch {} // tab was closed; drop it
-  }
-  await savePool();
-  if (id == null)
-    id = (await chrome.tabs.create({ url: 'https://chatgpt.com/', active: false })).id;
+  const id = (await chrome.tabs.create({ url: 'https://chatgpt.com/', active: false })).id;
   // Memory Saver must not discard a worker tab mid-job (that cuts the port and loses the image).
   await chrome.tabs.update(id, { autoDiscardable: false }).catch(() => {});
   return id;
@@ -322,18 +343,8 @@ async function acquireTab() {
 async function releaseTab(id) {
   if (id == null) return;
   try {
-    await chrome.tabs.get(id);
-  } catch {
-    return; // gone
-  }
-  if (tabPool.length >= concFor('chatgpt')) {
-    try {
-      await chrome.tabs.remove(id);
-    } catch {}
-  } else {
-    tabPool.push(id);
-    await savePool();
-  }
+    await chrome.tabs.remove(id);
+  } catch {} // already closed by the user/navigation crash
 }
 async function waitTabComplete(tabId, timeout = 60000) {
   const end = Date.now() + timeout;
@@ -548,6 +559,7 @@ async function startChatgptJob(job) {
     if (job.kind !== 'image') throw new Error('Worker ChatGPT chỉ tạo ảnh hoặc chạy Đạo diễn');
 
     say(st, 'tải ' + (job.payload.references || []).length + ' ảnh tham chiếu…');
+
     const images = [];
     for (const ref of job.payload.references || [])
       images.push(await downloadRef(job.__base, ref.asset));
@@ -587,12 +599,9 @@ async function startChatgptJob(job) {
 
 // ---- Google Vids video job ------------------------------------------------
 // Google Vids makes video inside a video DOCUMENT (the creation panel lives in the editor), and the
-// user asked for a brand-new document per render. The worker keeps ONE tab of its own and, for each
-// job, navigates it to mint a fresh doc — so it never hijacks a doc the user is editing and never
-// piles up tabs. The old doc stays saved in the user's Drive (that is the "new doc per render"
-// choice). The signed 1080p preview URL is read from the generate response, so clips never need to
-// be kept in the doc.
-let vidsWorkerTabId = null; // the worker's own Vids tab, reused across jobs
+// user asked for a brand-new document and a brand-new tab per render. The tab is closed when the job
+// exits; the old document remains saved in Drive. The signed 1080p preview URL is read from the
+// generate response, so the tab is not needed after the server stores the clip.
 
 async function waitForDocUrl(tabId, timeout) {
   const end = Date.now() + timeout;
@@ -619,22 +628,15 @@ async function waitForDocUrl(tabId, timeout) {
 // reach a /d/ document (e.g. not logged into Google). Tries the Google-editors /create convention
 // first, then falls back to clicking "start a new video" on the gallery.
 async function createFreshVidsDoc() {
-  let tabId = vidsWorkerTabId;
-  if (tabId != null) {
-    try {
-      await chrome.tabs.get(tabId);
-    } catch {
-      tabId = null;
-    }
-  }
-  if (tabId == null) {
-    const t = await chrome.tabs.create({
+  const tabId = (
+    await chrome.tabs.create({
       url: 'https://docs.google.com/videos/u/0/',
       active: false,
-    });
-    tabId = t.id;
-  }
-  vidsWorkerTabId = tabId;
+    })
+  ).id;
+  // Memory Saver must not discard this tab mid-job: a discarded tab gets a new id, so every later
+  // executeScript fails with "No tab with id" and the render is lost even though Vids finished it.
+  await chrome.tabs.update(tabId, { autoDiscardable: false }).catch(() => {});
 
   // Strategy 1: the /create convention (fast if Vids supports it, like Docs/Slides/Sheets).
   try {
@@ -711,6 +713,9 @@ async function createFreshVidsDoc() {
   } catch (e) {
     glog('gallery-create error', String((e && e.message) || e));
   }
+  try {
+    await chrome.tabs.remove(tabId);
+  } catch {}
   return null;
 }
 // Run a self-contained function in the page's MAIN world and get its return value.
@@ -753,6 +758,7 @@ async function startVidsJob(job) {
       );
     active.set(job.id, { sub: 'vids', tabId });
     report('Google Vids: chuẩn bị…');
+
     const images = [];
     for (const ref of job.payload.references || []) {
       try {
@@ -760,7 +766,37 @@ async function startVidsJob(job) {
         images.push({ base64: r.dataUrl.split(',')[1], mime: r.mime, filename: r.name });
       } catch {}
     }
-    const out = await generateVideo(tabId, job, images);
+    // A lip-sync take is video-to-video: fetch the source video (the keyframe held over the line's
+    // vocal) so the extension can upload it in the "AI video clip" Edit tab.
+    let sourceVideo = null;
+    if (job.payload.inputVideo?.url) {
+      report('Google Vids: tải video nguồn (khớp miệng)…');
+      const v = await downloadRef(
+        job.__base,
+        {
+          url: job.payload.inputVideo.url,
+          mime: 'video/mp4',
+          name: job.payload.inputVideo.name || 'lipsync-input.mp4',
+        },
+        120000,
+      );
+      sourceVideo = {
+        base64: v.dataUrl.split(',')[1],
+        mime: v.mime || 'video/mp4',
+        filename: v.name || 'lipsync-input.mp4',
+      };
+    }
+    // The AI-video panel needs the tab to be the focused, foreground tab or its Generate (up-arrow)
+    // button does not fire when clicked from the background — bring it to the front for an upload
+    // drive (lip-sync video or reference images). Text-to-video runs fine in the background.
+    if (sourceVideo || images.length) {
+      try {
+        await chrome.tabs.update(tabId, { active: true });
+        const t = await chrome.tabs.get(tabId);
+        await chrome.windows.update(t.windowId, { focused: true });
+      } catch (_) {}
+    }
+    const out = await generateVideo(tabId, job, images, sourceVideo);
     if (!out.base64) throw new Error('Không lấy được video từ Google Vids');
     await completeVideo(job, out);
     report('✓ xong video ' + job.id.slice(0, 8));
@@ -774,6 +810,11 @@ async function startVidsJob(job) {
     // rejected (tab navigated/closed) and generateVideo threw before its own cleanup ran — so the
     // capture hook does not keep reading responses for a dead job.
     if (typeof tabId === 'number') await clearGvidsActive(tabId);
+    if (typeof tabId === 'number') {
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch {}
+    }
     if (anyRunning()) poll();
   }
 }
@@ -793,10 +834,11 @@ function normalizeVidsDuration(text) {
     .replace(/\ba\s+a\s+10-second\b/gi, 'a 10-second');
 }
 
-async function generateVideo(tabId, job, images) {
+async function generateVideo(tabId, job, images, sourceVideo = null) {
   await ensureGvidsTabReady(tabId);
   const queueId = job.id;
   const hasImages = Array.isArray(images) && images.length;
+  const hasVideo = !!(sourceVideo && sourceVideo.base64); // a lip-sync video-to-video take
   const rawPrompt = String(job.payload.prompt || '');
   glog(
     'start job',
@@ -827,7 +869,10 @@ async function generateVideo(tabId, job, images) {
   // been learned yet (the warm-up job) or the replay does not take.
   let usedReplay = false;
   let tagPrompt = null; // set on the UI path so a later replay can swap the prompt exactly
-  if (!hasImages && rawPrompt && !gvidsReplaySuspended) {
+  // Replay cannot attach a freshly uploaded source video, so a lip-sync video-to-video take always
+  // goes through the Edit UI (upload the video, type the prompt). Text-to-video with no images and
+  // no source video keeps the fast replay path.
+  if (!hasImages && !hasVideo && rawPrompt && !gvidsReplaySuspended) {
     const sample = await execMain(tabId, () => {
       const s = window.__dramaGvidsSample;
       return s && Array.isArray(s.bodyJson) ? s : null;
@@ -873,18 +918,52 @@ async function generateVideo(tabId, job, images) {
 
   // UI path — the original automation, and the warm-up that teaches the hook a replay sample.
   if (!usedReplay) {
-    report('Google Vids: điền prompt, đặt 1080p, bấm Tạo…');
-    const drive = await execMain(tabId, gvidsDriveUi, [{ prompt: rawPrompt, images }]);
-    glog('UI drive result', JSON.stringify(drive));
-    if (!drive || !drive.ok) {
-      await clearGvidsActive(tabId);
-      throw new Error(
-        'Google Vids: ' +
-          ((drive && drive.detail) ||
-            'không điều khiển được giao diện. Mở sẵn một video và bảng tạo video rồi thử lại.'),
-      );
+    if (hasVideo) {
+      // Lip-sync video-to-video: open the "AI video clip" panel, switch to Edit, upload the source
+      // video, type the Omni prompt, submit. No replay tag — a video upload is never replayed.
+      report('Google Vids: vào Edit, tải video nguồn, điền prompt…');
+      const drive = await execMain(tabId, gvidsDriveEditUi, [
+        { prompt: rawPrompt, video: sourceVideo },
+      ]);
+      glog('Edit drive result', JSON.stringify(drive));
+      if (!drive || !drive.ok) {
+        await clearGvidsActive(tabId);
+        throw new Error(
+          'Google Vids (Edit): ' +
+            ((drive && drive.detail) ||
+              'không điều khiển được tab Edit. Mở “AI video clip” → Edit rồi thử lại.'),
+        );
+      }
+    } else if (hasImages) {
+      // Image-to-video: the same steps as lip-sync, on the Create tab — upload the reference images
+      // (max 3), type the prompt, submit. No replay tag — an image upload is never replayed.
+      report('Google Vids: vào Create, tải ảnh tham chiếu, điền prompt…');
+      const drive = await execMain(tabId, gvidsDriveEditUi, [
+        { mode: 'create', prompt: normalizeVidsDuration(rawPrompt), images },
+      ]);
+      glog('Create drive result', JSON.stringify(drive));
+      if (!drive || !drive.ok) {
+        await clearGvidsActive(tabId);
+        throw new Error(
+          'Google Vids (Create): ' +
+            ((drive && drive.detail) ||
+              'không điều khiển được tab Create. Mở “AI video” → Create rồi thử lại.'),
+        );
+      }
+    } else {
+      report('Google Vids: điền prompt, đặt 1080p, bấm Tạo…');
+      const drive = await execMain(tabId, gvidsDriveUi, [{ prompt: rawPrompt, images }]);
+      glog('UI drive result', JSON.stringify(drive));
+      if (!drive || !drive.ok) {
+        await clearGvidsActive(tabId);
+        throw new Error(
+          'Google Vids: ' +
+            ((drive && drive.detail) ||
+              'không điều khiển được giao diện. Mở sẵn một video và bảng tạo video rồi thử lại.'),
+        );
+      }
+      tagPrompt = (drive && drive.promptSet) || null;
     }
-    tagPrompt = (drive && drive.promptSet) || null;
   }
 
   glog('kicked via', usedReplay ? 'REPLAY' : 'UI', '— waiting for preview…');
@@ -944,14 +1023,23 @@ async function generateVideo(tabId, job, images) {
       glog('preview captured', String(s.captured).slice(0, 90));
       await clearGvidsActive(tabId);
       report('Google Vids: tải video 1080p…');
-      const dl = await execMain(tabId, gvidsDownload, [s.captured]);
+      const dl = await execMain(tabId, gvidsDownload, [s.captured]).catch(e => ({
+        detail: String((e && e.message) || e),
+      }));
       glog(
         'download',
         dl && dl.base64 ? 'ok ' + (dl.size || '') + 'B' : 'FAIL ' + (dl && dl.detail),
       );
-      if (!dl || !dl.base64)
-        throw new Error((dl && dl.detail) || 'Không tải được video 1080p từ Google Vids.');
-      return { base64: dl.base64, mime: dl.mime || 'video/mp4' };
+      if (dl && dl.base64) return { base64: dl.base64, mime: dl.mime || 'video/mp4' };
+      // The preview URL is signed, so the worker itself can fetch it — this still saves the render
+      // when the tab died (discarded/closed) between the capture and the download.
+      report('Google Vids: tải lại video qua worker…');
+      const sw = await downloadVidsPreview(s.captured);
+      glog('download via worker', sw.base64 ? 'ok ' + sw.size + 'B' : 'FAIL ' + sw.detail);
+      if (sw.base64) return { base64: sw.base64, mime: sw.mime };
+      throw new Error(
+        (dl && dl.detail) || sw.detail || 'Không tải được video 1080p từ Google Vids.',
+      );
     }
     if (Date.now() - beat > 10000) {
       beat = Date.now();
@@ -968,6 +1056,32 @@ const clearGvidsActive = tabId =>
     window.__dramaGvidsActiveJob = null;
   }).catch(() => {});
 
+// Same download as gvidsDownload but run in the worker itself, for when the job tab is gone. The
+// preview URL is signed and its host is covered by host_permissions, so the worker's fetch carries
+// the user's Google session too.
+async function downloadVidsPreview(previewUrl) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const r = await fetch(previewUrl, { credentials: 'include' });
+      if (r.ok) {
+        const buf = await r.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const head = new TextDecoder('latin1').decode(bytes.slice(0, 64)).toLowerCase();
+        if (buf.byteLength >= 200000 && (head.includes('ftyp') || (bytes[0] === 0x1a && bytes[1] === 0x45))) {
+          const ct = (r.headers.get('content-type') || '').split(';')[0].trim();
+          return {
+            base64: bytesToBase64(bytes),
+            mime: ct && ct.startsWith('video/') ? ct : 'video/mp4',
+            size: buf.byteLength,
+          };
+        }
+      }
+    } catch (_) {}
+    await sleep(2000);
+  }
+  return { detail: 'Worker cũng không tải được video 1080p (URL không sẵn sàng).' };
+}
+
 // ---- Muse Chat video job ----------------------------------------------------
 // Automates the Muse web chat (https://muse.ai) exactly like doing it by hand: open a fresh
 // chat tab, type the prompt, attach the reference image, send, wait for the video reply,
@@ -976,10 +1090,39 @@ const clearGvidsActive = tabId =>
 // UNLIMITED TABS, ONE TAB PER COMMAND: every job opens its OWN background chat tab and closes
 // it when done. No tab pool, no concurrency cap — the poll loop claims a musechat job whenever
 // the worker is on. Each tab downloads only the video whose queueId matches its own job.
+// Muse can leave an upload at "Still sending" while its tab stays backgrounded. Briefly selecting
+// the job tab makes the page visible and lets Muse commit the send; wake-ups are serialized so
+// concurrent jobs do not fight over the active tab. The user's currently selected tab is restored.
+let museWakeChain = Promise.resolve();
+function wakeMuseTab(tabId, ms = 250) {
+  const wake = async () => {
+    const [previous] = await chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .catch(() => []);
+    if (previous?.id === tabId) {
+      await sleep(ms);
+      return;
+    }
+    await chrome.tabs.update(tabId, { active: true });
+    await sleep(ms);
+    if (typeof previous?.id === 'number') {
+      const [current] = await chrome.tabs
+        .query({ active: true, currentWindow: true })
+        .catch(() => []);
+      // If the user manually selected another tab during the short wake, respect that choice.
+      if (current?.id !== tabId) return;
+      const stillOpen = await chrome.tabs.get(previous.id).catch(() => null);
+      if (stillOpen) await chrome.tabs.update(previous.id, { active: true }).catch(() => {});
+    }
+  };
+  museWakeChain = museWakeChain.then(wake, wake);
+  return museWakeChain;
+}
+
 async function ensureMuseChatHook(tabId) {
   await waitTabComplete(tabId, 60000);
   for (let i = 0; i < 8; i++) {
-    const ok = await execMain(tabId, () => !!window.__dramaMuseChatHookInstalled).catch(
+    const ok = await execMain(tabId, () => !!window.__dramaMuseChatHookInstalled && !!window.__dramaMuseChatUi).catch(
       () => false,
     );
     if (ok) return;
@@ -987,25 +1130,96 @@ async function ensureMuseChatHook(tabId) {
       await chrome.scripting.executeScript({
         target: { tabId },
         world: 'MAIN',
-        files: ['content-musechat-hook.js'],
+        files: ['content-musechat-ui.js', 'content-musechat-hook.js'],
       });
     } catch {}
     await sleep(600);
   }
-  // Proceed regardless; the document_start content script usually installed it already.
+  throw new Error('Không khởi tạo được bộ điều khiển Muse. Hãy tải lại extension và kiểm tra đăng nhập.');
 }
 
 async function startMuseChatJob(job) {
   const st = trackJob(job, 'musechat'); // reserve a slot synchronously so poll() counts it
-  const hb = setInterval(() => heartbeat(job).catch(() => {}), 10000);
+  const hb = setInterval(() => heartbeat(job, st).catch(() => {}), 10000);
   let tabId = null;
   const queueId = job.id;
-  const assetKind = job.kind === 'image' ? 'image' : 'video';
+  // Closing the owned tab must not depend on an injected cleanup script: Muse may be navigating
+  // or its page world may be stuck exactly when the result arrives. Remove the tab directly,
+  // verify that it is gone, and retry once before leaving the finalizer as a last fallback.
+  const closeOwnedTab = async () => {
+    const ownedId = tabId;
+    if (typeof ownedId !== 'number') return true;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await chrome.tabs.remove(ownedId).catch(() => {});
+      const alive = await chrome.tabs.get(ownedId).catch(() => null);
+      if (!alive) {
+        tabId = null;
+        console.log(
+          '[Drama Tool · Muse Chat] job ' + queueId.slice(0, 8) + ' → đã đóng tab #' + ownedId,
+        );
+        return true;
+      }
+      await sleep(200);
+    }
+    report('Muse chat: chưa đóng được tab #' + ownedId + ', sẽ thử lại khi kết thúc job', true);
+    return false;
+  };
   try {
-    report('Muse chat: mở tab riêng cho job ' + queueId.slice(0, 8) + '…');
-    const tab = await chrome.tabs.create({ url: MUSECHAT_NEW_CHAT_URL, active: false });
+    if (job.recover) {
+      st.sent = true;
+      st.conversationUrl = job.recover.conversationUrl;
+      const url = new URL(st.conversationUrl);
+      if (url.protocol !== 'https:' || url.hostname !== 'muse.ai') throw new Error('Link Muse cũ không hợp lệ.');
+      const tab = await chrome.tabs.create({ url: st.conversationUrl, active: false });
+      tabId = tab.id;
+      st.tabId = tabId;
+      await ensureMuseChatHook(tabId);
+      const state = {
+        queueId,
+        prompt: String(job.payload.prompt || ''),
+        kind: job.kind,
+        sentAt: Date.now(),
+        confirmed: true,
+        recovery: true,
+        baseline: [],
+      };
+      await execMain(tabId, saved => window.__dramaMuseChatRestore?.(saved), [state]);
+      const deadline = Date.now() + 120000;
+      while (Date.now() < deadline) {
+        await ensureMuseChatHook(tabId);
+        const found = await execMain(tabId, saved => {
+          if (window.__dramaMuseChatActiveJob?.queueId !== saved.queueId)
+            window.__dramaMuseChatRestore?.(saved);
+          window.__dramaMuseChatPoll?.();
+          const c = window.__dramaMuseChatCaptured;
+          return c?.queueId === saved.queueId ? c.imageUrl || c.videoUrl : '';
+        }, [state]).catch(() => '');
+        if (found) {
+          const dl = await execMain(tabId, job.kind === 'image' ? museChatDownloadImage : museChatDownload, [found]);
+          if (dl?.base64) {
+            if (job.kind === 'image') await complete(job, dl, st);
+            else await completeVideo(job, dl);
+            await closeOwnedTab();
+            return;
+          }
+        }
+        await sleep(2500);
+      }
+      throw new Error('Chưa tìm thấy kết quả trong cuộc trò chuyện Muse cũ.');
+    }
+    // GUARANTEE: every video job gets its OWN brand-new tab. Tabs are never reused between
+    // jobs and the user's current tab is never touched — every automation call below targets
+    // ONLY the tabId created here.
+    report('Muse chat: mở tab mới riêng cho job ' + queueId.slice(0, 8) + '…');
+    const tab = await chrome.tabs.create({ url: MUSECHAT_HOME_URL, active: false });
     tabId = tab.id;
     st.tabId = tabId;
+    console.log(
+      '[Drama Tool · Muse Chat] job ' +
+        queueId.slice(0, 8) +
+        ' → TAB MỚI #' +
+        tabId,
+    );
     try {
       await chrome.tabs.update(tabId, { autoDiscardable: false });
     } catch {}
@@ -1018,334 +1232,720 @@ async function startMuseChatJob(job) {
       qid => {
         window.__dramaMuseChatCaptured = null;
         window.__dramaMuseChatError = null;
-        window.__dramaMuseChatActiveJob = {
-          queueId: qid,
-          kind: assetKind,
-          armed: false,
-          notBefore: Date.now() + 500,
-        };
+        window.__dramaMuseChatActiveJob = { queueId: qid, sentAt: 0 };
       },
       [queueId],
     );
 
+    // Ensure we're in a brand-new chat BEFORE pushing image + prompt.
+    // If not, force-click the "+" (aria-label="New side chat") button, then verify.
+    // NOTE: the tab "complete" event fires before the muse.ai SPA boots — without waiting,
+    // the check below would see an empty unrendered page and wrongly skip the "+" click.
+    report('Muse chat: chờ trang load xong…');
+    const ready = await execMain(tabId, museChatWaitReady).catch(() => null);
+    if (!ready || !ready.ok) {
+      await clearMuseChatActive(tabId);
+      throw new Error(
+        'Muse chat (chờ trang): ' + ((ready && ready.detail) || 'trang không load xong.'),
+      );
+    }
+    report('Muse chat: kiểm tra thread mới…');
+    let isNew = false; // Always explicitly create a fresh conversation for this job.
+    if (!isNew) {
+      report('Muse chat: mở thread mới (bấm nút +)…');
+      const nth = await execMain(tabId, museChatClickNewChat).catch(() => null);
+      if (!nth || !nth.ok) {
+        await clearMuseChatActive(tabId);
+        throw new Error(
+          'Muse chat (mở thread mới): ' + ((nth && nth.detail) || 'không bấm được nút + tạo chat mới.'),
+        );
+      }
+      // The click may navigate (SPA) — reinstall the hook, then re-check until the
+      // new empty chat appears.
+      await ensureMuseChatHook(tabId);
+      const t0 = Date.now();
+      isNew = false;
+      while (Date.now() - t0 < 20000) {
+        await sleep(1500);
+        isNew = await execMain(tabId, museChatIsNewChat).catch(() => false);
+        if (isNew) break;
+      }
+      if (!isNew) {
+        await clearMuseChatActive(tabId);
+        throw new Error(
+          'Muse chat (mở thread mới): đã bấm nút + nhưng vẫn không thấy thread mới (vẫn còn tin nhắn cũ).',
+        );
+      }
+      report('Muse chat: đã ở thread mới.');
+    }
+
+    const refs = job.payload.references || [];
+    if (refs.length) report('Muse chat: tải ' + refs.length + ' ảnh tham chiếu…');
     const images = [];
-    for (const ref of job.payload.references || []) {
+    for (const ref of refs) {
       try {
         const r = await downloadRef(job.__base, ref.asset);
         images.push({ base64: r.dataUrl.split(',')[1], mime: r.mime, filename: r.name });
-      } catch {}
+      } catch (e) {
+        throw new Error('Muse chat (ảnh tham chiếu): ' + e.message);
+      }
     }
 
     report('Muse chat: gửi prompt' + (images.length ? ' + ảnh tham chiếu' : '') + '…');
-    const drive = await execMain(tabId, museChatDriveUi, [
-      { prompt: String(job.payload.prompt || ''), images, queueId },
-    ]);
+    await execMain(tabId, qid => {
+      window.__dramaMuseChatActiveJob = { queueId: qid, sentAt: 0 };
+      window.__dramaMuseChatCaptured = null;
+      window.__dramaMuseChatError = null;
+    }, [queueId]);
+    const driveArgs = [{ queueId, prompt: String(job.payload.prompt || ''), images, kind: job.kind }];
+    // Do not replay an ambiguous send: it can create a second paid generation.
+    let lastStage = '';
+    let wakePromise = null;
+    const startWake = () => {
+      if (wakePromise) return wakePromise;
+      st.progress = 'kích hoạt tab Muse để hoàn tất gửi';
+      report('Muse chat: ' + st.progress + '…');
+      wakePromise = wakeMuseTab(tabId).catch(error => {
+        glog('Muse tab wake error', String(error?.message || error));
+      });
+      return wakePromise;
+    };
+    const stageTimer = setInterval(() => {
+      execMain(tabId, () => window.__dramaMuseChatStage || '').then(stage => {
+        if (stage && stage !== lastStage) { lastStage = stage; st.progress = stage; report('Muse chat: ' + stage + '…'); }
+        if (/xác nhận tin nhắn đã gửi|đã bấm gửi/i.test(stage)) startWake();
+      }).catch(() => {});
+    }, 2000);
+    let drive;
+    try { drive = await execMain(tabId, museChatDriveUi, driveArgs); }
+    catch (error) {
+      // Full navigation can destroy the executeScript promise after a successful send.
+      // The hook stores the send marker in this tab's sessionStorage before submission.
+      await ensureMuseChatHook(tabId);
+      for (let i = 0; i < 15; i++) {
+        drive = await execMain(tabId, qid => {
+          window.__dramaMuseChatPoll?.();
+          const active = window.__dramaMuseChatActiveJob;
+          return active?.queueId === qid && active.sentAt
+            ? { ok: true, attempted: true, confirmed: !!active.confirmed, pending: !active.confirmed,
+                sentAt: active.sentAt, conversationUrl: location.href, watchState: window.__dramaMuseChatSnapshot() } : null;
+        }, [queueId]).catch(() => null);
+        if (drive) break;
+        await sleep(1000);
+      }
+      if (!drive) throw new Error('Trang chuyển hướng khi gửi; chưa xác nhận kết quả. ' + error.message);
+    }
+    finally {
+      clearInterval(stageTimer);
+      if (wakePromise) await wakePromise;
+    }
     if (!drive || !drive.ok) {
       await clearMuseChatActive(tabId);
       throw new Error(
-        'Muse chat: ' + ((drive && drive.detail) || 'không điều khiển được giao diện chat.'),
+        'Muse chat (gửi prompt): ' +
+          ((drive && drive.detail) || 'không điều khiển được giao diện chat.'),
       );
     }
-    await execMain(tabId, qid => {
-      if (window.__dramaMuseChatActiveJob?.queueId === qid)
-        window.__dramaMuseChatActiveJob.armed = true;
-    }, [queueId]);
-
-    report('Muse chat: đang chờ ' + (assetKind === 'image' ? 'ảnh' : 'video') + '…');
+    // The stage poll normally starts this immediately after the click. If the stage was missed but
+    // Muse still reports an unconfirmed send, force one wake before entering the long video wait.
+    if (drive.pending && !wakePromise) await startWake();
+    st.sent = true;
+    st.conversationUrl = drive.conversationUrl || (await chrome.tabs.get(tabId)).url;
+    const sentAt = drive.sentAt || Date.now();
+    // Carry the pre-send video baseline through a navigation/reinstalled hook.
+    // Never turn an attempted send into a confirmed send just to resume polling.
+    const watchState = drive.watchState || await execMain(tabId, () => window.__dramaMuseChatSnapshot?.()).catch(() => null);
+    st.progress = drive.pending ? 'đã bấm gửi; tiếp tục chờ video từ Muse' : 'đã gửi, đang chờ video';
+    report('Muse chat: ' + st.progress);
+    await execMain(tabId, message => window.__dramaMuseChatUi?.status(message), [st.progress]).catch(() => {});
     const TIMEOUT = 10 * 60 * 1000;
-    const t0 = Date.now();
-    let beat = 0;
+    const t0 = sentAt;
+    let beat = 0, downloadError = '';
+    const downloadAttempts = new Map();
     for (;;) {
-      const s = await execMain(
-        tabId,
-        qid => {
-          const c = window.__dramaMuseChatCaptured;
-          const e = window.__dramaMuseChatError;
-          return {
-            // Only accept the capture whose queueId matches THIS job — the correct video id.
-            captured:
-              c && c.queueId === qid && c.kind === assetKind ? c.assetUrl || c.videoUrl : '',
-            error: e && e.queueId === qid ? e.detail : '',
-          };
-        },
-        [queueId],
-      );
+      if (Date.now() - t0 > TIMEOUT) throw new Error(downloadError || 'Chưa thấy video sau 10 phút kể từ khi bấm gửi. Giữ tab để kiểm tra, không tự gửi lại prompt.');
+      let s = null;
+      try {
+        s = await execMain(
+          tabId,
+          (qid, state) => {
+            // SPA navigation wipes page-world state — re-arm this job's marker if it's gone,
+            // preserving the original send timestamp whenever we still have it.
+            if (!window.__dramaMuseChatHookInstalled) return { hookMissing: true };
+            const j = window.__dramaMuseChatActiveJob;
+            if ((!j || j.queueId !== qid) && state) window.__dramaMuseChatRestore?.(state);
+            window.__dramaMuseChatPoll?.();
+            const c = window.__dramaMuseChatCaptured;
+            const e = window.__dramaMuseChatError;
+            return {
+              // Only accept the capture whose queueId matches THIS job — the correct video id.
+              captured: c && c.queueId === qid ? c.imageUrl || c.videoUrl : '',
+              score: c?.score || 0,
+              error: e && e.queueId === qid ? e.detail : '',
+              diagnostics: window.__dramaMuseChatDiagnostics?.() || null,
+            };
+          },
+          [queueId, watchState],
+        );
+      } catch (e) {
+        // Most likely the tab is mid-navigation (chat apps often navigate right after send).
+        // Only treat it as fatal if the tab is actually gone.
+        const alive = await chrome.tabs.get(tabId).catch(() => null);
+        if (!alive) throw new Error('Muse chat (chờ video): tab đã bị đóng.');
+        await sleep(2000);
+        continue;
+      }
+      if (s && s.hookMissing) {
+        // Hook was wiped by a navigation before the content script re-ran — reinstall it.
+        await ensureMuseChatHook(tabId);
+        await sleep(1000);
+        continue;
+      }
       if (s && s.error) {
         await clearMuseChatActive(tabId);
         throw new Error(s.error);
       }
-      if (s && s.captured) {
-        await clearMuseChatActive(tabId);
-        report('Muse chat: tải ' + (assetKind === 'image' ? 'ảnh' : 'video') + '…');
-        const dl = await execMain(tabId, museChatDownload, [s.captured, assetKind]);
-        if (!dl || !dl.base64)
-          throw new Error(
-            (dl && dl.detail) ||
-              'Không tải được ' + (assetKind === 'image' ? 'ảnh' : 'video') + ' từ Muse chat.',
-          );
-        if (assetKind === 'image') await complete(job, dl);
-        else await completeVideo(job, dl);
-        report('✓ xong ' + (assetKind === 'image' ? 'ảnh' : 'video') + ' ' + queueId.slice(0, 8));
-        return;
+      if (s?.captured && Date.now() - (downloadAttempts.get(s.captured) || 0) > 12000) {
+        downloadAttempts.set(s.captured, Date.now());
+        report('Muse chat: tải video…');
+        await execMain(tabId, () => window.__dramaMuseChatUi?.status('đang tải video')).catch(() => {});
+        const dl = await execMain(tabId, job.kind === 'image' ? museChatDownloadImage : museChatDownload, [s.captured]).catch(error => ({ detail: error.message }));
+        if (dl?.base64) {
+          st.progress = 'lưu video vào Drama Tool';
+          report('Muse chat: lưu video vào Drama Tool…');
+          await execMain(tabId, () => window.__dramaMuseChatUi?.status('đang lưu video vào Drama Tool')).catch(() => {});
+          if (job.kind === 'image') await complete(job, { base64: dl.base64, mime: dl.mime }, st);
+          else await completeVideo(job, { base64: dl.base64, mime: dl.mime });
+          report('✓ xong video ' + queueId.slice(0, 8));
+          await closeOwnedTab();
+          return;
+        }
+        downloadError = 'Muse chat (tải video): ' + (dl?.detail || 'Không đọc được file video.');
+        // Keep observing the reply for a direct file link; a blob may be a MediaSource.
+        report(downloadError + ' — tiếp tục chờ file hoàn chỉnh…');
       }
       if (Date.now() - t0 > TIMEOUT) {
         await clearMuseChatActive(tabId);
-        throw new Error('Quá thời gian chờ Muse tạo video (10 phút).');
+        throw new Error('Muse chat (chờ video): quá thời gian chờ (10 phút).');
       }
       if (Date.now() - beat > 15000) {
         beat = Date.now();
-        report('Muse chat: đang chờ… ' + Math.round((Date.now() - t0) / 1000) + 's');
+        const seconds = Math.round((Date.now() - t0) / 1000);
+        st.progress = s?.diagnostics?.freshVideos
+          ? 'đã thấy ' + s.diagnostics.freshVideos + ' player video, đang đọc dữ liệu… ' + seconds + 's'
+          : 'đang chờ video… ' + seconds + 's';
+        report('Muse chat: ' + st.progress);
+        await execMain(tabId, progress => window.__dramaMuseChatUi?.status(progress), [st.progress]).catch(() => {});
       }
       await sleep(2000);
     }
   } catch (e) {
-    await fail(job, e.message).catch(() => {});
+    if (tabId !== null) await execMain(tabId, detail => window.__dramaMuseChatUi?.status(detail, true), [e.message]).catch(() => {});
+    if (st.sent) await heartbeat(job, st).catch(() => {});
+    await fail(job, e.message, st).catch(() => {});
     report('✗ ' + e.message, true);
   } finally {
     clearInterval(hb);
     active.delete(job.id);
     if (typeof tabId === 'number') {
-      await clearMuseChatActive(tabId);
-      // Each command owns its tab: close it so tabs never pile up.
-      try {
-        await chrome.tabs.remove(tabId);
-      } catch {}
+      await closeOwnedTab();
     }
     if (anyRunning()) poll();
   }
 }
 const clearMuseChatActive = tabId =>
   execMain(tabId, () => {
-    window.__dramaMuseChatActiveJob = null;
+    if (window.__dramaMuseChatClear) window.__dramaMuseChatClear();
+    else window.__dramaMuseChatActiveJob = null;
   }).catch(() => {});
 
 // --- MAIN-world functions injected into the Muse chat tab (must be self-contained) ---
-// Type the prompt, attach the reference image, send — exactly like doing it by hand.
-// CALIBRATE the selectors below against the real logged-in muse.ai chat page.
-async function museChatDriveUi(job) {
+// Wait until the muse.ai SPA has actually rendered. Chrome's tab "complete" event fires
+// before the React app boots — checking for messages too early sees an empty page and
+// wrongly concludes it's a new chat. We wait for the "+" button (sidebar rendered) as the
+// boot signal, then give the conversation content a moment to catch up.
+async function museChatWaitReady() {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const t0 = Date.now();
+  while (Date.now() - t0 < 30000) {
+    let plus = null;
+    try {
+      plus =
+        document.querySelector('[aria-label="New side chat"]') ||
+        [...document.querySelectorAll('button, [role="button"]')].find(el => {
+          try {
+            const r = el.getBoundingClientRect();
+            return (el.textContent || '').trim() === '+' && r.width >= 16 && r.height >= 16;
+          } catch (_) {
+            return false;
+          }
+        }) ||
+        null;
+    } catch (_) {}
+    if (plus || window.__dramaMuseChatUi?.composer()) {
+      await sleep(3000); // let the conversation content catch up with the shell
+      return { ok: true };
+    }
+    await sleep(1000);
+  }
+  return { ok: false, detail: 'Trang muse.ai load quá lâu (không thấy nút + tạo chat).' };
+}
+// Check whether the main conversation area is a fresh/empty chat (no messages yet).
+// Used BEFORE pushing the reference image + prompt: we must never send into an old thread.
+// Called after explicitly clicking New side chat; require a ready, empty composer.
+async function museChatIsNewChat() {
+  const ui = window.__dramaMuseChatUi;
+  if (!ui) return false;
+  const input = ui.composer();
+  if (!input || ui.value(input).trim()) return false;
+  // Inspect only the conversation containing the composer. Welcome text and
+  // navigation cards are not messages, regardless of their size or position.
+  const scope = ui.scope(input);
+  return ![...scope.querySelectorAll('[data-message-id], [data-message-author-role], [role="log"] > *, .chat-message, .message-row')]
+    .some(el => ui.visible(el) && !el.contains(input));
+}
+// Click the "+" new-chat button in the sidebar to open a fresh thread.
+// (Navigating to a "new thread" URL directly does not work — the click is required.)
+async function museChatClickNewChat() {
   const visible = el => {
     if (!el) return false;
-    const r = el.getBoundingClientRect();
-    const s = getComputedStyle(el);
-    return (
-      r.width > 20 &&
-      r.height > 10 &&
-      s.visibility !== 'hidden' &&
-      s.display !== 'none' &&
-      Number(s.opacity || '1') > 0.05
-    );
+    let r, s;
+    try {
+      r = el.getBoundingClientRect();
+    } catch (_) {
+      return false;
+    }
+    try {
+      s = getComputedStyle(el);
+    } catch (_) {
+      s = null;
+    }
+    if (r.width < 16 || r.height < 16) return false;
+    if (s && (s.visibility === 'hidden' || s.display === 'none')) return false;
+    return true;
   };
-  const labelOf = el =>
-    [
-      el.getAttribute('aria-label'),
-      el.getAttribute('title'),
-      el.getAttribute('placeholder'),
-      el.innerText,
-      el.textContent,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
+  const labelOf = el => {
+    try {
+      return [
+        el.getAttribute('aria-label'),
+        el.getAttribute('title'),
+        el.innerText,
+        el.textContent,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+    } catch (_) {
+      return '';
+    }
+  };
   try {
-    const promptText = String(job.prompt || '');
-    if (!promptText) return { ok: false, detail: 'Job không có prompt.' };
-
-    // 1. Composer: the big text input near the bottom of the chat.
-    const cands = [
-      ...document.querySelectorAll(
-        'textarea, [contenteditable="true"], [role="textbox"], input[type="text"]',
-      ),
-    ].filter(visible);
-    let input = null;
-    let best = -Infinity;
-    for (const el of cands) {
-      const r = el.getBoundingClientRect();
-      const label = labelOf(el);
-      let score = 0;
-      if (r.top > window.innerHeight * 0.55) score += 40; // composer lives near the bottom
-      if (el.tagName === 'TEXTAREA' || el.isContentEditable) score += 20;
-      if (r.width > 200 && r.height >= 30 && r.height < 300) score += 10;
-      if (/search|tìm|tim/i.test(label)) score -= 80;
-      if (score > best) {
-        best = score;
-        input = el;
+    // 1. EXACT selector first (verified on the real UI).
+    let btn = document.querySelector('button[aria-label="New side chat"]');
+    if (!btn) btn = document.querySelector('[aria-label="New side chat"]');
+    if (btn && visible(btn)) {
+      btn.click();
+      return { ok: true, detail: 'đã bấm nút + (New side chat)' };
+    }
+    // 2. Fallback: heuristic search near the "Side chats" heading.
+    let anchorBox = null;
+    try {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        if (node.nodeValue && node.nodeValue.trim() === 'Side chats') {
+          const heading = node.parentElement;
+          anchorBox = (heading && heading.closest('div')) || (heading && heading.parentElement);
+          break;
+        }
       }
-    }
-    if (!input || best < 10)
-      return { ok: false, detail: 'Không tìm thấy ô chat trên muse.ai (đã đăng nhập chưa?).' };
-
-    // 2. Attach the reference image first (so it rides along with the prompt).
-    if (Array.isArray(job.images) && job.images.length) {
-      try {
-        const files = [];
-        for (const ref of job.images.slice(0, 4)) {
-          if (!ref.base64) continue;
-          const bstr = atob(ref.base64);
-          const u8 = new Uint8Array(bstr.length);
-          for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
-          files.push(
-            new File([u8], ref.filename || 'ref.jpg', { type: ref.mime || 'image/jpeg' }),
-          );
-        }
-        if (files.length) {
-          const attachBtn = [...document.querySelectorAll('button, [role="button"]')]
-            .filter(visible)
-            .find(el => /attach|đính kèm|dinh kem|upload|\+/.test(labelOf(el)));
-          if (attachBtn) {
-            attachBtn.click();
-            await sleep(800);
-          }
-          const dt = new DataTransfer();
-          for (const f of files) dt.items.add(f);
-          const fileInput = [...document.querySelectorAll('input[type="file"]')].find(visible);
-          if (fileInput) {
-            try {
-              fileInput.multiple = true;
-            } catch (_) {}
-            fileInput.files = dt.files;
-            fileInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-            await sleep(1500);
-          } else {
-            const dropTarget = input.closest('form') || input.parentElement || document.body;
-            for (const type of ['dragenter', 'dragover', 'drop']) {
-              dropTarget.dispatchEvent(
-                new DragEvent(type, {
-                  dataTransfer: dt,
-                  bubbles: true,
-                  cancelable: true,
-                  composed: true,
-                }),
-              );
-              await sleep(300);
-            }
-            await sleep(1200);
-          }
-        }
-      } catch (_) {}
-    }
-
-    // 3. Type the prompt.
-    input.focus();
-    if (input.isContentEditable) {
-      const sel = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(input);
-      sel.removeAllRanges();
-      sel.addRange(range);
-      document.execCommand('insertText', false, promptText);
-    } else {
-      const proto =
-        input.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-      if (setter) setter.call(input, promptText);
-      else input.value = promptText;
-    }
-    input.dispatchEvent(
-      new InputEvent('input', { bubbles: true, inputType: 'insertText', data: promptText }),
-    );
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    await sleep(600);
-
-    // 4. Send: the send button near the composer, else Enter.
-    const inputRect = input.getBoundingClientRect();
-    const buttons = [...document.querySelectorAll('button, [role="button"]')].filter(
-      el => visible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true',
-    );
-    let sendBtn = null;
-    best = -Infinity;
+    } catch (_) {}
+    const buttons = [...document.querySelectorAll('button, [role="button"]')].filter(visible);
+    let bestBtn = null,
+      bestScore = -Infinity;
     for (const el of buttons) {
-      const r = el.getBoundingClientRect();
+      const text = (el.textContent || '').trim();
       const label = labelOf(el);
       let score = 0;
-      if (/gửi|gui|send/.test(label)) score += 80;
-      if (el.querySelector('svg')) score += 10; // send buttons are usually icon-only
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      if (
-        cx >= inputRect.left - 20 &&
-        cx <= inputRect.right + 120 &&
-        cy >= inputRect.top - 80 &&
-        cy <= inputRect.bottom + 40
-      )
-        score += 30;
-      if (/stop|dừng|dung|cancel|hủy|huy/.test(label)) score -= 100;
-      if (score > best) {
-        best = score;
-        sendBtn = el;
+      if (text === '+') score += 60;
+      if (/new chat|chat mới|đoạn chat mới|new thread|new side chat|tạo.*chat|create.*chat/i.test(label))
+        score += 50;
+      if (anchorBox && anchorBox.contains(el)) score += 30;
+      const r = el.getBoundingClientRect();
+      if (r.width < 60 && r.height < 60) score += 10; // small icon button, not a big CTA
+      if (score > bestScore) {
+        bestScore = score;
+        bestBtn = el;
       }
     }
-    if (sendBtn && best >= 40) {
-      sendBtn.click();
-    } else {
-      input.focus();
-      input.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }),
-      );
-      input.dispatchEvent(
-        new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true }),
-      );
+    if (!bestBtn || bestScore < 40) {
+      return { ok: false, detail: 'Không tìm thấy nút + tạo chat mới trong sidebar.' };
     }
-    await sleep(2000);
-    return { ok: true, detail: 'prompt đã gửi' };
+    bestBtn.click();
+    return { ok: true, detail: 'đã bấm nút + (tìm theo heuristic)' };
   } catch (err) {
     return { ok: false, detail: String((err && err.message) || err) };
   }
 }
-
-async function museChatDownload(assetUrl, kind = 'video') {
-  const sniff = bytes => {
-    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
-      return 'image/png';
-    if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'image/jpeg';
-    if (
-      bytes[0] === 0x52 &&
-      bytes[1] === 0x49 &&
-      bytes[2] === 0x46 &&
-      bytes[3] === 0x46 &&
-      bytes[8] === 0x57 &&
-      bytes[9] === 0x45 &&
-      bytes[10] === 0x42 &&
-      bytes[11] === 0x50
-    )
-      return 'image/webp';
+// Type the prompt, attach the reference image, send — exactly like doing it by hand.
+// CALIBRATE the selectors below against the real logged-in muse.ai chat page.
+async function museChatDriveUi(job) {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const ui = window.__dramaMuseChatUi;
+  if (!ui) return { ok: false, detail: 'Chưa khởi tạo bộ điều khiển Muse.' };
+  const until = async (fn, timeout = 30000) => {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) { const result = fn(); if (result) return result; await sleep(300); }
     return null;
   };
-  const toBase64 = bytes => {
-    let bin = '';
-    for (let i = 0; i < bytes.length; i += 0x8000)
-      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-    return btoa(bin);
+  let stage = 'chờ ô nhập';
+  const setStage = value => { stage = value; ui.status(value); };
+  let attempted = false, armedState = null;
+  const normalize = value => String(value || '').replace(/\r\n/g, '\n').replace(/\u00a0/g, ' ').trim();
+  const fillPrompt = async prompt => {
+    setStage('điền prompt');
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+      const editor = ui.composer();
+      if (!editor) { await sleep(300); continue; }
+      if (normalize(ui.value(editor)) !== normalize(prompt)) {
+        editor.focus();
+        if (editor.isContentEditable) {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(editor);
+          selection.removeAllRanges(); selection.addRange(range);
+          // Some editors return false from execCommand despite accepting the edit.
+          try { document.execCommand('insertText', false, prompt); } catch (_) {}
+          if (normalize(ui.value(editor)) !== normalize(prompt)) {
+            const allowed = editor.dispatchEvent(new InputEvent('beforeinput', {
+              bubbles: true, composed: true, cancelable: true, inputType: 'insertText', data: prompt,
+            }));
+            if (allowed && normalize(ui.value(editor)) !== normalize(prompt)) editor.textContent = prompt;
+          }
+        } else {
+          const proto = editor.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+          if (!setter) throw new Error('Ô nhập không hỗ trợ điền văn bản.');
+          setter.call(editor, prompt);
+        }
+        editor.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: prompt }));
+        editor.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      // Confirm against the current node, after the framework has re-rendered.
+      await sleep(400);
+      const current = ui.composer();
+      if (current && normalize(ui.value(current)) === normalize(prompt)) return current;
+    }
+    throw new Error('Không giữ được prompt trong ô nhập sau khi giao diện cập nhật.');
   };
   try {
-    for (let i = 0; i < 6; i++) {
-      try {
-        const r = await fetch(assetUrl, { credentials: 'include' });
-        if (r.ok) {
-          const buf = new Uint8Array(await r.arrayBuffer());
-          if (buf.length < (kind === 'image' ? 1000 : 10000)) {
-            await new Promise(rr => setTimeout(rr, 4000));
-            continue;
-          }
-          const mime =
-            kind === 'image'
-              ? sniff(buf)
-              : assetUrl.includes('.webm')
-                ? 'video/webm'
-                : 'video/mp4';
-          if (!mime) {
-            await new Promise(rr => setTimeout(rr, 4000));
-            continue;
-          }
-          return { base64: toBase64(buf), mime, size: buf.length };
-        }
-      } catch (_) {}
-      await new Promise(rr => setTimeout(rr, 4000));
+    const prompt = String(job.prompt || '').trim();
+    if (!prompt) throw new Error('Job không có prompt.');
+    let input = await until(() => ui.composer());
+    if (!input) throw new Error('Không tìm thấy ô nhập của chat mới.');
+    let attachmentReady = null;
+    const images = job.images || [];
+    if (images.length) {
+      setStage('tải ảnh tham chiếu');
+      const scope = ui.scope(input);
+      const findFile = () => {
+        const candidates = [...document.querySelectorAll('input[type="file"]')]
+          .filter(el => !el.disabled && (!el.accept || /image|png|jpg|jpeg|webp|\*/i.test(el.accept)));
+        return candidates.find(el => scope.contains(el)) || (candidates.length === 1 ? candidates[0] : null);
+      };
+      let picker = findFile(); // File inputs are normally hidden; do not filter by visibility.
+      if (!picker) {
+        const attach = [...scope.querySelectorAll('button, [role="button"]')]
+          .filter(ui.visible).find(el => !/new.*chat/i.test(ui.label(el)) &&
+            (/attach|upload|đính kèm|thêm ảnh/i.test(ui.label(el)) || ui.label(el).trim() === '+'));
+        if (attach) attach.click();
+        picker = await until(findFile, 5000);
+      }
+      if (!picker) throw new Error('Không tìm thấy ô tải ảnh trong chat; chưa gửi prompt.');
+      if (images.length > 1 && !picker.multiple)
+        throw new Error('Ô tải ảnh chỉ nhận một ảnh; job có ' + images.length + ' ảnh.');
+      const dt = new DataTransfer();
+      for (const ref of images) {
+        if (!ref.base64) throw new Error('Ảnh tham chiếu rỗng.');
+        const bytes = Uint8Array.from(atob(ref.base64), c => c.charCodeAt(0));
+        dt.items.add(new File([bytes], ref.filename || 'reference.png', { type: ref.mime || 'image/png' }));
+      }
+      const before = ui.attachmentTokens(input);
+      let previewSince = 0;
+      picker.files = dt.files;
+      picker.dispatchEvent(new Event('input', { bubbles: true }));
+      picker.dispatchEvent(new Event('change', { bubbles: true }));
+      attachmentReady = () => {
+        const current = ui.composer();
+        if (!current || ui.busy(current)) { previewSince = 0; return false; }
+        const region = ui.scope(current);
+        const added = [...ui.attachmentTokens(current)].filter(token => !before.has(token));
+        const filenames = images.every(ref => ref.filename && (region.innerText || region.textContent || '').includes(ref.filename));
+        if (!added.length && !filenames) { previewSince = 0; return false; }
+        if (!previewSince) previewSince = Date.now();
+        return Date.now() - previewSince >= 900;
+      };
     }
-    return { detail: 'Không tải được asset Muse (URL chưa sẵn sàng sau nhiều lần thử).' };
-  } catch (err) {
-    return { detail: String((err && err.message) || err) };
+    // Fill the prompt independently of preview detection: Muse may render attachments
+    // as background thumbnails, while replacing the editor during upload.
+    input = await fillPrompt(prompt);
+    if (attachmentReady) {
+      setStage('chờ ảnh đính kèm sẵn sàng');
+      if (!await until(attachmentReady, 60000))
+        throw new Error('Prompt đã điền, nhưng chưa xác nhận được ảnh đính kèm; chưa bấm gửi.');
+      input = await fillPrompt(prompt);
+    }
+    setStage('chờ nút gửi');
+    const controlStart = Date.now();
+    const control = await until(() => {
+      input = ui.composer();
+      if (!input || normalize(ui.value(input)) !== normalize(prompt) || ui.busy(input)) return null;
+      const found = ui.sendControl(input);
+      if (found) return found.disabled ? null : found;
+      // Keyboard-only editors handle Enter themselves. Never use this while a
+      // recognized send control is disabled, and never follow a click with Enter.
+      return Date.now() - controlStart >= 5000 ? { enter: true } : null;
+    }, 45000);
+    if (!control) throw new Error('Nút gửi vẫn bị khóa hoặc ảnh vẫn đang tải sau 45 giây.');
+    window.__dramaMuseChatArm(job.queueId, prompt, job.kind);
+    armedState = window.__dramaMuseChatSnapshot();
+    attempted = true;
+    setStage(control.enter ? 'gửi bằng Enter' : 'bấm gửi prompt');
+    if (control.button) control.button.click();
+    else {
+      input.focus();
+      const event = type => new KeyboardEvent(type, {
+        key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true,
+      });
+      if (input.dispatchEvent(event('keydown'))) input.dispatchEvent(event('keypress'));
+      input.dispatchEvent(event('keyup'));
+    }
+    setStage('xác nhận tin nhắn đã gửi');
+    const sent = await until(() => {
+      const error = window.__dramaMuseChatError;
+      if (error?.queueId === job.queueId) throw new Error(error.detail);
+      const active = window.__dramaMuseChatActiveJob;
+      if (active?.queueId === job.queueId && active.confirmed) return true;
+      const current = ui.composer();
+      if (current && !normalize(ui.value(current)) && ui.hasMessage(current, prompt)) {
+        window.__dramaMuseChatConfirm(); return true;
+      }
+      return false;
+    }, 30000);
+    // A missing echo/request match is not a rejected send. Muse may render a
+    // shortened prompt or use a transport the hook cannot inspect. Keep watching.
+    if (!sent) setStage('đã bấm gửi; đang chờ Muse tạo video, không gửi lại prompt');
+    return {
+      ok: true, attempted, confirmed: !!sent, pending: !sent,
+      sentAt: window.__dramaMuseChatActiveJob.sentAt, conversationUrl: location.href,
+      watchState: window.__dramaMuseChatSnapshot(),
+    };
+  } catch (error) {
+    const detail = stage + ': ' + error.message;
+    // A UI/rendering error after clicking must not cancel an in-flight generation.
+    // Only a definite rejection from this prompt request is terminal here.
+    if (attempted && armedState && window.__dramaMuseChatError?.queueId !== job.queueId) {
+      ui.status('đã bấm gửi; tiếp tục theo dõi video dù chưa đọc được xác nhận');
+      return { ok: true, attempted, pending: true, confirmed: false, sentAt: armedState.sentAt,
+        conversationUrl: location.href, watchState: window.__dramaMuseChatSnapshot() || armedState };
+    }
+    ui.status(detail, true);
+    return { ok: false, attempted, detail };
   }
+}
+
+// Download the video inside the page (reuses the logged-in session), return base64.
+async function museChatDownloadImage(imageUrl) {
+  const response = await fetch(imageUrl, { credentials: 'include' });
+  if (!response.ok) throw new Error('Không tải được ảnh Muse: HTTP ' + response.status);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const mime = bytes[0] === 0x89 && bytes[1] === 0x50 ? 'image/png'
+    : bytes[0] === 0xff && bytes[1] === 0xd8 ? 'image/jpeg'
+    : bytes[0] === 0x52 && bytes[1] === 0x49 ? 'image/webp' : '';
+  if (!mime || bytes.length < 100) throw new Error('Ảnh Muse chưa tải xong hoặc định dạng không hỗ trợ.');
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { base64: btoa(binary), mime };
+}
+
+async function museChatDownload(videoUrl) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  const encode = bytes => {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000)
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+  };
+  const identify = bytes => {
+    const mp4 = bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
+    const webm = bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3;
+    return mp4 ? 'video/mp4' : webm ? 'video/webm' : '';
+  };
+  const recordBlobPlayer = async url => {
+    if (typeof window !== 'undefined')
+      window.__dramaMuseChatUi?.status('đã thấy video; đang lấy dữ liệu từ trình phát Muse');
+    const sameUrl = video => {
+      try {
+        return video.currentSrc === url.href || video.src === url.href ||
+          video.getAttribute('src') === videoUrl;
+      } catch (_) { return false; }
+    };
+    // Exact shape seen on Muse, plus a generic fallback for future class changes.
+    const videos = [...document.querySelectorAll(
+      'video.h-full.w-full.bg-transparent.object-cover, video[src^="blob:https://muse.ai/"], video',
+    )];
+    const video = videos.find(sameUrl);
+    if (!video) throw new Error('Đã thấy URL blob nhưng không còn tìm thấy thẻ video tương ứng.');
+    const deadline = Date.now() + 30000;
+    while (
+      Date.now() < deadline &&
+      (video.readyState < 2 || !Number.isFinite(video.duration) || video.duration <= 0)
+    ) await new Promise(resolve => setTimeout(resolve, 250));
+    const duration = Number(video.duration);
+    if (!Number.isFinite(duration) || duration <= 0)
+      throw new Error('Video blob chưa có thời lượng để thu lại.');
+    if (duration > 180) throw new Error('Video blob dài hơn giới hạn thu 3 phút.');
+    const withTimeout = (promise, ms, message) => new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error(message)), ms);
+      Promise.resolve(promise).then(
+        value => { clearTimeout(timeout); resolve(value); },
+        error => { clearTimeout(timeout); reject(error); },
+      );
+    });
+    const capture = video.captureStream || video.mozCaptureStream;
+    if (typeof capture !== 'function' || typeof MediaRecorder === 'undefined')
+      throw new Error('Trình duyệt không hỗ trợ thu video blob từ trình phát Muse.');
+    const stream = capture.call(video);
+    if (!stream?.getVideoTracks?.().length)
+      throw new Error('Trình phát Muse chưa cung cấp track video.');
+    const mimeCandidates = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+    ];
+    const mimeType = mimeCandidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+    const recorder = new MediaRecorder(stream, {
+      ...(mimeType ? { mimeType } : {}),
+      videoBitsPerSecond: 8_000_000,
+    });
+    const chunks = [];
+    const previous = {
+      currentTime: video.currentTime,
+      loop: video.loop,
+      muted: video.muted,
+      playbackRate: video.playbackRate,
+      paused: video.paused,
+    };
+    let stopTimer = null;
+    try {
+      const finished = new Promise((resolve, reject) => {
+        recorder.ondataavailable = event => {
+          if (event.data?.size) chunks.push(event.data);
+        };
+        recorder.onerror = event => reject(event.error || new Error('MediaRecorder báo lỗi.'));
+        recorder.onstop = resolve;
+      });
+      video.loop = false;
+      video.playbackRate = 1;
+      try { video.currentTime = 0; } catch (_) {}
+      recorder.start(500);
+      await withTimeout(video.play(), 8000, 'Trình phát không bắt đầu trong 8 giây.');
+      stopTimer = setTimeout(() => {
+        if (recorder.state !== 'inactive') recorder.stop();
+      }, Math.ceil((duration + 2) * 1000));
+      video.addEventListener('ended', () => {
+        if (recorder.state !== 'inactive') recorder.stop();
+      }, { once: true });
+      await withTimeout(
+        finished,
+        Math.ceil((duration + 10) * 1000),
+        'MediaRecorder không kết thúc đúng hạn.',
+      );
+      const blob = new Blob(chunks, { type: recorder.mimeType || 'video/webm' });
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (bytes.length < 1024) throw new Error('Bản thu từ video blob không có đủ dữ liệu.');
+      if (bytes.length > 200 * 1024 * 1024)
+        throw new Error('Bản thu video vượt giới hạn truyền 200 MB của worker.');
+      const mime = identify(bytes);
+      if (!mime) throw new Error('Bản thu từ trình phát không phải WebM/MP4 hợp lệ.');
+      return { base64: encode(bytes), mime, size: bytes.length, method: 'player-recording' };
+    } finally {
+      if (stopTimer) clearTimeout(stopTimer);
+      if (recorder.state !== 'inactive') recorder.stop();
+      for (const track of stream.getTracks()) track.stop();
+      video.loop = previous.loop;
+      video.muted = previous.muted;
+      video.playbackRate = previous.playbackRate;
+      try { video.currentTime = previous.currentTime; } catch (_) {}
+      if (!previous.paused) video.play().catch(() => {});
+    }
+  };
+  try {
+    const url = new URL(videoUrl, location.href);
+    if (!/^(https?:|blob:)$/.test(url.protocol)) throw new Error('URL video không hợp lệ.');
+    if (url.protocol === 'blob:' && typeof window !== 'undefined' && window.__dramaMuseChatReadObjectUrl) {
+      const tracked = await window.__dramaMuseChatReadObjectUrl(url.href);
+      if (tracked?.pending) return { detail: tracked.detail || 'MediaSource chưa nạp xong.' };
+      if (tracked?.error) throw new Error(tracked.error);
+      if (tracked?.bytes) {
+        const bytes = tracked.bytes instanceof Uint8Array
+          ? tracked.bytes
+          : new Uint8Array(tracked.bytes);
+        const mime = identify(bytes);
+        if (mime) {
+          return {
+            base64: encode(bytes), mime, size: bytes.length,
+            method: tracked.method || 'tracked-object-url',
+          };
+        }
+        // Separate audio/video SourceBuffers may not form a standalone file.
+        // Fall through to player recording in that case.
+      }
+    }
+    try {
+      const fetchController = url.protocol === 'blob:' ? new AbortController() : controller;
+      const blobTimer = url.protocol === 'blob:'
+        ? setTimeout(() => fetchController.abort(), 5000)
+        : null;
+      let response;
+      try {
+        response = await fetch(url.href, { credentials: 'include', signal: fetchController.signal });
+      } finally {
+        if (blobTimer) clearTimeout(blobTimer);
+      }
+      if (!response.ok) throw new Error('Tải video báo HTTP ' + response.status + '.');
+      const type = (response.headers.get('content-type') || '').split(';')[0];
+      if (/text\/|json|mpegurl|dash\+xml|image\//i.test(type))
+        throw new Error('URL trả về ' + type + ', chưa phải file video.');
+      const length = Number(response.headers.get('content-length') || 0);
+      if (length > 200 * 1024 * 1024)
+        throw new Error('Video vượt giới hạn truyền 200 MB của worker.');
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length > 200 * 1024 * 1024)
+        throw new Error('Video vượt giới hạn truyền 200 MB của worker.');
+      if (bytes.length < 1024) throw new Error('File video chưa đủ dữ liệu.');
+      if (length && !response.headers.get('content-encoding') && bytes.length !== length)
+        throw new Error('File tải về chưa đủ dung lượng.');
+      if (response.status === 206) {
+        const range = (response.headers.get('content-range') || '').match(/^bytes 0-(\d+)\/(\d+)$/);
+        if (!range || Number(range[1]) + 1 !== Number(range[2]) || bytes.length !== Number(range[2]))
+          throw new Error('Máy chủ mới trả về một phần video.');
+      }
+      const mime = identify(bytes);
+      if (!mime) throw new Error('Dữ liệu tải về không phải MP4/WebM.');
+      return { base64: encode(bytes), mime, size: bytes.length, method: 'direct-fetch' };
+    } catch (error) {
+      // A MediaSource blob is not fetchable as a file. Record exactly one pass
+      // from the generated <video> element instead.
+      if (url.protocol === 'blob:') return await recordBlobPlayer(url);
+      throw error;
+    }
+  } catch (error) {
+    return { detail: error.name === 'AbortError' ? 'Tải video quá 45 giây; sẽ thử lại.' : error.message };
+  } finally { clearTimeout(timer); }
 }
 
 // --- MAIN-world functions injected into the Google Vids tab (must be self-contained) ---
@@ -1408,23 +2008,73 @@ async function gvidsDriveUi(job) {
     return best;
   };
   const openVideoAiPanel = async () => {
+    // Google Vids' cards/sidebar react to pointer/mouse events, not a bare .click(); dispatch the
+    // whole sequence on the element directly (so an overlaying welcome dialog cannot intercept it).
+    const fire = el => {
+      try {
+        el.scrollIntoView({ block: 'center' });
+      } catch (_) {}
+      const o = { bubbles: true, cancelable: true, composed: true, view: window };
+      for (const t of ['pointerover', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+        try {
+          el.dispatchEvent(new (t.startsWith('pointer') ? PointerEvent : MouseEvent)(t, o));
+        } catch (_) {}
+      }
+      try {
+        el.click();
+      } catch (_) {}
+    };
+    const tryOpen = async el => {
+      if (!el) return false;
+      fire(el);
+      await sleep(1300);
+      return !!findPromptInput();
+    };
+    // 0. The welcome dialog's "Create AI videos" entry point — a stable data-view-id on the <button>
+    //    (confirmed on the live page). Click it to open the AI video Create panel deterministically.
+    const entry = document.querySelector(
+      'button[data-view-id="getting-started-dialog-videogen"], button[aria-controls="getting-started-dialog-videogen"], button.videogen',
+    );
+    if (entry && visible(entry) && (await tryOpen(entry))) return true;
+    const controls = [
+      ...document.querySelectorAll(
+        "button, [role='button'], a, [role='tab'], [role='menuitem'], [role='option'], div[tabindex], li",
+      ),
+    ].filter(visible);
+    // 1. The right-sidebar "AI video" button opens the panel directly — even with the welcome dialog
+    //    still up. Prefer the right-most match (the sidebar sits at the far right).
+    const aiVideo = controls
+      .filter(el => /(^|\s)ai video(\s|$)/i.test(labelOf(el)) && !/create ai video/i.test(labelOf(el)))
+      .sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right);
+    for (const el of aiVideo.slice(0, 3)) if (await tryOpen(el)) return true;
+    // 2. The "Create AI videos" card in the welcome dialog (a div card; try it and its thumbnail).
+    const labelEl = [...document.querySelectorAll("div, span, button, [role='button'], a")]
+      .filter(visible)
+      .find(el => {
+        const t = (el.innerText || '').trim();
+        return t.length < 120 && /^create ai videos?\b|^tạo video (ai|bằng ai)/i.test(t);
+      });
+    if (labelEl) {
+      let card = labelEl;
+      for (let i = 0; i < 7 && card.parentElement; i++) {
+        const r = card.getBoundingClientRect();
+        if (r.width > 150 && r.height > 110) break;
+        card = card.parentElement;
+      }
+      if (await tryOpen(card)) return true;
+      const img = card.querySelector('img, [role="img"], [class*="humbnail"]');
+      if (img && (await tryOpen(img))) return true;
+    }
+    // 3. The dedicated video-generation icon.
     const iconBtn = document.querySelector(
       '[class*="VideoGenerationIconButton"], [class*="VideoGenerationIcon"]',
     );
-    if (iconBtn && visible(iconBtn)) {
-      iconBtn.click();
-      await sleep(1200);
-      return true;
-    }
-    const controls = [...document.querySelectorAll("button, [role='button'], a")].filter(visible);
+    if (iconBtn && visible(iconBtn) && (await tryOpen(iconBtn))) return true;
+    // 4. Any other "create video with AI" control.
     const target = controls.find(el =>
       /video ai|đoạn video|do ai tạo|ai tạo|tạo bằng ai|tạo video/.test(labelOf(el)),
     );
-    if (target) {
-      target.click();
-      await sleep(1200);
-      return true;
-    }
+    if (target) return tryOpen(target);
     return false;
   };
   const setPromptValue = (el, value) => {
@@ -1501,7 +2151,7 @@ async function gvidsDriveUi(job) {
     const diag = [];
     try {
       const files = [];
-      for (const ref of imageRefs.slice(0, 10)) {
+      for (const ref of imageRefs.slice(0, 3)) {
         if (!ref.base64) continue;
         const bstr = atob(ref.base64);
         const u8 = new Uint8Array(bstr.length);
@@ -1521,29 +2171,71 @@ async function gvidsDriveUi(job) {
           promptEl.parentElement?.parentElement ||
           document.body
         : document.body;
+      // Google Vids' "Create" panel hides image upload behind an "Ingredients" button ("add brand
+      // images, characters…"); the <input type=file> only mounts AFTER it is opened. Open it first
+      // (and an "Upload / from computer" sub-option if the input still is not there) so the scan below
+      // finds a real file input to set the files on, instead of a drop the Create prompt box ignores.
+      const hasFileInput = () => !!document.querySelector("input[type='file']:not([disabled])");
+      if (!hasFileInput()) {
+        const btn = re =>
+          Array.from(document.querySelectorAll("button, [role='button'], [role='menuitem'], [role='tab']"))
+            .filter(visible)
+            .find(b => re.test(labelOf(b)));
+        // The Create tab must be active — Edit/Animate/Extend expect a source video, not images.
+        const createTab = btn(/^\s*(create|tạo)\s*$/i);
+        if (createTab && createTab.getAttribute('aria-selected') !== 'true') {
+          createTab.click();
+          diag.push('create-tab');
+          await sleep(400);
+        }
+        const ingredients = btn(/ingredient|nguyên liệu|brand image|character|add media|thêm (ảnh|media)/i);
+        if (ingredients) {
+          ingredients.click();
+          diag.push('ingredients');
+          await sleep(900);
+        } else {
+          diag.push('no-ingredients-btn');
+        }
+        for (let c = 0; c < 3 && !hasFileInput(); c++) {
+          const up = btn(/upload|tải lên|from (this )?computer|from device|máy tính|thiết bị|browse/i);
+          if (!up) break;
+          up.click();
+          diag.push('upload-opt');
+          await sleep(800);
+        }
+      }
       const fileInputs = Array.from(document.querySelectorAll("input[type='file']"));
       const scored = fileInputs
         .map(inp => {
           const accept = String(inp.getAttribute('accept') || '').toLowerCase();
           let s = 0;
+          // The AI video image uploader lives in .videoGenCreationViewFileInputsContainerV2 — a hidden
+          // <input type=file accept="image/png, image/jpeg"> that is reused for each ingredient.
+          if (inp.closest('[class*="videoGen"], [class*="FileInputsContainer"]')) s += 200;
           if (container.contains(inp)) s += 100;
           if (/image|png|jpe?g|webp/.test(accept)) s += 60;
           if (!inp.disabled) s += 10;
           return { inp, s };
         })
         .sort((a, b) => b.s - a.s);
-      const dt = new DataTransfer();
-      for (const f of files) dt.items.add(f);
       const preferred = scored[0]?.inp;
       if (preferred) {
-        try {
-          preferred.multiple = true;
-        } catch (_) {}
-        preferred.files = dt.files;
-        preferred.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-        preferred.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-        diag.push('file-input x' + files.length);
+        // The uploader is single-file (multiple=false) and reused per ingredient, so set one file at a
+        // time and wait for each to register before the next — setting all files at once drops the rest.
+        let n = 0;
+        for (const f of files) {
+          const dt = new DataTransfer();
+          dt.items.add(f);
+          preferred.files = dt.files;
+          preferred.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+          preferred.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+          n++;
+          await sleep(1800);
+        }
+        diag.push('file-input x' + n);
       } else {
+        const dt = new DataTransfer();
+        for (const f of files) dt.items.add(f);
         container.dispatchEvent(
           new DragEvent('dragenter', {
             dataTransfer: dt,
@@ -1664,15 +2356,20 @@ async function gvidsDriveUi(job) {
     let promptText = String(job.prompt || '');
     if (!promptText) return { ok: false, detail: 'Job không có prompt.' };
     let input = findPromptInput();
-    if (!input) {
+    // The "Hello, AI" welcome dialog and the AI video panel can take a few seconds to render after the
+    // doc opens. Poll instead of a single shot: each round open the panel (click "Create AI videos" /
+    // the "AI video" sidebar) if the prompt box is not up yet, then re-check, for up to 18s.
+    const promptDeadline = Date.now() + 18000;
+    while (!input && Date.now() < promptDeadline) {
       await openVideoAiPanel();
       input = findPromptInput();
+      if (!input) await sleep(1000);
     }
     if (!input)
       return {
         ok: false,
         detail:
-          'Không tìm thấy ô nhập prompt — hãy mở một video và bảng tạo video trong Google Vids.',
+          'Không tìm thấy ô nhập prompt — hãy mở một video và bảng "Create AI videos" trong Google Vids.',
       };
     let attachDetail = '';
     if (Array.isArray(job.images) && job.images.length) {
@@ -1701,6 +2398,340 @@ async function gvidsDriveUi(job) {
     return { ok: true, detail: 'attached=' + attachDetail, promptSet: promptText };
   } catch (err) {
     return { ok: false, detail: String(err && err.message) };
+  }
+}
+
+// Lip-sync video-to-video on Google Vids' "AI video clip" panel: open the panel, switch to the
+// EDIT tab, upload the source video (the keyframe held over the line's vocal), type the Omni prompt,
+// submit. Self-contained (runs in the page's MAIN world — it cannot call gvidsDriveUi's helpers).
+// The MAIN-world capture hook reads the resulting preview URL just as for a Create render.
+// NOTE: Google Vids' DOM is unlabelled and changes often — these selectors are best-effort and need
+// verifying against the live site; each step reports what it did so a failure says where it stopped.
+// job.mode 'create' runs the same steps on the CREATE tab with reference images (job.images, max 3)
+// instead of a source video — the image-to-video path.
+async function gvidsDriveEditUi(job) {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const visible = el => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const s = window.getComputedStyle(el);
+    return (
+      r.width > 16 &&
+      r.height > 8 &&
+      s.visibility !== 'hidden' &&
+      s.display !== 'none' &&
+      Number(s.opacity || '1') > 0.05
+    );
+  };
+  const labelOf = el =>
+    [
+      el.getAttribute('aria-label'),
+      el.getAttribute('title'),
+      el.getAttribute('placeholder'),
+      el.getAttribute('data-value'),
+      el.innerText,
+      el.textContent,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+  const clickables = () =>
+    [
+      ...document.querySelectorAll(
+        "button,[role='button'],[role='tab'],a,[role='link'],[jsaction],div[role='button']",
+      ),
+    ].filter(visible);
+  const click = async el => {
+    if (!el) return false;
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    try {
+      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }));
+      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    } catch (_) {}
+    el.click();
+    await sleep(500);
+    return true;
+  };
+  const diag = [];
+  try {
+    const create = job.mode === 'create';
+    // The panel's tab this run uses: Create (images) or Edit (source video). The tabs are
+    // role="tab" with aria-label "Create"/"Edit" — match that name alone, since labelOf also folds in
+    // the sub-caption ("Create from scratch"). Edit keeps its older loose match as a fallback.
+    const nameOf = el => (el.getAttribute('aria-label') || el.innerText || '').trim().toLowerCase();
+    const tabNameRe = create ? /^(create|tạo)$/ : /^(edit|chỉnh sửa)$/;
+    const isModeTab = el => {
+      if (tabNameRe.test(nameOf(el))) return true;
+      if (create) return false;
+      const t = labelOf(el).trim();
+      return /(^|\b)(edit|chỉnh sửa)(\b|$)/.test(t) && !/animate|extend|create/.test(t);
+    };
+    const findModeTab = () =>
+      [...document.querySelectorAll("[role='tab']")].filter(visible).find(isModeTab) ||
+      clickables().find(isModeTab);
+    const video = job.video;
+    const images = (Array.isArray(job.images) ? job.images : []).filter(i => i && i.base64).slice(0, 3);
+    if (create ? !images.length : !video || !video.base64)
+      return { ok: false, detail: create ? 'no reference images' : 'no source video' };
+    const prompt = String(job.prompt || '');
+    if (!prompt) return { ok: false, detail: 'no prompt' };
+
+    // 1. Open the "AI video clip" / video-AI panel if it is not already showing. A fresh doc first
+    //    shows the "Hello, AI" welcome dialog — its "Create AI videos" card opens the panel.
+    const clickWelcome = async () => {
+      const w = document.querySelector(
+        'button[data-view-id="getting-started-dialog-videogen"], button[aria-controls="getting-started-dialog-videogen"]',
+      );
+      if (!w || !visible(w)) return false;
+      await click(w);
+      await sleep(1500);
+      diag.push('welcome-card');
+      return true;
+    };
+    await clickWelcome();
+    if (!findModeTab()) {
+      // Only small controls — a loose text match on a big container (the doc header "Untitled
+      // video · Play · Share…") would click the wrong thing.
+      const opener = clickables().find(e => {
+        const r = e.getBoundingClientRect();
+        const l = labelOf(e);
+        return (
+          r.width < 360 &&
+          r.height < 100 &&
+          l.length < 80 &&
+          /ai video clip|^\s*ai video\s*$|video ai|đoạn video|tạo bằng ai|ai tạo|tạo video|video do ai/.test(
+            l,
+          )
+        );
+      });
+      if (opener) {
+        await click(opener);
+        await sleep(1200);
+      }
+      diag.push(opener ? 'opened-panel' : 'panel-opener-not-found');
+    }
+
+    // 2. Switch to the CREATE or EDIT tab (the panel's tabs are Create · Edit · Animate · Extend).
+    let modeTab = null;
+    for (let i = 0; i < 12 && !modeTab; i++) {
+      // the panel can take a few seconds to render after the welcome card / sidebar click, and the
+      // welcome dialog itself can pop up late — click it whenever it shows
+      modeTab = findModeTab();
+      if (!modeTab && !(await clickWelcome())) await sleep(1000);
+    }
+    const tabName = create ? 'Create' : 'Edit';
+    if (!modeTab) return { ok: false, detail: tabName + ' tab not found. (' + diag.join(',') + ')' };
+    if (modeTab.getAttribute('aria-selected') !== 'true') await click(modeTab);
+    diag.push(tabName.toLowerCase() + '-tab');
+    await sleep(900);
+
+    // 3. Upload. Build a File from the base64 bytes the worker downloaded.
+    const toFile = (ref, name, type) => {
+      const bstr = atob(ref.base64);
+      const u8 = new Uint8Array(bstr.length);
+      for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+      return new File([u8], ref.filename || name, { type: ref.mime || type, lastModified: Date.now() });
+    };
+    if (create) {
+      // Create: the reference-image uploader is a hidden single-file <input type=file
+      // accept="image/png, image/jpeg"> in .videoGenCreationViewFileInputsContainerV2, reused for each
+      // ingredient — set one image at a time and give each a moment to register.
+      const imageInput = () =>
+        document.querySelector(
+          "[class*='videoGenCreationViewFileInputs'] input[type='file'], [class*='videoGen'] input[type='file'][accept*='image']",
+        ) ||
+        [...document.querySelectorAll("input[type='file']")].find(i =>
+          /image|png|jpe?g/.test(String(i.getAttribute('accept') || '').toLowerCase()),
+        );
+      let n = 0;
+      for (const ref of images) {
+        const inp = imageInput();
+        if (!inp) break;
+        const dt = new DataTransfer();
+        dt.items.add(toFile(ref, 'reference-' + (n + 1) + '.jpg', 'image/jpeg'));
+        inp.files = dt.files;
+        inp.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        inp.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        n++;
+        await sleep(2000);
+      }
+      if (!n) return { ok: false, detail: 'image upload input not found. (' + diag.join(',') + ')' };
+      diag.push('images x' + n);
+    } else {
+      // Edit: prefer a file input that accepts video; else the "Add video" dropzone.
+      const dt = new DataTransfer();
+      dt.items.add(toFile(video, 'lipsync-input.mp4', 'video/mp4'));
+      const videoInput = Array.from(document.querySelectorAll("input[type='file']"))
+        .map(inp => {
+          const accept = String(inp.getAttribute('accept') || '').toLowerCase();
+          let s = 0;
+          if (/video|mp4|\*/.test(accept) || !accept) s += 50;
+          if (!inp.disabled) s += 10;
+          return { inp, s };
+        })
+        .sort((a, b) => b.s - a.s)[0]?.inp;
+      if (videoInput) {
+        videoInput.files = dt.files;
+        videoInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        videoInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        diag.push('file-input');
+      } else {
+        // Click an "Add video" control (it may open a file chooser we cannot drive) then drop the
+        // file on the dropzone as a fallback.
+        const add = clickables().find(e => /add video|thêm video|tải video|upload/.test(labelOf(e)));
+        if (add) await click(add);
+        const zone =
+          [
+            ...document.querySelectorAll("[class*='DragDrop'],[class*='dropzone'],[role='region']"),
+          ].find(visible) || document.body;
+        for (const type of ['dragenter', 'dragover', 'drop'])
+          zone.dispatchEvent(
+            new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true, composed: true }),
+          );
+        diag.push(add ? 'add+drop' : 'drop-only');
+      }
+    }
+
+    // 4. Wait for the upload to register (an accept/consent step may appear), then find the prompt.
+    for (let c = 0; c < 4; c++) {
+      const agree = clickables().find(b =>
+        /tôi đồng ý|i agree|agree|đồng ý|chấp nhận/.test(labelOf(b)),
+      );
+      if (agree) {
+        await click(agree);
+        diag.push('consent');
+        break;
+      }
+      await sleep(600);
+    }
+    await sleep(2500); // the upload needs a moment before Generate enables
+
+    // 5. Type the prompt into the Edit box ("describe the changes that you want to make").
+    const promptEl = [
+      ...document.querySelectorAll(
+        "textarea, input[type='text'], [contenteditable='true'], [role='textbox']",
+      ),
+    ]
+      .filter(visible)
+      .sort((a, b) => {
+        const score = el => {
+          const l = labelOf(el);
+          let s = 0;
+          if (/change|describe|mô tả|chỉnh sửa|prompt|nhập/.test(l)) s += 60;
+          if (el.tagName === 'TEXTAREA') s += 20;
+          if (el.isContentEditable || el.getAttribute('role') === 'textbox') s += 10;
+          if (/tìm|search|menu/.test(l)) s -= 80;
+          return s;
+        };
+        return score(b) - score(a);
+      })[0];
+    if (!promptEl) return { ok: false, detail: 'prompt box not found. (' + diag.join(',') + ')' };
+    promptEl.focus();
+    if (promptEl.isContentEditable) {
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(promptEl);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand('insertText', false, prompt);
+    } else {
+      const proto =
+        promptEl.tagName === 'TEXTAREA'
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+      if (setter) setter.call(promptEl, prompt);
+      else promptEl.value = prompt;
+    }
+    promptEl.dispatchEvent(
+      new InputEvent('input', { bubbles: true, inputType: 'insertText', data: prompt }),
+    );
+    promptEl.dispatchEvent(new Event('change', { bubbles: true }));
+    diag.push('prompt');
+    await sleep(600);
+
+    // 6. Submit — the round send/arrow button at the bottom-right of the AI-video panel. It only
+    //    enables once the video is attached AND the prompt is non-empty, so poll for it to enable,
+    //    and make sure the panel is still open (it can collapse) before clicking.
+    const panelOf = el => {
+      let p = el;
+      while (p && p !== document.body) {
+        if (
+          [...p.querySelectorAll("button,[role='tab'],[role='button']")].some(isModeTab)
+        )
+          return p;
+        p = p.parentElement;
+      }
+      return (
+        el.closest("[role='region'],[class*='panel' i],[class*='sidebar' i]") || document.body
+      );
+    };
+    const exclude =
+      /clear|xoá|xóa|^add$|thêm|^create$|tạo mới|^edit$|chỉnh sửa|animate|extend|omni|720|1080|aspect|tỉ lệ|close|đóng|share|chia sẻ|play|phát|avatar|search|tìm|menu|undo|redo|hoàn tác|ingredient|drive|photos|template|remove|gỡ/;
+    const findSubmit = () => {
+      const panel = panelOf(promptEl);
+      const prr = panel.getBoundingClientRect();
+      const ptop = promptEl.getBoundingClientRect().top;
+      const cands = [...panel.querySelectorAll("button,[role='button'],[jsaction]")]
+        .filter(b => visible(b) && b.getAttribute('role') !== 'tab')
+        .map(b => {
+          const r = b.getBoundingClientRect();
+          const l = labelOf(b).trim();
+          let s = 0;
+          if (/(^|\s)(generate|send|submit|gửi|run|tạo video|khởi tạo)(\s|$)/.test(l)) s += 60;
+          if (exclude.test(l)) s -= 120;
+          if (r.right > prr.right - 100) s += 30; // right side of the panel
+          if (r.bottom > prr.bottom - 130) s += 30; // bottom of the panel
+          if (r.top > ptop) s += 20; // below the prompt
+          if (r.width <= 76 && r.height <= 76) s += 15; // a round icon button
+          if (b.querySelector('svg,[class*="arrow" i]')) s += 12;
+          if (!l) s += 8; // icon-only, no text label
+          const enabled = !b.disabled && b.getAttribute('aria-disabled') !== 'true';
+          return { b, s, enabled };
+        })
+        .sort((a, b) => b.s - a.s);
+      return cands[0] && cands[0].s > 20 ? cands[0] : null;
+    };
+    // The panel can collapse after the upload — re-open it so the submit button is present.
+    if (!findModeTab()) {
+      const reopen = clickables().find(e => {
+        const r = e.getBoundingClientRect();
+        return (
+          r.width < 360 &&
+          r.height < 100 &&
+          /ai video|video ai|đoạn video|tạo bằng ai/.test(labelOf(e))
+        );
+      });
+      if (reopen) {
+        await click(reopen);
+        await sleep(1000);
+        diag.push('reopen-panel');
+      }
+    }
+    let sub = null;
+    for (let i = 0; i < 12; i++) {
+      // poll up to ~12s for the arrow to enable (the upload must finish first)
+      sub = findSubmit();
+      if (sub && sub.enabled) break;
+      await sleep(1000);
+    }
+    if (!sub) return { ok: false, detail: 'submit button not found. (' + diag.join(',') + ')' };
+    await click(sub.b);
+    diag.push(sub.enabled ? 'submit' : 'submit-while-disabled');
+    // Verify it started: the prompt box usually clears or the button turns into a spinner/disabled.
+    // If nothing changed, click once more (a background-tab first click can be swallowed).
+    await sleep(1800);
+    const after = findSubmit();
+    const promptLeft = String(promptEl.value || promptEl.textContent || '').trim().length;
+    const started = !after || !after.enabled || promptLeft < prompt.length / 2;
+    if (!started) {
+      await click(sub.b);
+      diag.push('submit-retry');
+    }
+    return { ok: true, detail: diag.join(',') };
+  } catch (err) {
+    return { ok: false, detail: String((err && err.message) || err) + ' (' + diag.join(',') + ')' };
   }
 }
 
@@ -1899,7 +2930,7 @@ async function gvidsReplay(sample, newPrompt, queueId) {
 function startJob(job) {
   const site = job.payload && job.payload.site;
   const isVids = job.kind === 'video' && site === 'googlevids';
-  const isMuseChat = site === 'musechat' && (job.kind === 'image' || job.kind === 'video');
+  const isMuseChat = ['image', 'video'].includes(job.kind) && site === 'musechat';
   if (isMuseChat) startMuseChatJob(job);
   else if (isVids) startVidsJob(job);
   else startChatgptJob(job);
@@ -1933,22 +2964,14 @@ async function poll() {
       const kinds = [];
       const sites = []; // which video sites this extension may take right now
       // 'recover' = collect a late image from its saved ChatGPT conversation (no new prompt).
-      // ChatGPT image/text jobs are site-tagged too; declare the site so a Muse-only worker
-      // cannot claim them when both browser workers are enabled.
-      if (cfg.runChatgpt && activeOf('chatgpt') < concFor('chatgpt')) {
-        kinds.push('image', 'text', 'recover');
-        sites.push('chatgpt');
-      }
-      if (cfg.runMuseChat) {
-        kinds.push('image', 'video');
-        sites.push('musechat');
-      }
+      if (cfg.runChatgpt && activeOf('chatgpt') < concFor('chatgpt'))
+        { kinds.push('image', 'text', 'recover'); sites.push('chatgpt'); }
       // The Vids worker creates its own fresh document per job, so it can claim video jobs without a
       // doc tab already being open. Serial: only claim its site while it has a free slot.
       if (cfg.runVids && activeOf('vids') < concFor('vids')) sites.push('googlevids');
       // Muse Chat: unlimited tabs, one tab per command — always room for its own site.
-      if (cfg.runMuseChat) sites.push('musechat');
-      if (sites.length) kinds.push('video');
+      if (cfg.runMuseChat) { sites.push('musechat'); kinds.push('image', 'video', 'recover'); }
+      if (cfg.runVids) kinds.push('video');
       if (!kinds.length) break;
 
       let job = null,

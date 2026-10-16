@@ -9,13 +9,16 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import {
+  LEAD_SHORT,
   TAKE_MAX,
   TAKE_MIN,
   activityFromPcm,
   alignLines,
   groupLines,
   guessLang,
+  leadEach,
   muxTake,
+  omniPrompt,
   refineTakes,
   separateVocals,
 } from './lib/lipsync.mjs';
@@ -181,6 +184,93 @@ assert.ok(cuts[0].clipEnd <= 2.45 + 1e-9, 'never into the take after it');
 cuts = refineTakes([{ start: 1.0, end: 4.0, padTo: 5, max: 3.2 }], act);
 near(cuts[0].clipEnd - cuts[0].clipStart, 3.2, 0.021, 'never longer than max');
 
+// --- Unit: a short single line → an 8–10 s reference clip (lead-in + lead-out) -------------------
+// leadEach centres the voice in an 8–10 s clip, 2 s a side by default; 0 once the voice is long.
+assert.equal(leadEach(6), 2, 'a 6 s line → 2 s + 2 s = a 10 s clip');
+assert.equal(leadEach(4), 2, 'a 4 s line → 2 s + 2 s = an 8 s clip (the floor)');
+assert.equal(leadEach(3), 2.5, 'a 3 s line → 2.5 s a side to reach the 8 s floor');
+assert.equal(leadEach(2), 3, 'a 2 s line → 3 s a side to reach the 8 s floor');
+assert.equal(leadEach(LEAD_SHORT + 0.5), 0, 'a line past LEAD_SHORT asks for no lead');
+assert.equal(leadEach(8), 0);
+// A real voiced span with generous silence around it: the cut grows a lead-in before the first word
+// and a lead-out after the last — into the silence only, bounded by lo / hi (the neighbour take).
+const makeAct = (secs, spans) => {
+  const buf = Buffer.alloc(secs * RATE * 2);
+  for (let i = 0; i < secs * RATE; i++) {
+    const t = i / RATE;
+    const on = spans.some(([a, b]) => t >= a && t < b);
+    const v = on ? 0.3 * Math.sin(2 * Math.PI * 220 * t) : 0.0005 * Math.sin(2 * Math.PI * 50 * t);
+    buf.writeInt16LE(Math.round(v * 32767), i * 2);
+  }
+  return activityFromPcm(buf, RATE);
+};
+// A 6 s line (2–8 s) in a 14 s track → 2 s lead-in + 2 s lead-out = a 10 s clip, voice centred.
+const act6 = makeAct(14, [[2.0, 8.0]]);
+let lc = refineTakes(
+  [{ start: 2.0, end: 8.0, leadIn: 2, leadOut: 2, padTo: TAKE_MIN, max: TAKE_MAX, lo: 0, hi: 14 }],
+  act6,
+)[0];
+near(lc.lsStart, 2.0, 0.021, 'voice starts at 2 s');
+near(lc.lsEnd, 8.0, 0.021, 'voice ends at 8 s');
+near(lc.clipStart, 0.0, 0.03, '2 s lead-in before the first word');
+near(lc.clipEnd, 10.0, 0.03, '2 s lead-out after the last word');
+near(lc.clipEnd - lc.clipStart, 10, 0.03, 'a 10 s reference clip');
+// A 4 s line (3–7 s) in a 12 s track → 2 s + 2 s = an 8 s clip (the floor).
+const act4 = makeAct(12, [[3.0, 7.0]]);
+lc = refineTakes(
+  [{ start: 3.0, end: 7.0, leadIn: 2, leadOut: 2, padTo: TAKE_MIN, max: TAKE_MAX, lo: 0, hi: 12 }],
+  act4,
+)[0];
+near(lc.clipStart, 1.0, 0.03, '2 s lead-in');
+near(lc.clipEnd, 9.0, 0.03, '2 s lead-out');
+// The lead only grows into real silence: a near neighbour (lo / hi) keeps it shorter, never cutting
+// into another take's voice.
+lc = refineTakes(
+  [{ start: 3.0, end: 7.0, leadIn: 2, leadOut: 2, padTo: TAKE_MIN, max: TAKE_MAX, lo: 2.0, hi: 7.8 }],
+  act4,
+)[0];
+assert.ok(lc.clipStart >= 2.0 - 1e-9, 'lead-in never past lo (the neighbour take)');
+assert.ok(lc.clipEnd <= 7.8 + 1e-9, 'lead-out never past hi');
+// No lead asked for (merged / full-length takes): only the small PRE/POST handles, cut unchanged.
+lc = refineTakes([{ start: 3.0, end: 7.0, padTo: 0, max: TAKE_MAX, lo: 0, hi: 12 }], act4)[0];
+assert.ok(lc.clipStart > 2.6 && lc.clipEnd < 7.4, 'no lead → only the small handles');
+// The lead-out runs THROUGH the singer's own sustain (voice right after the last word), not only
+// silence — that held note is the "ngân/nhả". A 4 s line (words 3–7 s) with the voice sustaining to
+// 9 s still gets its lead-out, bounded by hi; the silence-only handles alone would stop at 7 s.
+const actSustain = makeAct(12, [[3.0, 9.0]]); // voiced 3–9: words to ~7, the note rings on to 9
+lc = refineTakes(
+  [{ start: 3.0, end: 7.0, leadIn: 2, leadOut: 2, padTo: TAKE_MIN, max: TAKE_MAX, lo: 0, hi: 9.5 }],
+  actSustain,
+)[0];
+near(lc.lsEnd, 7.0, 0.021, 'the words still end at 7 s (not snapped to the sustain tail)');
+assert.ok(lc.clipEnd >= 8.9 - 1e-9, 'the lead-out grows through the sustain to hi: ' + lc.clipEnd);
+
+// --- Unit: omniPrompt spells out the lead-in / lead-out timeline for a widened clip -------------
+const leadPrompt = omniPrompt({
+  clipStart: 0,
+  clipEnd: 10,
+  lsStart: 2,
+  lsEnd: 8,
+  lsLines: [{ at: 2.0, lyric: 'The river carries us home', emotion: 'quiet hope' }],
+});
+assert.match(leadPrompt, /10\.0s reference clip and the singing does NOT fill it/);
+assert.match(leadPrompt, /0\.0–2\.0s \(LEAD-IN, before any singing\)/);
+assert.match(leadPrompt, /draw a visible breath IN/);
+assert.match(leadPrompt, /8\.0–10\.0s \(LEAD-OUT, after the last word\)/);
+assert.match(leadPrompt, /sustain and let the final note ring out/);
+// A full-length take (the singing fills the clip) carries no lead timeline.
+const fullPrompt = omniPrompt({
+  clipStart: 0,
+  clipEnd: 8,
+  lsStart: 0.15,
+  lsEnd: 7.7,
+  lsLines: [
+    { at: 0.15, lyric: 'a', emotion: 'x' },
+    { at: 4, lyric: 'b', emotion: 'y' },
+  ],
+});
+assert.ok(!/LEAD-IN|reference clip/.test(fullPrompt), 'a full take has no lead timeline');
+
 // --- Unit: the Omni Flash request ----------------------------------------------------------------
 const omni = { model: 'Omni-Flash', aspectRatio: '16:9' };
 let req = buildRequest('video', omni, 'sing', [], 1, 'data:video/mp4;base64,AAAA');
@@ -270,10 +360,12 @@ let aligned = false;
 let spoken = null;
 const spokenAt = [];
 const SPOKEN = [
+  // Two pairs of close lines: within each pair the gap is small (< GAP_MAX, so they merge
+  // into one take); between the pairs the gap is large (> GAP_MAX, so a take never bridges them).
   { text: 'The river carries us home tonight.', at: 1.5 },
-  { text: 'And every light is shining for you.', at: 6.5 },
+  { text: 'And every light is shining for you.', at: 5.0 },
   { text: 'We walk the quiet road again.', at: 12 },
-  { text: 'And morning finds us singing.', at: 17.5 },
+  { text: 'And morning finds us singing.', at: 15.5 },
 ];
 const SPOKEN_SECS = 22;
 if (canAlign) {
@@ -636,7 +728,15 @@ try {
     assert.match(t1.resolvedPrompts.video, /The 2 lines of this take, timed from its first frame/);
     assert.match(t1.resolvedPrompts.video, /\d\.\ds: "Uno dos tres".*\d\.\ds: "cuatro cinco"/);
     assert.match(t1.resolvedPrompts.video, /ONE continuous unbroken take from ONE camera/);
-    assert.match(t1.resolvedPrompts.video, /camera: slow push-in\./);
+    // first take's camera (rotation index 0) is a still-safe push-in, with moving stage lighting
+    assert.match(t1.resolvedPrompts.video, /Camera: steady cinematic push-in with a subtle handheld sway,/);
+    assert.match(t1.resolvedPrompts.video, /Dynamic, MOVING stage lighting/);
+    assert.match(t1.resolvedPrompts.video, /precise lip-sync|Precise lip-sync/);
+    assert.match(t1.resolvedPrompts.video, /WHOLE BODY performs/, 'không còn đơ thân');
+    assert.match(t1.resolvedPrompts.video, /BACKGROUND alive/, 'hậu cảnh động');
+    assert.match(t1.resolvedPrompts.video, /leans and tilts/, 'thân nghiêng/lắc');
+    assert.match(t1.resolvedPrompts.video, /HANDS and ARMS move freely and LIFT/, 'giơ tay khi nhấn nhá');
+    assert.match(t1.resolvedPrompts.video, /glances straight into the camera/, 'liếc nhìn thẳng camera');
     assert.ok(!/Reference subjects/.test(t1.resolvedPrompts.video), 'no image list: no images go');
     assert.match(
       t1.resolvedPrompts.image,
@@ -711,6 +811,40 @@ try {
     assert.equal(clip.start, take.clipStart, 'the clip carries the song time it belongs at');
     near(clip.duration, take.clipEnd - take.clipStart, 0.001, 'and its length');
     assert.equal(clip.outdated, false);
+
+    // Google Vids as the lip-sync video source: the take runs video-to-video through the extension's
+    // Edit tab, so its job is a bare worker job (site 'googlevids', no inline Seedvis payload) that
+    // carries the SAME source video (keyframe + vocal) by url for the extension to upload, plus the
+    // Omni lip-sync prompt and no reference images.
+    await api('/api/node', 'PATCH', {
+      id: t1.id,
+      gvids: { video: true },
+      seedvis: { video: false },
+    });
+    r = await api('/api/jobs', 'POST', { nodeId: t1.id, kind: 'video' });
+    assert.equal(r.status, 201, JSON.stringify(r.data));
+    const gj = r.data.job;
+    assert.equal(gj.payload.site, 'googlevids', 'claimed by the Google Vids worker');
+    assert.ok(!gj.payload.seedvis && !gj.payload.orbit, 'a bare worker job, nothing sent inline');
+    assert.match(
+      gj.payload.inputVideo.url,
+      /^\/media\/[a-f0-9-]+\.mp4$/,
+      'the source video to upload, by url',
+    );
+    assert.match(gj.payload.inputVideo.id, /^[a-f0-9-]+\.mp4$/);
+    assert.match(gj.payload.prompt, /"Uno dos tres"/, 'the Omni lip-sync prompt');
+    assert.deepEqual(gj.payload.references, [], 'no reference images — the video is the input');
+    // the worker can fetch that source video over /media (same bytes as the Omni source)
+    const gsrc = await fetch(`http://127.0.0.1:${PORT}` + gj.payload.inputVideo.url);
+    assert.equal(gsrc.status, 200);
+    assert.equal(gsrc.headers.get('content-type'), 'video/mp4');
+    // clean up: cancel the queued job (no extension here) and put the take back on Omni for the rest
+    await api('/api/jobs/cancel', 'POST', { id: gj.id });
+    await api('/api/node', 'PATCH', {
+      id: t1.id,
+      gvids: { video: false },
+      seedvis: { video: { model: 'Omni-Flash', aspectRatio: '16:9', upscale: null } },
+    });
 
     // Re-reading keeps the takes (keyframe + clip), no duplicates.
     r = await api('/api/music/lipsync', 'POST', { id });
@@ -990,8 +1124,9 @@ try {
       near(parseTime(gpuRows[1].Start), spokenAt[1], 0.3, 'GPU time in the CSV');
       assert.equal(gpuRows[1].CSV_Start, '00:08.000');
       assert.ok(Number(gpuRows[1].Shift_s) < -1, 'the shift from the CSV');
-      // … and the lip-sync takes cut on those same readings: the four lines merged into two windows
-      // of 7–10 s, each one shot size and one keyframe, each line timed inside its take.
+      // … and the lip-sync takes cut on those same readings: the four lines merged into two short
+      // windows (two lines each), then widened with a lead-in / lead-out into 8–10 s reference clips
+      // — one shot size and one keyframe each, every line timed inside its take.
       const tk = im.data.importSummary.takes;
       assert.equal(tk.takes, 2, JSON.stringify(tk));
       assert.equal(tk.created, 2);
@@ -1031,11 +1166,12 @@ try {
           takes2[0].clipEnd >= takes2[0].lsLines[1].end,
         'the take covers both of its lines',
       );
+      // These short two-line takes (≈5.5 s of voice) are widened into 8–10 s reference clips: a
+      // lead-in holds the first line off the first frame, and a lead-out follows the last line.
       for (const t of takes2) {
-        assert.ok(
-          t.lsLines[0].at >= 0 && t.lsLines[0].at < 1,
-          'the first line opens the clip, right after its pre-roll: ' + t.lsLines[0].at,
-        );
+        assert.ok(t.headLead >= 0.8, 'a lead-in before the first word: ' + t.headLead);
+        assert.ok(t.tailLead >= 0.8, 'a lead-out after the last word: ' + t.tailLead);
+        near(t.lsLines[0].at, t.headLead, 0.05, 'the first line opens right after the lead-in');
         assert.ok(t.lsLines[1].at > t.lsLines[0].at, 'the second line comes later in the clip');
         near(
           t.clipStart + t.lsLines[1].at,
@@ -1044,19 +1180,27 @@ try {
           'each line is timed from the clip start',
         );
       }
+      // The widened clip is spelled out in the Omni prompt as a lead-in / sing / lead-out timeline.
+      assert.match(takes2[0].videoPrompt, /reference clip and the singing does NOT fill it/);
+      assert.match(takes2[0].videoPrompt, /LEAD-IN, before any singing/);
+      assert.match(takes2[0].videoPrompt, /LEAD-OUT, after the last word/);
       // Take 2 opens on the AUDIENCE row 006, but luồng B never borrows a coverage row's framing or
-      // feeling: the tool gives it one frontal shot size (rotation: take 2 → CU), eye level, and the
-      // feeling of its own SINGER line (008), never the audience's "recognition".
+      // feeling: the tool gives it one frontal shot size (rotation: take 2 → CU), a frontal angle
+      // (rotation index 1), and the feeling of its own SINGER line (008), never the audience's.
       assert.equal(takes2[1].lsLines[0].key, '006');
       assert.equal(takes2[1].subject, 'Singer');
       assert.equal(takes2[1].shotSize, 'CU');
-      assert.equal(takes2[1].angle, 'eye level');
+      assert.equal(takes2[1].angle, 'eye level, slightly off-center');
       assert.equal(
         takes2[1].parts[0].location,
         '',
         'wired to the main stage, not the coverage set',
       );
-      assert.equal(takes2[1].lsNote, '', 'the singer rows carry a delivery: nothing to warn about');
+      assert.match(
+        takes2[1].lsNote,
+        /Clip tham chiếu/,
+        'the panel explains the widened reference clip (lead-in + sing + lead-out)',
+      );
       assert.equal(takes2[1].parts.length, 1, 'one framing, one keyframe');
       // the keyframe shows the SINGER's feeling (row 008), not the audience row's
       assert.match(
@@ -1069,8 +1213,8 @@ try {
         'never the audience row’s emotion on the singer’s keyframe',
       );
       // Omni gets every line with its own feeling AND delivery (how it is sung), and is told the
-      // whole take is one unbroken shot; a still source cannot orbit, so take 1's "slow push-in"
-      // stays and take 2's "locked" stays.
+      // whole take is one unbroken shot. Camera moves rotate by take index but stay still-safe (a
+      // single source frame cannot orbit/dolly): take 1 = push-in, take 2 = pull-out.
       assert.match(
         takes2[0].videoPrompt,
         /\d\.\ds: "The river carries us home tonight\." — feeling and delivery: quiet hope — soft eyes, small smile; gentle, close to the mic/,
@@ -1080,8 +1224,11 @@ try {
         /\d\.\ds: "And every light is shining for you\." — feeling and delivery: open joy — chin lifted, eyes bright; full voice/,
       );
       assert.match(takes2[0].videoPrompt, /ONE continuous unbroken take from ONE camera/);
-      assert.match(takes2[0].videoPrompt, /camera: slow push-in\./);
-      assert.match(takes2[1].videoPrompt, /camera: slow push-in\./);
+      assert.match(takes2[0].videoPrompt, /Camera: steady cinematic push-in with a subtle handheld sway,/);
+      assert.match(takes2[1].videoPrompt, /Camera: smooth pull-out with a gentle drift,/);
+      // every rotated move must be one a still source can hold — never an orbit or dolly
+      for (const tk of takes2)
+        assert.ok(!/orbit|dolly|tracking shot|crane/i.test(tk.videoPrompt), 'still-safe camera only');
       // A re-cut on the same vocal and the same storyboard changes nothing.
       const takeSig = t =>
         JSON.stringify([

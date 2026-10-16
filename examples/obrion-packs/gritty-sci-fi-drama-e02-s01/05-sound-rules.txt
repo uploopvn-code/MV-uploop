@@ -1,0 +1,19 @@
+SOUND RULES — E02-S01 · TẤM THẺ TITAN
+
+Dialogue
+- Dùng nguyên văn lời thoại trong 01-script.txt, không thêm câu giải thích.
+- Ken: low / clipped / controlled; Ami: restrained whisper. “Giấu nó đi” gần như không thành tiếng nhưng vẫn rõ chữ.
+- Chừa khoảng lặng sau câu hỏi của Ken và trước câu cuối.
+
+Ambience
+- Nền xuyên suốt: gió sa mạc qua kim loại + hum điện nhẹ của đèn khẩn cấp.
+- Động cơ tuần tra ở xa lúc đầu, nhỏ dần. Không biến thành âm thanh chiến đấu gần.
+- Đèn tắt phụt là sự kiện âm thanh nhỏ: hum dừng, sau đó khoảng trống nghe rõ hơn.
+
+Foley
+- Thẻ titanium cọ đầu ngón khi Ami cầm; tiếng vải/túi rất nhẹ khi cô cất nó.
+- Cửa Ken khép: kim loại mềm, không slam.
+- Cuối cảnh: một tiếng kim loại va rất xa ở hành lang; không xác định nguồn và không thêm tiếng quái vật/người.
+
+Music
+- Không nhạc nền trong cảnh. Cắt đen có thể mở nhạc ở cảnh tiếp theo, nhưng shot JSON của cảnh này không tạo score.

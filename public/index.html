@@ -9,211 +9,463 @@
   <body>
     <aside class="rail">
       <div class="brand">M<span>V</span></div>
-      <button class="nav active" data-view="studio">▦<span>Studio</span></button
-      ><button class="nav" data-view="queue">◷<span>Hàng đợi</span><i id="jobCount">0</i></button
-      ><button class="nav" data-view="gallery">🎬<span>Video</span><i id="videoCount">0</i></button
-      ><button class="nav" data-view="director">✦<span>Đạo diễn</span></button
-      ><button class="nav" data-view="connect">↗<span>Kết nối web</span></button>
-      <div class="rail-bottom"><span class="dot"></span> Chạy trên máy bạn</div>
+      <button class="nav active" data-view="studio">
+        ▦<span data-i18n="nav.production">Production Studio</span></button
+      ><button class="nav" data-view="queue">
+        ◷<span data-i18n="nav.queue">Render Queue · Hàng đợi</span><i id="jobCount">0</i></button
+      ><button class="nav" data-view="gallery">
+        🎬<span data-i18n="nav.deliverables">Deliverables · Video</span
+        ><i id="videoCount">0</i></button
+      ><button class="nav" data-view="director">
+        ✦<span data-i18n="nav.director">Director · Đạo diễn</span></button
+      ><button class="nav" data-view="connect">
+        ↗<span data-i18n="nav.workers">Web Workers · Kết nối</span>
+      </button>
+      <div class="rail-bottom">
+        <span class="dot"></span> <span data-i18n="shell.local">Chạy trên máy bạn</span>
+      </div>
     </aside>
     <main>
       <header>
         <div>
           <div class="eyebrow">WORKSPACE / LIVE CONCERT</div>
           <h1 id="projectName">Live Concert đầu tiên</h1>
-          <p id="saveLocation" class="save-location" title="Thư mục lưu project trên máy bạn"></p>
+          <p
+            id="saveLocation"
+            class="save-location"
+            data-i18n-title="shell.saveLocation"
+            title="Thư mục lưu project trên máy bạn"
+          ></p>
         </div>
         <div class="header-actions">
-          <select id="projectSelect" class="button" aria-label="Chọn project"></select
-          ><button class="button" id="newProject">＋ Project</button
+          <select
+            id="projectSelect"
+            class="button"
+            data-i18n-aria="header.projectSelect"
+            aria-label="Chọn project"
+          ></select
+          ><select
+            id="languageSelect"
+            class="button"
+            data-i18n-aria="header.languageSelect"
+            aria-label="Language"
+          >
+            <option value="vi">VI</option>
+            <option value="en">EN</option>
+            <option value="zh">中文</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option></select
+          ><button
+            class="button"
+            id="openGuide"
+            title="Hướng dẫn sử dụng: đi từ cột START tới video cuối"
+          >
+            ？ Hướng dẫn</button
+          ><button class="button" id="newProject" data-i18n="header.newProject">＋ Project</button
           ><button
             class="button"
             id="openWindow"
+            data-i18n-title="header.openWindowTitle"
             title="Mở một project khác trong cửa sổ riêng để làm song song"
           >
-            ⧉ Cửa sổ mới</button
+            <span data-i18n="header.openWindow">⧉ Cửa sổ mới</span></button
           ><button
             class="button"
             id="backupProject"
+            data-i18n-title="header.backupTitle"
             title="Lưu project này ra file .mvproj.json để sao lưu"
           >
-            💾 Backup</button
-          ><label class="button" title="Nhập project từ file backup .mvproj.json"
-            >📂 Nhập<input
+            <span data-i18n="header.backup">💾 Backup</span></button
+          ><label
+            class="button"
+            data-i18n-title="header.importTitle"
+            title="Nhập project từ file backup .mvproj.json"
+            ><span data-i18n="header.import">📂 Nhập</span
+            ><input
               type="file"
               id="importProject"
               accept=".json,.mvproj.json,application/json"
               hidden /></label
-          ><span id="workerBadge" class="badge">Chưa nối web worker</span
-          ><button class="button" id="projectSettings">⚙ Project</button
-          ><button class="button" id="export">↓ Xuất prompt</button>
+          ><span id="workerBadge" class="badge" data-i18n="header.workerDisconnected"
+            >Chưa nối web worker</span
+          ><button class="button" id="projectSettings" data-i18n="header.settings">⚙ Project</button
+          ><button class="button" id="export" data-i18n="header.exportPrompt">↓ Xuất prompt</button
+          ><button class="button" id="packageAll" data-i18n="header.package">📦 Đóng gói</button>
         </div>
       </header>
       <section id="studio" class="view">
+        <nav
+          class="workspace-tabs"
+          data-i18n-aria="workspace.aria"
+          aria-label="Production workspaces"
+        >
+          <button class="workspace-tab active" data-workspace="shots" data-i18n="workspace.shots">
+            Shots
+          </button>
+          <button class="workspace-tab" data-workspace="assets" data-i18n="workspace.assets">
+            Assets
+          </button>
+          <button class="workspace-tab" data-workspace="timeline" data-i18n="workspace.timeline">
+            Timeline
+          </button>
+          <button class="workspace-tab" data-workspace="queue" data-i18n="workspace.queue">
+            Render Queue
+          </button>
+          <button
+            class="workspace-tab"
+            data-workspace="deliverables"
+            data-i18n="workspace.deliverables"
+          >
+            Deliverables
+          </button>
+        </nav>
         <div class="graph-area" id="graphArea">
           <div class="canvas-topbar">
             <div class="canvas-context">
-              <span class="canvas-kicker">WORKFLOW / CANVAS</span>
+              <span class="canvas-kicker">PRODUCTION / SHOT GRAPH</span>
               <strong id="canvasProjectName">Live Concert đầu tiên</strong>
-              <span class="canvas-state" id="canvasState"><i class="canvas-state-dot"></i> Sẵn sàng</span>
+              <span class="canvas-state" id="canvasState"
+                ><i class="canvas-state-dot"></i>
+                <span data-i18n="canvas.ready">Sẵn sàng</span></span
+              >
             </div>
             <div class="canvas-top-actions">
-              <button id="toolsToggle" class="canvas-tool-button" type="button" aria-expanded="false" aria-controls="graphSide">
-                <span>☷</span> Công cụ
+              <button
+                id="toolsToggle"
+                class="canvas-tool-button"
+                type="button"
+                aria-expanded="false"
+                aria-controls="graphSide"
+              >
+                <span>☷</span> <span data-i18n="canvas.tools">Công cụ</span>
               </button>
-              <button id="fullscreenToggle" class="canvas-tool-button" type="button">⛶ Toàn màn hình</button>
+              <button
+                id="assistantToggle"
+                class="canvas-tool-button"
+                type="button"
+                aria-expanded="false"
+                aria-controls="graphSide"
+                data-i18n-aria="assistant.title"
+                aria-label="Trợ lý đạo diễn"
+              >
+                <span>🎬</span> <span data-i18n="assistant.title">Trợ lý đạo diễn</span>
+              </button>
+              <button
+                id="groupSelectedNodes"
+                class="canvas-tool-button canvas-group-action"
+                type="button"
+                title="Giữ Shift và kéo trên vùng trống để chọn tối đa 10 node, rồi gom thành khối thu gọn. Bấm Delete để xóa các node đã chọn."
+              >
+                ▣ Gom node <span id="groupSelectedCount">0/10</span>
+              </button>
+              <button
+                id="autoGroupNodes"
+                class="canvas-tool-button canvas-group-action"
+                type="button"
+                title="Tự xếp node theo khu vực rồi gom các cụm liền kề, tối đa 10 node mỗi Group"
+              >
+                ▦ Tự động gom
+              </button>
+              <button
+                id="fullscreenToggle"
+                class="canvas-tool-button"
+                data-i18n="canvas.fullscreen"
+                type="button"
+              >
+                ⛶ Toàn màn hình
+              </button>
             </div>
           </div>
           <div class="graph-lock" id="graphLock" hidden>
-            🔒 Hàng đợi đang chạy — workflow tạm khoá. Đợi xong hoặc bấm “Dừng” trước khi sửa.
+            🔒
+            <span
+              >Chuỗi tự động đang chạy — có thể làm tiếp ở node khác; chỉ node trong chuỗi và đầu
+              vào của nó tạm khóa.</span
+            >
           </div>
           <div class="graph-scroll"><div id="graphCanvas"></div></div>
-          <div class="canvas-dock" aria-label="Điều khiển canvas">
+          <div class="canvas-dock" data-i18n-aria="canvas.controls" aria-label="Điều khiển canvas">
             <div class="dock-group dock-project-actions">
-              <button id="addNode" class="dock-button dock-add" type="button" title="Thêm node ảnh">＋</button>
-              <span class="dock-label">Thêm node</span>
+              <button
+                id="addNode"
+                class="dock-button dock-add"
+                type="button"
+                data-i18n-title="canvas.addImageTitle"
+                title="Thêm node ảnh"
+              >
+                ＋
+              </button>
+              <span class="dock-label" data-i18n="canvas.addNode">Thêm node</span>
             </div>
             <span class="dock-divider"></span>
             <div class="dock-group dock-zoom">
-              <button id="zoomOut" class="dock-button" type="button" aria-label="Thu nhỏ">−</button>
+              <button
+                id="zoomOut"
+                class="dock-button"
+                type="button"
+                data-i18n-aria="canvas.zoomOut"
+                aria-label="Thu nhỏ"
+              >
+                −
+              </button>
               <span id="zoomValue" class="dock-zoom-value">100%</span>
-              <button id="zoomIn" class="dock-button" type="button" aria-label="Phóng to">＋</button>
+              <button
+                id="zoomIn"
+                class="dock-button"
+                type="button"
+                data-i18n-aria="canvas.zoomIn"
+                aria-label="Phóng to"
+              >
+                ＋
+              </button>
             </div>
             <span class="dock-divider"></span>
-            <button id="fitCanvas" class="dock-button dock-wide" type="button" title="Vừa khung">⌗ <span>Vừa khung</span></button>
-            <button id="arrangeZones" class="dock-button dock-wide" type="button" title="Xếp node vào các khu vực theo thứ tự">⌘ <span>Xếp khu vực</span></button>
+            <button
+              id="fitCanvas"
+              class="dock-button dock-wide"
+              type="button"
+              data-i18n-title="canvas.fitTitle"
+              title="Vừa khung"
+            >
+              ⌗ <span data-i18n="canvas.fit">Vừa khung</span>
+            </button>
+            <button
+              id="arrangeZones"
+              class="dock-button dock-wide"
+              type="button"
+              data-i18n-title="canvas.arrangeTitle"
+              title="Xếp node vào các khu vực theo thứ tự"
+            >
+              ⌘ <span data-i18n="canvas.arrange">Xếp khu vực</span>
+            </button>
           </div>
-          <aside class="graph-side" id="graphSide" aria-label="Công cụ workflow">
+          <aside
+            class="graph-side"
+            id="graphSide"
+            data-i18n-aria="sidebar.workflowTools"
+            aria-label="Công cụ workflow"
+          >
             <div class="side-head">
-              <div>
+              <div data-side-heading="tools">
                 <span class="side-kicker">WORKFLOW TOOLS</span>
-                <strong>Điều khiển sản xuất</strong>
+                <strong data-i18n="sidebar.production">Điều khiển sản xuất</strong>
               </div>
-              <button id="toolsClose" class="side-close" type="button" aria-label="Đóng công cụ">×</button>
+              <button
+                id="toolsClose"
+                class="side-close"
+                type="button"
+                data-i18n-aria="sidebar.closeTools"
+                aria-label="Đóng công cụ"
+              >
+                ×
+              </button>
             </div>
-            <div class="side-scroll">
+            <div class="side-scroll" id="toolsPanel" role="region" aria-label="Công cụ workflow">
               <div class="side-sep"></div>
-              <div class="side-title">Thêm node</div>
+              <div class="side-title" data-i18n="sidebar.addNode">Thêm node</div>
               <button
                 id="addCharacter"
                 class="button"
+                data-i18n-title="node.addCharacterTitle"
                 title="Model sheet nhân vật: chân dung + 3 góc toàn thân. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
               >
-                ＋ Nhân vật
+                <span data-i18n="node.addCharacter">＋ Nhân vật</span>
               </button>
               <button
                 id="addProp"
                 class="button"
+                data-i18n-title="node.addPropTitle"
                 title="Model sheet vật dụng: 1 góc chính + 2 góc xoay trong một ảnh. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
               >
-                ＋ Vật dụng
+                <span data-i18n="node.addProp">＋ Vật dụng</span>
               </button>
               <button
                 id="addScene"
                 class="button"
+                data-i18n-title="node.addSceneTitle"
                 title="Cảnh toàn trống người, làm gốc cho các node góc máy. Chỉ cần gõ tên và mô tả, prompt tool đặt sẵn."
               >
-                ＋ Bối cảnh
+                <span data-i18n="node.addScene">＋ Bối cảnh</span>
               </button>
               <button
                 id="addStage"
                 class="button"
+                data-i18n-title="node.addStageTitle"
                 title="Sân khấu 3D: ghim chỗ đứng và hướng mặt của từng người một lần. Nối node này vào các shot (hoặc vào bối cảnh của chúng) — chúng tự nhận vị trí, cỡ cảnh và góc máy tool tự tính."
               >
-                ＋ 🧍 Sân khấu 3D
+                <span data-i18n="node.addStage">＋ 🧍 Sân khấu 3D</span>
               </button>
               <button
                 id="addWardrobe"
                 class="button"
+                data-i18n-title="node.addWardrobeTitle"
                 title="Một bộ trang phục + vật dụng của một nhân vật cho một bối cảnh. Mở node nhân vật để thêm bộ đã nối sẵn."
               >
-                ＋ Trang phục
+                <span data-i18n="node.addWardrobe">＋ Trang phục</span>
               </button>
-              <button id="addStyle" class="button">＋ Style</button>
-              <button id="addCamera" class="button">＋ Máy quay</button>
+              <button id="addStyle" class="button" data-i18n="node.addStyle">＋ Style</button>
+              <button id="addCamera" class="button" data-i18n="node.addCamera">＋ Máy quay</button>
               <button
                 id="addAudio"
                 class="button"
+                data-i18n-title="node.addAudioTitle"
                 title="Node âm thanh: nhạc nền + tiếng hiện trường, chèn vào prompt của mọi shot nối ra"
               >
-                ＋ Âm thanh
+                <span data-i18n="node.addAudio">＋ Âm thanh</span>
+              </button>
+              <button
+                id="addScript"
+                class="button"
+                title="Node kịch bản (SCRIPT): nhập ý tưởng, xưởng viết truyện → bảng shot → blueprint JSON, tự QC bằng validator của tool rồi dựng graph"
+              >
+                <span>＋ Kịch bản (SCRIPT)</span>
               </button>
               <button
                 id="addMusic"
                 class="button"
+                data-i18n-title="node.addMusicTitle"
                 title="Node nhạc (MUSIC): dán link YouTube hoặc tải file nhạc, tool phân tích cấu trúc / thời lượng / nhịp / số shot cho storyboard"
               >
-                ＋ Nhạc (MUSIC)
+                <span data-i18n="node.addMusic">＋ Nhạc (MUSIC)</span>
               </button>
               <div class="side-sep"></div>
-              <div class="side-title">Tạo ảnh nhanh theo khu</div>
+              <div class="side-title" data-i18n="sidebar.quickImages">Tạo ảnh nhanh theo khu</div>
               <label
-                >Khu vực<select id="imageZone" aria-label="Khu vực tạo ảnh">
-                  <option value="character">① Nhân vật</option>
-                  <option value="wardrobe">② Trang phục & vật dụng</option>
-                  <option value="design">③ Bối cảnh</option>
-                  <option value="production">⑥ Khung hình luồng A (phủ cảnh)</option>
-                  <option value="lipsync">⑪ Khung take luồng B (hát nhép)</option>
+                >Production Area<select
+                  id="imageZone"
+                  data-i18n-aria="render.videoAreaLabel"
+                  aria-label="Production area"
+                >
+                  <option value="character" data-i18n="zone.character">
+                    ① Characters · Nhân vật
+                  </option>
+                  <option value="wardrobe" data-i18n="zone.wardrobe">
+                    ② Wardrobe & Props · Trang phục & Vật dụng
+                  </option>
+                  <option value="design" data-i18n="zone.design">
+                    ③ Locations & Sets · Bối cảnh
+                  </option>
+                  <option value="production" data-i18n="zone.production">
+                    ⑥ Khung hình luồng A (phủ cảnh)
+                  </option>
+                  <option value="lipsync" data-i18n="zone.lipsync">
+                    ⑪ Khung take luồng B (hát nhép)
+                  </option>
                 </select></label
               >
-              <button id="autoImageStart" class="button primary">▶ Tạo ảnh khu vực</button>
+              <button id="autoImageStart" class="button primary" data-i18n="render.createImages">
+                ▶ Tạo ảnh khu vực
+              </button>
               <p id="autoImageStatus" class="field-hint"></p>
               <div class="side-sep"></div>
-              <div class="side-title">Tạo video nhanh theo khu</div>
+              <div class="side-title" data-i18n="sidebar.quickVideos">Tạo video nhanh theo khu</div>
               <label
-                >Khu vực<select id="videoZone" aria-label="Khu vực tạo video">
-                  <option value="production">⑥ Sản xuất (phủ cảnh)</option>
-                  <option value="merged">⑦ Phân cảnh ghép</option>
-                  <option value="lipsync">⑪ Hát nhép (lip-sync)</option>
+                ><span data-i18n="render.videoAreaLabel">Production Area</span
+                ><select
+                  id="videoZone"
+                  data-i18n-aria="render.videoAreaLabel"
+                  aria-label="Production Area"
+                >
+                  <option value="production" data-i18n="zone.productionVideo">
+                    ⑥ Production · Sản xuất
+                  </option>
+                  <option value="merged" data-i18n="zone.mergedVideo">
+                    ⑦ Merged Scenes · Phân cảnh ghép
+                  </option>
+                  <option value="lipsync" data-i18n="zone.lipsyncVideo">
+                    ⑪ Lip Sync · Hát nhép
+                  </option>
                 </select></label
               >
               <label
-                >Tạo bằng<select id="videoProvider" aria-label="Nguồn tạo video">
-                  <option value="">Tất cả (theo cấu hình node)</option>
+                ><span data-i18n="render.providerLabel">Tạo bằng</span
+                ><select
+                  id="videoProvider"
+                  data-i18n-aria="render.providerLabel"
+                  aria-label="Nguồn tạo video"
+                >
+                  <option value="" data-i18n="render.allNodeProviders">
+                    Tất cả (theo cấu hình node)
+                  </option>
                   <option value="seedvis">Seedvis API</option>
+                  <option value="seedane">Seedane (Dola / Muse)</option>
                   <option value="musechat">Muse Chat</option>
                   <option value="gvids">Google Vids</option>
                 </select></label
               >
-              <button id="autoVideoZoneStart" class="button primary">▶ Tạo video khu vực</button>
-              <p id="autoVideoZoneStatus" class="field-hint"></p>
-              <div class="side-sep"></div>
-              <div class="side-title">Tạo tự động</div>
               <label
-                >Chạy đến<select id="autoTarget" aria-label="Node đích chạy tự động">
-                  <option value="">Toàn bộ workflow</option>
-                </select></label
-              >
-              <button id="autoStart" class="button primary">▶ Tạo ảnh (chuỗi)</button>
-              <button id="autoStop" class="button">Dừng tạo ảnh</button>
-              <label
-                >Số phiên bản video<select
+                ><span data-i18n="render.videoVersionsLabel">Tổng số phiên bản mục tiêu</span
+                ><select
                   id="videoVersions"
-                  aria-label="Số phiên bản video mỗi node"
+                  data-i18n-aria="render.videoVersionsLabel"
+                  aria-label="Tổng số phiên bản video mục tiêu mỗi node"
                 >
                   <option value="1">1</option>
                   <option value="2">2</option>
                   <option value="3">3</option>
                   <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
                 </select></label
               >
-              <button id="autoVideoStart" class="button primary">▶ Tạo video</button>
-              <button id="autoVideoStop" class="button">Dừng tạo video</button>
-              <button id="autoVideoRetry" class="button" hidden>↻ Chạy lại video lỗi</button>
-              <button id="autoVideoMissing" class="button" hidden>✚ Tạo video còn thiếu</button>
+              <p class="field-hint" data-i18n="render.targetVersionsHelp">
+                Chỉ tạo phần còn thiếu để mỗi node đạt tổng số phiên bản đã chọn.
+              </p>
+              <button
+                id="autoVideoZoneStart"
+                class="button primary"
+                data-i18n="render.createVideos"
+              >
+                ▶ Tạo video khu vực
+              </button>
+              <p id="autoVideoZoneStatus" class="field-hint"></p>
+              <div class="side-sep"></div>
+              <div class="side-title" data-i18n="sidebar.automation">Tạo tự động</div>
+              <label
+                ><span data-i18n="render.runUntilLabel">Chạy đến</span
+                ><select
+                  id="autoTarget"
+                  data-i18n-aria="render.runUntilLabel"
+                  aria-label="Node đích chạy tự động"
+                >
+                  <option value="" data-i18n="render.wholeWorkflow">Toàn bộ workflow</option>
+                </select></label
+              >
+              <button id="autoStart" class="button primary" data-i18n="render.startImageChain">
+                ▶ Tạo ảnh (chuỗi)
+              </button>
+              <button id="autoStop" class="button" data-i18n="render.stopImages">
+                Dừng tạo ảnh
+              </button>
+              <button id="autoVideoStart" class="button primary" data-i18n="render.startVideos">
+                ▶ Tạo video
+              </button>
+              <button id="autoVideoStop" class="button" data-i18n="render.stopVideos">
+                Dừng tạo video
+              </button>
+              <button id="autoVideoRetry" class="button" data-i18n="render.retryVideos" hidden>
+                ↻ Chạy lại video lỗi
+              </button>
+              <button id="autoVideoMissing" class="button" data-i18n="render.missingVideos" hidden>
+                ✚ Tạo video còn thiếu
+              </button>
               <button
                 id="seedanceGroups"
                 class="button"
+                data-i18n-title="render.splitSeedanceTitle"
                 title="Gộp các shot liên tiếp (nhồi tới 30 giây, có thể gồm nhiều bối cảnh) thành nhóm, mỗi nhóm một lần render Seedance với ảnh storyboard"
               >
-                🧩 Chia nhóm Seedance
+                <span data-i18n="render.splitSeedance">🧩 Chia nhóm Seedance</span>
               </button>
               <button
                 id="seedanceResplit"
                 class="button"
+                data-i18n-title="render.resplitSeedanceTitle"
                 title="Xóa các nhóm Seedance chưa render rồi chia lại toàn bộ cho đầy 30 giây (giữ nguyên nhóm đã có video)"
               >
-                ↻ Chia lại
+                <span data-i18n="render.resplitSeedance">↻ Chia lại</span>
               </button>
               <p id="autoStatus" class="field-hint"></p>
               <p id="autoVideoStatus" class="field-hint"></p>
@@ -222,48 +474,495 @@
                 >♫ <span id="songName">Thêm bài hát</span
                 ><input type="file" accept="audio/*" id="audioUpload" hidden
               /></label>
-              <button class="text-button" id="editBrief">Chỉnh mô tả chung ↗</button>
+              <button class="text-button" id="editBrief" data-i18n="project.editBrief">
+                Chỉnh mô tả chung ↗
+              </button>
               <audio id="songPlayer" controls hidden></audio>
             </div>
           </aside>
+          <aside class="assistant-dock collapsed" id="assistantDock" aria-label="Trợ lý đạo diễn">
+            <div class="assistant-dock-head">
+              <span class="director-avatar" aria-hidden="true"
+                ><span class="da-scene"
+                  ><span class="da-board"><span class="da-stripes"></span></span
+                  ><span class="da-arm"></span></span
+              ></span>
+              <div class="assistant-dock-title">
+                <span class="side-kicker">DIRECTOR ASSISTANT</span>
+                <strong data-i18n="assistant.title">Trợ lý đạo diễn</strong>
+              </div>
+              <button
+                id="assistantExpand"
+                class="side-close"
+                type="button"
+                aria-label="Phóng to Trợ lý (full tab)"
+                title="Phóng to / thu nhỏ"
+              >
+                ⤢
+              </button>
+              <button
+                id="assistantCollapse"
+                class="side-close"
+                type="button"
+                aria-label="Thu Trợ lý xuống đáy"
+                title="Thu xuống"
+              >
+                ▾
+              </button>
+            </div>
+            <div class="side-scroll assistant-scroll" id="assistantPanel">
+              <div class="assistant-chat-top">
+                <p class="assistant-intro" data-i18n="assistant.intro">
+                  Giao việc bằng ngôn ngữ tự nhiên. Trợ lý sẽ xác định node, xem trước tác động và
+                  dùng các thao tác của studio để thực hiện.
+                </p>
+                <details class="command-history" id="assistantClaudeSettings">
+                  <summary data-i18n="assistant.claudeSettings">Claude · Bộ não trợ lý</summary>
+                  <p id="assistantClaudeStatus" class="field-hint" role="status"></p>
+                  <label
+                    ><span data-i18n="assistant.claudeVia">Nguồn</span
+                    ><select id="assistantClaudeVia">
+                      <option value="claude" data-i18n="assistant.viaPlan">
+                        Gói Claude (Pro/Max) — không cần key
+                      </option>
+                      <option value="api" data-i18n="assistant.viaApi">Claude API key</option>
+                    </select></label
+                  >
+                  <label
+                    ><span data-i18n="assistant.model">Model cho tác vụ</span
+                    ><select id="assistantClaudeModelSelect">
+                      <option value="claude-sonnet-4-6">Sonnet 4.6 — mặc định, cân bằng</option>
+                      <option value="claude-opus-5-5">Opus 5.5 — mạnh nhất</option>
+                      <option value="claude-sonnet-5-5">Sonnet 5.5 — nhanh, giỏi</option>
+                      <option value="claude-haiku-5-5">Haiku 5.5 — rẻ, nhanh</option>
+                      <option value="__custom__" data-i18n="assistant.modelCustom">Khác (tự nhập)…</option>
+                    </select></label
+                  >
+                  <label
+                    >Model ID<input
+                      id="assistantClaudeModel"
+                      value="claude-sonnet-4-6"
+                      autocomplete="off"
+                  /></label>
+                  <div id="assistantClaudeApiFields">
+                  <label
+                    >API key<input
+                      id="assistantClaudeKey"
+                      type="password"
+                      autocomplete="new-password"
+                      placeholder="sk-ant-…"
+                  /></label>
+                  <label
+                    ><span data-i18n="assistant.workspaceId">Anthropic Workspace ID</span
+                    ><input id="assistantClaudeWorkspace" autocomplete="off" placeholder="wrkspc_…"
+                  /></label>
+                  <p class="field-hint" data-i18n="assistant.workspaceHelp">
+                    Chỉ cần khi API key chưa được gắn cố định vào một workspace.
+                  </p>
+                  </div>
+                  <label class="assistant-websearch">
+                    <input id="assistantClaudeWebSearch" type="checkbox" />
+                    <span data-i18n="assistant.webSearch">Cho phép web search (tra cứu web)</span>
+                  </label>
+                  <p class="field-hint" data-i18n="assistant.webSearchHelp">
+                    Trợ lý được tra cứu web khi cần dữ kiện thực tế. Mỗi lượt tìm có tính phí (qua API key) hoặc dùng gói Claude (CLI).
+                  </p>
+                  <button
+                    id="assistantClaudeSave"
+                    class="button"
+                    type="button"
+                    data-i18n="assistant.saveClaude"
+                  >
+                    Lưu cấu hình Claude
+                  </button>
+                </details>
+              </div>
+              <details class="assistant-usage" id="assistantRecipePanel" open>
+                <summary>Quy trình · <span id="assistantRecipeState">chưa chạy</span></summary>
+                <div id="assistantRecipeRun" class="assistant-usage-history"></div>
+                <div id="assistantRecipeList" class="assistant-usage-history"></div>
+              </details>
+              <details class="assistant-usage" id="assistantUsagePanel">
+                <summary>
+                  Token Claude · <span id="assistantUsageTotal">0</span> đã dùng trong project
+                </summary>
+                <div id="assistantUsageHistory" class="assistant-usage-history">
+                  Chưa có lần gọi Claude nào.
+                </div>
+              </details>
+              <details class="assistant-usage" id="assistantLearnedPanel">
+                <summary>Lệnh đã học · <span id="assistantLearnedCount">0</span></summary>
+                <div id="assistantLearnedList" class="assistant-usage-history">
+                  Chưa có lệnh sửa nào được học.
+                </div>
+              </details>
+              <details class="assistant-usage" id="assistantSkillsPanel">
+                <summary>Kỹ năng Trợ lý · <span id="assistantSkillsCount">0</span></summary>
+                <div id="assistantSkillsList" class="assistant-usage-history"></div>
+                <div id="assistantSkillEditor" hidden></div>
+                <div class="actions">
+                  <button id="assistantAddSkill" class="button" type="button">+ Thêm kỹ năng</button>
+                </div>
+                <p class="field-hint">
+                  Kỹ năng = luật Trợ lý LUÔN áp khi lập kế hoạch (vd: “luôn đổi Production sang Muse”,
+                  “prompt video dùng cú máy chậm”). Bật/tắt từng kỹ năng. Dùng chung mọi project trừ khi chọn “chỉ project này”.
+                </p>
+              </details>
+              <div
+                id="assistantConversation"
+                class="assistant-conversation"
+                role="log"
+                aria-live="polite"
+                aria-relevant="additions"
+              ></div>
+              <div id="assistantTyping" class="assistant-typing" hidden>
+                <span class="director-avatar" aria-hidden="true"
+                  ><span class="da-scene"
+                    ><span class="da-board"><span class="da-stripes"></span></span
+                    ><span class="da-arm"></span></span
+                ></span>
+                <span><i></i><i></i><i></i></span>
+                <small data-i18n="assistant.thinking">Trợ lý đang suy nghĩ…</small>
+              </div>
+              <div id="commandPreview" class="assistant-plan" hidden>
+                <strong id="commandPreviewTitle"></strong>
+                <ul id="commandPreviewItems"></ul>
+                <div class="assistant-plan-actions">
+                  <button
+                    id="commandApprove"
+                    class="button primary"
+                    type="button"
+                    data-i18n="assistant.approve"
+                  >
+                    Xác nhận thực hiện
+                  </button>
+                  <button
+                    id="commandCancel"
+                    class="button"
+                    type="button"
+                    data-i18n="assistant.cancel"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              </div>
+              <div class="assistant-composer">
+                <label for="commandInput" class="sr-only" data-i18n="assistant.requestLabel"
+                  >Bạn muốn làm gì?</label
+                >
+                <textarea
+                  id="commandInput"
+                  class="command-input assistant-input"
+                  rows="2"
+                  data-i18n-placeholder="assistant.chatPlaceholder"
+                  data-i18n-aria="command.inputAria"
+                  placeholder="Nhắn việc cho Trợ lý đạo diễn…"
+                  aria-label="Studio command"
+                ></textarea>
+                <div class="assistant-composer-actions">
+                  <span class="field-hint" data-i18n="assistant.enterHint"
+                    >Enter để gửi · Shift+Enter để xuống dòng</span
+                  >
+                  <button
+                    id="commandRun"
+                    class="button primary assistant-send"
+                    data-i18n="assistant.send"
+                  >
+                    Gửi
+                  </button>
+                </div>
+              </div>
+              <div class="assistant-chat-tools">
+                <button
+                  id="assistantRememberSkill"
+                  class="button"
+                  type="button"
+                  title="Agent tổng hợp việc vừa làm (ưng ý, thành công) thành một kỹ năng rồi lưu — xem lại trước khi lưu."
+                >
+                  📌 Nhớ việc → kỹ năng
+                </button>
+                <button
+                  id="commandQuickRun"
+                  class="button"
+                  type="button"
+                  data-i18n="assistant.quickRun"
+                >
+                  Lệnh nhanh (không AI)
+                </button>
+                <button id="commandUndo" class="button" data-i18n="command.undoButton">
+                  ↶ Undo
+                </button>
+                <button
+                  id="assistantClearChat"
+                  class="button"
+                  type="button"
+                  data-i18n="assistant.clearChat"
+                >
+                  Xóa trò chuyện
+                </button>
+              </div>
+              <p
+                id="commandResult"
+                class="field-hint assistant-command-result"
+                role="status"
+                aria-live="polite"
+              ></p>
+              <details class="assistant-help">
+                <summary data-i18n="assistant.examples">Lệnh mẫu</summary>
+                <div class="assistant-examples">
+                  <button
+                    type="button"
+                    data-command-example="summary"
+                    data-i18n="assistant.exampleSummary"
+                  >
+                    Thống kê project
+                  </button>
+                  <button
+                    type="button"
+                    data-command-example="images"
+                    data-i18n="assistant.exampleImages"
+                  >
+                    Tạo ảnh ở nhân vật
+                  </button>
+                  <button
+                    type="button"
+                    data-command-example="videos"
+                    data-i18n="assistant.exampleVideos"
+                  >
+                    Tạo video ở Production
+                  </button>
+                  <button
+                    type="button"
+                    data-command-example="provider"
+                    data-i18n="assistant.exampleProvider"
+                  >
+                    Đổi video Production sang Muse Chat
+                  </button>
+                  <button
+                    type="button"
+                    data-command-example="package"
+                    data-i18n="assistant.examplePackage"
+                  >
+                    Đóng gói tất cả dự án
+                  </button>
+                </div>
+                <p class="field-hint" data-i18n="assistant.scope">
+                  Nối graph, đổi provider, tạo ảnh/video theo khu, kiểm tra node thiếu dữ liệu,
+                  thống kê project, sắp xếp và hoàn tác các thay đổi hỗ trợ.
+                </p>
+                <details class="command-history">
+                  <summary data-i18n="command.history">Lịch sử lệnh</summary>
+                  <div id="commandHistory"></div>
+                </details>
+              </details>
+            </div>
+          </aside>
+          <button
+            class="assistant-launcher"
+            id="assistantLauncher"
+            type="button"
+            aria-label="Mở Trợ lý đạo diễn"
+          >
+            <span class="director-avatar" aria-hidden="true"
+              ><span class="da-scene"
+                ><span class="da-board"><span class="da-stripes"></span></span
+                ><span class="da-arm"></span></span
+            ></span>
+            <span class="assistant-launcher-label" data-i18n="assistant.title">Trợ lý đạo diễn</span>
+          </button>
         </div>
-        <p id="connectHint" class="field-hint">
-          Kéo dây từ Out sang In · Kéo node trong cột để sắp xếp. Muốn chuyển nhóm, kéo ngang vượt mép cột một đoạn rõ ràng · Bấm vào dây rồi bấm × (hoặc phím Delete) để xóa · Kéo nền để pan · Lăn chuột để zoom.
+        <p id="connectHint" class="field-hint" data-i18n="canvas.connectHint">
+          Kéo dây từ Out sang In · Kéo node trong cột để sắp xếp. Muốn chuyển nhóm, kéo ngang vượt
+          mép cột một đoạn rõ ràng · Giữ Shift và kéo trên chỗ trống để quét chọn tối đa 10 node,
+          rồi bấm “Nhóm đã chọn” để thu gọn · Bấm vào dây rồi bấm × (hoặc phím Delete) để xóa · Lăn
+          chuột để cuộn dọc · Shift + lăn để cuộn ngang · Ctrl + lăn để zoom.
         </p>
         <!-- Hai làn thời gian: làn A = phủ cảnh (⑥/⑧), làn B = câu hát nhép (⑪/⑫) -->
         <div id="timelineTrack"></div>
+        <div id="timelinePreview" class="timeline-preview" hidden>
+          <video id="timelinePlayer" controls playsinline preload="metadata"></video>
+          <audio id="timelinePreviewAudio" preload="metadata"></audio>
+          <div class="timeline-preview-meta">
+            <span id="timelinePreviewLabel"></span
+            ><button id="timelineStop" class="button" type="button" data-i18n="timeline.stop">
+              Dừng xem
+            </button>
+          </div>
+        </div>
       </section>
       <section id="queue" class="view" hidden>
         <div class="section-heading">
-          <h2>Hàng đợi sản xuất</h2>
-          <p>
+          <h2 data-i18n="queue.title">Render Queue · Hàng đợi render</h2>
+          <p data-i18n="queue.description">
             Mỗi lần chạy lưu riêng prompt và ảnh đầu vào. Khi worker mất kết nối, cần kiểm tra trước
             khi chạy lại.
           </p>
         </div>
+        <div class="queue-filters">
+          <input
+            id="queueSearch"
+            class="command-input"
+            data-i18n-placeholder="queue.search"
+            data-i18n-aria="queue.searchAria"
+            placeholder="Search shots, jobs, providers…"
+            aria-label="Search render queue"
+          />
+          <select
+            id="queueProvider"
+            class="button"
+            data-i18n-aria="queue.allProviders"
+            aria-label="All providers"
+          >
+            <option value="" data-i18n="queue.allProviders">All providers</option>
+            <option value="seedvis">Seedvis</option>
+            <option value="musechat">Muse Chat</option>
+            <option value="gvids">Google Vids</option>
+            <option value="orbit">Orbit</option>
+          </select>
+          <select
+            id="queueAccount"
+            class="button"
+            data-i18n-aria="queue.allAccounts"
+            aria-label="All accounts"
+          >
+            <option value="" data-i18n="queue.allAccounts">All accounts</option>
+          </select>
+          <select
+            id="queueProject"
+            class="button"
+            data-i18n-aria="queue.currentProject"
+            aria-label="Current project"
+          >
+            <option value="" data-i18n="queue.currentProject">Current project</option>
+          </select>
+          <select
+            id="queueStatus"
+            class="button"
+            data-i18n-aria="queue.allStatuses"
+            aria-label="All statuses"
+          >
+            <option value="" data-i18n="queue.allStatuses">All statuses</option>
+            <option value="queued" data-i18n="status.queued">Queued</option>
+            <option value="running" data-i18n="status.running">Rendering</option>
+            <option value="completed" data-i18n="status.completed">Completed</option>
+            <option value="needs_review" data-i18n="status.needs_review">Needs Review</option>
+            <option value="failed" data-i18n="status.failed">Failed</option>
+          </select>
+          <div class="queue-controls">
+            <span data-i18n="queue.label">Queue:</span
+            ><button class="button queue-pause" data-group="musechat" data-i18n="queue.pauseMuse">
+              Pause Muse</button
+            ><button class="button queue-resume" data-group="musechat" data-i18n="queue.resumeMuse">
+              Resume Muse</button
+            ><button class="button queue-retry" data-group="musechat" data-i18n="queue.retryMuse">
+              Retry Muse</button
+            ><button class="button queue-pause" data-group="seedvis" data-i18n="queue.pauseSeedvis">
+              Pause Seedvis</button
+            ><button
+              class="button queue-resume"
+              data-group="seedvis"
+              data-i18n="queue.resumeSeedvis"
+            >
+              Resume Seedvis</button
+            ><button class="button queue-retry" data-group="seedvis" data-i18n="queue.retrySeedvis">
+              Retry Seedvis</button
+            ><button class="button queue-pause" data-group="gvids" data-i18n="queue.pauseVids">
+              Pause Vids</button
+            ><button class="button queue-resume" data-group="gvids" data-i18n="queue.resumeVids">
+              Resume Vids</button
+            ><button class="button queue-retry" data-group="gvids" data-i18n="queue.retryVids">
+              Retry Vids
+            </button>
+          </div>
+        </div>
+        <div
+          id="workerAccounts"
+          class="worker-accounts"
+          data-i18n-aria="queue.workerAccountsAria"
+          aria-label="Worker accounts"
+        ></div>
         <div id="jobs"></div>
       </section>
       <section id="gallery" class="view" hidden>
         <div class="section-heading">
-          <h2>Video đã tạo</h2>
-          <p>
+          <h2 data-i18n="gallery.title">Deliverables · Video đầu ra</h2>
+          <p data-i18n="gallery.description">
             Tất cả video gom theo node nguồn. Tick chọn nhiều bản rồi tải / xóa hàng loạt. Tên file
             tải về theo số thứ tự + tên node để nhận đúng nguồn.
           </p>
         </div>
+        <div class="queue-filters gallery-filters">
+          <input
+            id="gallerySearch"
+            class="command-input"
+            data-i18n-placeholder="gallery.search"
+            data-i18n-aria="gallery.searchAria"
+            placeholder="Search deliverables…"
+            aria-label="Search deliverables"
+          /><select
+            id="galleryProvider"
+            class="button"
+            data-i18n-aria="gallery.providerFilterAria"
+            aria-label="Filter deliverable provider"
+          >
+            <option value="" data-i18n="queue.allProviders">All providers</option>
+            <option value="seedvis">Seedvis</option>
+            <option value="musechat">Muse Chat</option>
+            <option value="gvids">Google Vids</option></select
+          ><select
+            id="galleryZone"
+            class="button"
+            data-i18n-aria="gallery.areaFilterAria"
+            aria-label="Filter deliverable area"
+          >
+            <option value="" data-i18n="gallery.allAreas">All areas</option>
+            <option value="production">Production</option>
+            <option value="lipsync">Lip Sync</option>
+            <option value="merged">Merged Scenes</option>
+          </select>
+        </div>
         <div id="galleryBar" class="gallery-bar" hidden>
-          <span id="gallerySelected">Đã chọn 0</span>
-          <button id="gallerySelectAll" class="button">Chọn tất cả</button
-          ><button id="galleryClear" class="button">Bỏ chọn</button
-          ><button id="galleryDownload" class="button primary">↓ Tải đã chọn</button
-          ><button id="galleryDelete" class="button danger">🗑 Xóa đã chọn</button>
+          <span id="gallerySelected" data-i18n-prefix="gallery.selected">Đã chọn 0</span>
+          <button
+            id="gallerySelectAll"
+            class="button"
+            data-i18n="gallery.selectAll"
+            data-i18n-aria="gallery.selectAll"
+            aria-label="Select all"
+          >
+            Chọn tất cả</button
+          ><button
+            id="galleryClear"
+            class="button"
+            data-i18n="gallery.clear"
+            data-i18n-aria="gallery.clear"
+            aria-label="Clear selection"
+          >
+            Bỏ chọn</button
+          ><button
+            id="galleryDownload"
+            class="button primary"
+            data-i18n="gallery.download"
+            data-i18n-aria="gallery.download"
+            aria-label="Download selected"
+          >
+            ↓ Tải đã chọn</button
+          ><button
+            id="galleryDelete"
+            class="button danger"
+            data-i18n="gallery.delete"
+            data-i18n-aria="gallery.delete"
+            aria-label="Delete selected"
+          >
+            🗑 Xóa đã chọn
+          </button>
         </div>
         <div id="galleryBody"></div>
       </section>
       <section id="director" class="view" hidden>
         <div class="section-heading">
-          <h2>Đạo diễn AI · từ ý tưởng đến sơ đồ</h2>
-          <p>
+          <h2 data-i18n="director.title">Đạo diễn AI · từ ý tưởng đến sơ đồ</h2>
+          <p data-i18n="director.description">
             Bốn bước tuần tự: <strong>ý tưởng → kịch bản</strong> ·
             <strong>chọn kiểu blueprint</strong> · <strong>lên blueprint</strong> ·
             <strong>dựng sơ đồ</strong>. Mỗi bước xem và sửa trước khi đi tiếp; bật "Tự động hoàn
@@ -351,6 +1050,90 @@
           <label id="agentScriptWrap" hidden
             >Kịch bản (xem, sửa rồi sang bước 3)<textarea id="agentScriptText" rows="10"></textarea>
           </label>
+        </div>
+
+        <div class="settings-panel director-step" id="obrionStudio">
+          <h3>OBRION · Xưởng kịch bản &amp; phân cảnh</h3>
+          <p class="muted">
+            Kịch bản thô → nhịp kể → camera → diễn xuất → âm thanh → prompt → kiểm tra → OTIO. Dùng
+            API key đã lưu ở Đạo diễn. Mỗi lần chạy gọi nhiều lượt AI và có thể phát sinh phí API.
+          </p>
+          <div class="actions">
+            <button class="button" id="obrionUseScript">Lấy kịch bản bước 1</button>
+            <label class="button"
+              >Nhập kịch bản .txt<input id="obrionScriptFile" type="file" accept=".txt" hidden
+            /></label>
+            <button class="button" id="obrionCheck">Kiểm tra Python</button>
+          </div>
+          <label
+            >Tên phim / phân đoạn<input id="obrionTitle" placeholder="OBRION · E02-S1"
+          /></label>
+          <label
+            >Kịch bản thô<textarea
+              id="obrionScript"
+              rows="8"
+              placeholder="Dán kịch bản đã duyệt, hành động và lời thoại…"
+            ></textarea>
+          </label>
+          <details>
+            <summary>Asset Bible &amp; quy tắc đạo diễn</summary>
+            <p class="field-hint">
+              Dùng assets hoặc characters / scenes / props; mỗi tài nguyên có key và description.
+              scene_id trùng key bối cảnh sẽ được nối vào sơ đồ. Không tự tạo URL tham chiếu hoặc
+              LoRA khi Bible chưa có.
+            </p>
+            <label class="button"
+              >Nhập Asset Bible .json<input id="obrionBibleFile" type="file" accept=".json" hidden
+            /></label>
+            <label
+              >Asset Bible (JSON)<textarea id="obrionBible" rows="7" spellcheck="false">
+{}</textarea>
+            </label>
+            <label
+              >Quy tắc camera<textarea
+                id="obrionCamera"
+                rows="3"
+                placeholder="Dán camera_rules.txt…"
+              ></textarea>
+            </label>
+            <label
+              >Quy tắc diễn xuất / FACS<textarea
+                id="obrionEmotion"
+                rows="3"
+                placeholder="Dán emotion_rules.txt…"
+              ></textarea>
+            </label>
+          </details>
+          <div class="actions">
+            <button class="button" id="obrionSave">Lưu bản nháp</button>
+            <button class="button primary" id="obrionGenerate">Phân cảnh với OBRION</button>
+          </div>
+          <p class="field-hint" id="obrionStatus" role="status" aria-live="polite"></p>
+          <pre id="obrionLogs" class="obrion-logs" hidden></pre>
+          <div id="obrionResult" hidden>
+            <p class="field-hint" id="obrionSummary"></p>
+            <label
+              >Shot JSON · xem và chỉnh sửa<textarea
+                id="obrionJson"
+                rows="14"
+                spellcheck="false"
+              ></textarea>
+            </label>
+            <div class="actions">
+              <button class="button" id="obrionValidate">Kiểm tra &amp; lưu chỉnh sửa</button>
+              <button class="button" id="obrionFeedback">Học từ bản sửa</button>
+              <button class="button" id="obrionExportJson">Tải JSON</button>
+              <button class="button" id="obrionExportOtio">Tải OTIO</button>
+              <button class="button primary" id="obrionBlueprint">
+                Chuyển sang Blueprint bước 3
+              </button>
+            </div>
+            <p class="field-hint">
+              OTIO chứa clip giữ chỗ và metadata shot, chưa có video render. “Học từ bản sửa” lưu ví
+              dụ vào bộ nhớ dùng chung; các lần chạy sau truy xuất tối đa 3 ví dụ liên quan cho mỗi
+              chuyên môn.
+            </p>
+          </div>
         </div>
 
         <!-- BƯỚC 2 — Chọn master prompt (kiểu blueprint) -->
@@ -511,6 +1294,7 @@
               <option value="seedvis">Seedvis API</option>
               <option value="web">ChatGPT (extension)</option>
               <option value="musechat">Muse chat (extension)</option>
+              <option value="seedane-muse">Seedane · Muse</option>
               <option value="orbit">Orbit (kịch bản web)</option>
             </select></label
           ><label id="defaultImageModelRow">Model ảnh<select id="defaultImageModel"></select></label
@@ -519,6 +1303,8 @@
               <option value="seedvis">Seedvis API</option>
               <option value="gvids">Google Vids (extension)</option>
               <option value="musechat">Muse chat (extension)</option>
+              <option value="seedane-dola">Seedane · Dola</option>
+              <option value="seedane-muse">Seedane · Muse</option>
               <option value="orbit">Orbit (kịch bản web)</option>
             </select></label
           ><label id="defaultVideoModelRow"
@@ -557,6 +1343,28 @@
           </p>
         </div>
         <div class="settings-panel">
+          <h3>Seedane · Dola &amp; Muse</h3>
+          <p id="seedaneStatus" class="muted">Đang kiểm tra…</p>
+          <form id="seedaneForm">
+            <label
+              >Địa chỉ API Seedane<input id="seedaneUrl" type="text" autocomplete="off"
+                placeholder="http://127.0.0.1:8787"
+            /></label>
+            <label
+              >Token<input id="seedaneToken" type="password" autocomplete="off"
+                placeholder="Dán token (Seedane → Cài đặt → API nội bộ → Copy)"
+            /></label>
+            <p class="muted">
+              Token lưu trên máy này (data/seedane-token.txt), không gửi về trình duyệt. Seedane phải
+              bật API nội bộ và cho phép IP máy này.
+            </p>
+            <button class="button primary" type="submit">Lưu</button>
+          </form>
+          <div class="actions">
+            <button id="testSeedane" class="button" type="button">Kiểm tra kết nối</button>
+          </div>
+        </div>
+        <div class="settings-panel">
           <h3>ChatGPT (extension) · tạo ảnh</h3>
           <p class="muted">
             Tạo ảnh bằng phiên ChatGPT của bạn qua extension trình duyệt (thư mục
@@ -591,13 +1399,14 @@
         <div class="settings-panel">
           <h3>Muse chat (extension) · tạo ảnh &amp; video</h3>
           <p class="muted">
-            Tạo ảnh hoặc video qua web chat muse.ai bằng phiên đăng nhập của bạn — cùng extension và cùng
-            worker token ở ô trên. Mỗi job mở một tab riêng rồi đóng.
+            Tạo ảnh hoặc video qua web chat muse.ai bằng phiên đăng nhập của bạn — cùng extension và
+            cùng worker token ở ô trên. Mỗi job mở một tab riêng rồi đóng.
           </p>
           <p class="muted">
             Trong popup extension: đăng nhập <strong>muse.ai</strong> → Bật
-            <strong>worker Muse chat</strong> → đặt node ảnh/video dùng "Muse chat (extension)", hoặc
-            đặt nguồn mặc định tương ứng ở trên. Ảnh được gắn vào node ảnh; video Muse thường khoảng 10 giây.
+            <strong>worker Muse chat</strong> → đặt node ảnh/video dùng "Muse chat (extension)",
+            hoặc đặt nguồn mặc định tương ứng ở trên. Ảnh được gắn vào node ảnh; video Muse thường
+            khoảng 10 giây.
           </p>
         </div>
         <div class="settings-panel">

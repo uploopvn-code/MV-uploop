@@ -3,6 +3,7 @@
 // wires every shot to the assets / style / camera it uses.
 import crypto from 'node:crypto';
 import { defaultNaming } from './output-config.mjs';
+import { NODE_CAP } from './lib/limits.mjs';
 import { SHOT_LIST_HEADER } from './lib/shotlist.mjs';
 
 // The master prompt the user pastes into an LLM, plus the output contract that
@@ -409,7 +410,7 @@ export function parseMusicAnalysis(input) {
 const str = (v, n = 20000) => String(v ?? '').slice(0, n);
 // One line from a Bible voice_profile — "Female, Late 30s; timbre: …; accent: …; pacing: …;
 // baseline: …" (a plain-string profile passes through). Sent with every line the character speaks.
-function voiceOf(vp) {
+export function voiceOf(vp) {
   if (!vp) return '';
   if (typeof vp !== 'object') return str(vp, 1000).trim();
   const label = {
@@ -715,19 +716,28 @@ export function buildGraph(bp) {
               : undefined,
       assetKey: key, // stable id across sequences → lets the project reuse its image
       name: str(a.name || key, 100),
-      // An item's / outfit's / location's blueprint prompt describes the object, garment or
-      // place, so it becomes the DESCRIPTION the server wraps in its own reference sheet (a
+      // A person's / item's / outfit's / location's blueprint prompt DESCRIBES the subject, so
+      // it becomes the description the server wraps in its own reference sheet (the character
+      // turnaround — one big portrait plus full-body front, side and back on one baseline — a
       // prop turnaround, a headless-mannequin outfit turnaround, or a 3-view location sheet)
-      // instead of replacing that sheet — so props, clothing and scenes always come out as the
-      // tool's clean references. A derived angle (isScene && ofKey) keeps its own prompt.
-      prompt: isItem || isWardrobe || (isScene && !ofKey) ? '' : str(a.prompt),
-      ...(isItem || (isScene && !ofKey) ? { desc: str(a.prompt, 2000) } : {}),
+      // instead of replacing that sheet. That way every reference comes out in the tool's
+      // proven layout: a blueprint that only says "portrait on left, 3 views on right" cannot
+      // quietly drop the clauses (same scale, same baseline, same lighting, no scenery, no
+      // text) that make an image model actually produce a turnaround.
+      // A derived angle (isScene && ofKey) keeps its own prompt. To override a sheet by hand,
+      // edit the node's image prompt in the Inspector after importing.
+      prompt: isItem || isWardrobe || isChar || (isScene && !ofKey) ? '' : str(a.prompt),
+      ...(isItem || isChar || (isScene && !ofKey) ? { desc: str(a.prompt, 2000) } : {}),
       // Physical anchors identify the person to the video model (the prompt's "@key" tags
       // mean nothing to it): the server lists them per reference image, in order.
       ...(isChar && arr(a.physical_anchors).length
         ? { anchors: str(arr(a.physical_anchors).join(', '), 1000) }
         : {}),
       ...(isChar && voiceOf(a.voice_profile) ? { voice: voiceOf(a.voice_profile) } : {}),
+      // Giữ cả bản có cấu trúc để Inspector sửa từng thành phần của DNA giọng.
+      ...(isChar && a.voice_profile && typeof a.voice_profile === 'object'
+        ? { voiceProfile: a.voice_profile }
+        : {}),
       // Code (NV1, NV2…): what the prompt calls this person. Real names raise the odds
       // of the video model refusing "a real person", so they never leave the Bible.
       ...(isChar && str(a.code, 20).trim() ? { code: str(a.code, 20).trim() } : {}),
@@ -961,7 +971,10 @@ export function buildGraph(bp) {
       audioDelivery: str(sh.audio_delivery, 500), // modulates the speaker's voice_profile
       start: Number.isFinite(Number(sh.start)) ? Number(sh.start) : i * 8,
       duration: Number.isFinite(dur) && dur > 0 ? dur : 8,
-      videoInput: 'refs', // a storyboard shot is driven by the connected asset images
+      // Mặc định quay từ ảnh khung hình đã render của chính shot: đó là khung đã duyệt, và là
+      // cách duy nhất giữ được bố cục/ánh sáng giữa ảnh và video. Đổi sang 'refs' trong
+      // Inspector khi muốn gửi thẳng ảnh các node nối vào (lib/providers.mjs: videoRunsFromRefs).
+      videoInput: 'self',
       image: null,
       video: null,
       outputNaming: { ...defaultNaming },
@@ -1007,8 +1020,14 @@ export function buildGraph(bp) {
   function buildMerged(sh, i, keys) {
     const shotName = str(sh.name || 'Shot ' + (i + 1), 100);
     const warn = msg => warnings.push(`${shotName}: ${msg}`);
-    const setups = arr(sh.setups).slice(0, 3);
-    if (arr(sh.setups).length > 3) warn('Veo nhận tối đa 3 ảnh — chỉ lấy 3 cỡ cảnh đầu.');
+    // Up to 6 dialogue beats in the 8-second clip. Only 3 framings exist, so beats past the
+    // first of each framing REUSE that setup's still — rapid A/B/A/B/A is two images, five cuts.
+    const MERGED_MAX_BEATS = 6;
+    const setups = arr(sh.setups).slice(0, MERGED_MAX_BEATS);
+    if (arr(sh.setups).length > MERGED_MAX_BEATS)
+      warn(
+        `Một clip 8 giây nhận tối đa ${MERGED_MAX_BEATS} nhịp cắt — chỉ lấy ${MERGED_MAX_BEATS} đầu.`,
+      );
     // The people in frame, each as ONE node: the look when this shot dresses them in a
     // costume (the bare character stays out then, as in a normal shot), else the character.
     const nodeFor = {}; // character key → the node that stands for them in this shot
@@ -1073,6 +1092,16 @@ export function buildGraph(bp) {
     if (!place)
       warn('không tìm thấy node bối cảnh cho phân cảnh ghép (khai "place" hoặc trong "uses").');
     const start = Number.isFinite(Number(sh.start)) ? Number(sh.start) : i * 8;
+    // The distinct framings, in first-cut order: these become the still images (≤3). When a
+    // framing repeats, the extra beats reuse its image, so the scene carries an explicit beat
+    // timeline on the merged node and ONE frame node per framing (no line on the frame).
+    const beatFramings = setups.map(s => {
+      const fr = FRAMINGS.includes(str(s.framing, 20)) ? str(s.framing, 20) : '';
+      if (!fr) warn(`cỡ cảnh "${str(s.framing, 20)}" không hợp lệ (ots_a, ots_b, two_shot).`);
+      return fr || 'two_shot';
+    });
+    const distinct = [...new Set(beatFramings)];
+    const reuse = distinct.length < setups.length;
     const mergedId = nid();
     nodes.push({
       id: mergedId,
@@ -1086,6 +1115,18 @@ export function buildGraph(bp) {
       start,
       duration: 8, // a Veo clip is always 8 seconds
       videoInput: 'refs', // the frames are the reference images
+      // Rapid dialogue reuses the ≤3 setup images across more cuts: the beat timeline lives
+      // here, each beat naming its framing (which image) and its line.
+      ...(reuse
+        ? {
+            beats: setups.map((s, k) => ({
+              framing: beatFramings[k],
+              lyric: str(s.dialogue ?? s.lyric, 5000),
+              frameAction: str(s.action, 500),
+              audioDelivery: str(s.audio_delivery, 500),
+            })),
+          }
+        : {}),
       image: null,
       video: null,
       outputNaming: { ...defaultNaming },
@@ -1095,9 +1136,9 @@ export function buildGraph(bp) {
       const src = styleId[k] || audioId[k];
       if (src) edges.push({ source: src, target: mergedId });
     }
-    setups.forEach((s, k) => {
-      const framing = FRAMINGS.includes(str(s.framing, 20)) ? str(s.framing, 20) : '';
-      if (!framing) warn(`cỡ cảnh "${str(s.framing, 20)}" không hợp lệ (ots_a, ots_b, two_shot).`);
+    // One frame node per distinct framing when beats reuse them; else one per setup (classic,
+    // the line rides on the frame). Either way the wire order is [1] place, [2] left, [3] right.
+    const makeFrame = (framing, k, line, action, delivery) => {
       const suffix = ` · ${k + 1}${FRAMING_LABEL[framing] ? ' ' + FRAMING_LABEL[framing] : ''}`;
       const frameId = nid();
       nodes.push({
@@ -1107,24 +1148,34 @@ export function buildGraph(bp) {
         frameNo: k + 1,
         framing: framing || 'two_shot',
         name: shotName.slice(0, 100 - suffix.length) + suffix,
-        prompt: str(s.prompt), // empty: built from the location + the two sheets
+        prompt: '', // built from the location + the two sheets
         videoPrompt: '',
-        lyric: str(s.dialogue ?? s.lyric, 5000),
-        audioDelivery: str(s.audio_delivery, 500),
-        frameAction: str(s.action, 500), // "takes one step toward NV1"
-        start, // keeps the frames beside their scene when the column is arranged by time
+        lyric: line,
+        audioDelivery: delivery,
+        frameAction: action,
+        start,
         image: null,
         video: null,
         outputNaming: { ...defaultNaming },
       });
-      // Wire order IS the image order the still prompt names: [1] place, [2] left, [3] right.
       for (const src of [place, left, right]) if (src) edges.push({ source: src, target: frameId });
       edges.push({ source: frameId, target: mergedId });
-    });
+    };
+    if (reuse) distinct.forEach((framing, k) => makeFrame(framing, k, '', '', ''));
+    else
+      setups.forEach((s, k) =>
+        makeFrame(
+          beatFramings[k],
+          k,
+          str(s.dialogue ?? s.lyric, 5000),
+          str(s.action, 500),
+          str(s.audio_delivery, 500),
+        ),
+      );
   }
 
-  if (nodes.length > 200)
-    throw new Error(`Blueprint quá lớn (${nodes.length} node > 200). Giảm số asset/shot.`);
+  if (nodes.length > NODE_CAP)
+    throw new Error(`Blueprint quá lớn (${nodes.length} node > ${NODE_CAP}). Giảm số asset/shot.`);
 
   // Drop duplicate edges.
   const seen = new Set();

@@ -13,6 +13,7 @@ import { api, esc, toast } from './core.js';
 import { render } from './render.js';
 import { inspect } from './inspector.js';
 import * as M from './stage-math.js';
+import { t } from './i18n.js';
 import { aim, dispose, fillFloor, fillPeople, newScene, shoot } from './stage-scene.js';
 
 const isShot = n =>
@@ -54,14 +55,22 @@ const labelOf = x =>
 
 let open = null; // the editor on screen (one at a time)
 
-export function openStage3d(setId) {
+export function openStage3d(id) {
   if (open) open.close();
   const state = store.state;
   const g = graphOf(state);
-  const set = g.node(setId);
-  if (!set || !g.isSet(set)) return toast('Chọn node bối cảnh (cảnh toàn) để dàn dựng 3D.', true);
+  const node = g.node(id);
+  if (!node) return toast(t('stage3d.chooseScene'), true);
+  // A SHOT (khung hình) is edited in "shot mode": its marks OVERRIDE the scene's shared blocking for
+  // just that shot. The scene is still loaded for context (its people). A SCENE node edits the shared
+  // blocking as before. In shot mode `shotId` is set and save goes to /api/stage3d/shot.
+  const shotMode = isShot(node);
+  const set = shotMode ? g.node(M.setOf(id, g)?.id) : node;
+  if (!set || !g.isSet(set)) return toast(t('stage3d.chooseScene'), true);
+  const setId = set.id;
+  const shotId = shotMode ? id : null;
   const people = state.nodes.filter(n => !n.terminal && g.isPerson(n));
-  if (!people.length) return toast('Project chưa có nhân vật. Tạo hình dàn biểu diễn trước.', true);
+  if (!people.length) return toast(t('stage3d.noPeople'), true);
   // The nodes that keep this set's marks once they are pinned: the set staged as being edited
   // (wired straight in, or into the location they are filmed in) — the server's rule.
   const usersOf = (st, s0 = store.state) => {
@@ -80,10 +89,16 @@ export function openStage3d(setId) {
   // on the floor), so what is drawn and captured is what will be stored
   const isPersonId = id => g.isPerson(g.node(id));
   const first = usersOf({ performers: people.map(p => ({ id: p.id })) });
-  const used = [...new Set(first.flatMap(s => M.wiredPeople(s.id, g)))];
+  // Seed order: the shot's OWN marks (override) → the scene's marks (inherit) → auto-layout the wired
+  // people. In shot mode the wired people are this shot's; in scene mode, everyone the set's shots show.
+  const used = shotMode
+    ? M.wiredPeople(shotId, g)
+    : [...new Set(first.flatMap(s => M.wiredPeople(s.id, g)))];
+  const baseStage = (shotMode && node.stage3d?.performers?.length ? node.stage3d : null) || set.stage3d;
+  const seeded = baseStage?.performers?.length;
   const stage = M.cleanStage(
-    set.stage3d?.performers?.length
-      ? { size: set.stage3d.size, performers: set.stage3d.performers }
+    seeded
+      ? { size: baseStage.size, performers: baseStage.performers }
       : {
           size: { ...M.STAGE },
           performers: M.autoLayout(
@@ -92,8 +107,12 @@ export function openStage3d(setId) {
         },
     isPersonId,
   );
+  if (!seeded && stage.performers.length === 2 && stage.performers.every(p => p.gear === 'none')) {
+    stage.dialogue = { a: stage.performers[0].id, b: stage.performers[1].id, side: 1 };
+    stage.performers = M.arrangeDialogue(stage);
+  }
   const nameOf = id => labelOf(g.node(id)) || 'performer';
-  let shots = usersOf(stage);
+  let shots = shotMode ? [node] : usersOf(stage);
   let dirty = false;
 
   // a renderer first: a machine without WebGL gets a message, not a stuck full-screen layer
@@ -101,7 +120,7 @@ export function openStage3d(setId) {
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   } catch (e) {
-    return toast('Máy này không chạy được 3D (WebGL): ' + e.message, true);
+    return toast(t('stage3d.webglError') + ': ' + e.message, true);
   }
 
   // --- DOM ---
@@ -109,19 +128,35 @@ export function openStage3d(setId) {
   root.id = 's3d';
   root.className = 's3d';
   root.innerHTML =
-    `<header class="s3d-head"><h2>🧍 Dàn dựng 3D · ${esc(set.name)}</h2>` +
-    `<span class="s3d-hint">Bấm chọn một người rồi kéo mũi tên dưới chân để dời · R / Shift+R xoay 15° · chuột trái xoay góc nhìn, chuột phải dời, cuộn phóng to</span>` +
-    `<button type="button" class="button" id="s3dAuto">Tự xếp theo vai</button>` +
-    `<button type="button" class="button primary" id="s3dSave">📌 Ghim vị trí</button>` +
-    `<button type="button" class="button" id="s3dClose">✕ Đóng</button></header>` +
-    `<aside class="s3d-left"><h3>Người trên sân khấu</h3><ul class="s3d-people" id="s3dPeople"></ul>` +
-    `<h3>Sân khấu</h3><div class="s3d-size"><label>Rộng (m)<input id="s3dW" type="number" min="4" max="40" step="0.5"></label><label>Sâu (m)<input id="s3dD" type="number" min="3" max="30" step="0.5"></label></div>` +
-    `<p class="field-hint">Mũi tên vàng ở mép sân khấu = phía khán giả. Trái/phải = trái/phải khung hình của góc toàn. Mỗi người một màu cố định — prompt cho mô hình ảnh biết màu nào là ai.</p>` +
-    (set.image ? `<img class="s3d-set" src="${esc(set.image.url)}" alt="Ảnh bối cảnh">` : '') +
+    `<header class="s3d-head"><h2>🧍 ${t('stage3d.title')} · ${esc(shotMode ? node.name + ' ⟵ ' + set.name : set.name)}</h2>` +
+    `<span class="s3d-hint">${shotMode ? 'Dàn dựng riêng cho khung này (đè lên cảnh)' : t('stage3d.hint')}</span>` +
+    `<button type="button" class="button" id="s3dAuto">${t('stage3d.autoArrange')}</button>` +
+    `<button type="button" class="button primary" id="s3dSave">📌 ${shotMode ? 'Ghim cho khung này' : t('stage3d.pin')}</button>` +
+    (shotMode
+      ? `<button type="button" class="button" id="s3dRevert" title="Xoá dàn dựng riêng của khung này, dùng lại bố cục của cảnh">↩ Về theo cảnh</button>`
+      : '') +
+    `<button type="button" class="button" id="s3dTopview" title="Dựng ảnh layout 3D thật (người có pose) bằng Topview 3D, thay ảnh maquette">🎬 Layout 3D</button>` +
+    `<select id="s3dMove" class="s3d-move" title="Kiểu chuyển động máy cho video preview 3D">` +
+    ['orbit:Orbit', 'dolly_in:Dolly vào', 'push_in:Đẩy nhẹ', 'pull_back:Kéo lùi', 'arc_left:Lia trái', 'arc_right:Lia phải', 'crane_up:Cẩu nâng', 'reveal:Mở cảnh']
+      .map(o => { const [v, l] = o.split(':'); return `<option value="${v}">${l}</option>`; })
+      .join('') +
+    `</select>` +
+    `<button type="button" class="button" id="s3dVideo" title="Render video preview 3D (camera chuyển động) của khung hình dàn dựng">🎥 Video 3D</button>` +
+    (shotMode
+      ? ''
+      : `<button type="button" class="button" id="s3dVideoCluster" title="Render video preview cho mọi cảnh đã dàn dựng rồi ghép thành 1 video">🎞 Video cụm</button>`) +
+    `<button type="button" class="button" id="s3dClose">✕ ${t('common.close')}</button></header>` +
+    `<aside class="s3d-left"><h3>${t('stage3d.people')}</h3><ul class="s3d-people" id="s3dPeople"></ul>` +
+    `<h3>${t('stage3d.stage')}</h3><div class="s3d-size"><label>${t('stage3d.width')}<input id="s3dW" type="number" min="4" max="40" step="0.5"></label><label>${t('stage3d.depth')}<input id="s3dD" type="number" min="3" max="30" step="0.5"></label></div>` +
+    `<section class="s3d-dialogue"><h3>${t('stage3d.dialogueTitle')}</h3><label>${t('stage3d.dialogueA')}<select id="s3dDialogueA"></select></label><label>${t('stage3d.dialogueB')}<select id="s3dDialogueB"></select></label>` +
+    `<label>${t('stage3d.axisSide')}<select id="s3dAxisSide"><option value="1">${t('stage3d.axisLeft')}</option><option value="-1">${t('stage3d.axisRight')}</option></select></label>` +
+    `<button type="button" class="button" id="s3dDialogueAuto">${t('stage3d.autoDialogue')}</button><p class="field-hint" id="s3dAxisHint"></p></section>` +
+    `<p class="field-hint">${t('stage3d.floorHint')}</p>` +
+    (set.image ? `<img class="s3d-set" src="${esc(set.image.url)}" alt="${t('stage3d.sceneImageAlt')}">` : '') +
     `</aside><div class="s3d-view" id="s3dView"></div>` +
-    `<aside class="s3d-right"><h3>Xem thử khung hình</h3>` +
-    `<p class="field-hint">Ghim một lần ở đây. Mọi node dùng bối cảnh này — nối thẳng node này vào, hoặc nối node này vào bối cảnh của chúng — tự nhận vị trí; cỡ cảnh, góc máy và ai ở giữa khung tool tự lấy từ chính node đó. Node thêm hay sửa sau cũng tự nhận.</p>` +
-    `<ul class="s3d-cams" id="s3dCams"></ul><h3>Câu vị trí tool tự thêm vào prompt</h3><div class="s3d-text" id="s3dText"></div></aside>`;
+    `<aside class="s3d-right"><h3>${t('stage3d.preview')}</h3>` +
+    `<p class="field-hint">${t('stage3d.pinHint')}</p>` +
+    `<ul class="s3d-cams" id="s3dCams"></ul><h3>${t('stage3d.positionPrompt')}</h3><div class="s3d-text" id="s3dText"></div></aside>`;
   document.body.appendChild(root);
   const $s = sel => root.querySelector(sel);
 
@@ -130,6 +165,27 @@ export function openStage3d(setId) {
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   view.appendChild(renderer.domElement);
   const { scene, floor: floorGroup, people: people3d } = newScene();
+  const axisGuide = new THREE.Group();
+  scene.add(axisGuide);
+  function showAxis() {
+    dispose(axisGuide);
+    axisGuide.clear();
+    axisGuide.visible = camKey === 'free';
+    const axis = M.dialogueAxis(stage);
+    if (!axis) return;
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(axis.A.x, 0.07, axis.A.z),
+        new THREE.Vector3(axis.B.x, 0.07, axis.B.z),
+      ]),
+      new THREE.LineBasicMaterial({ color: 0xffd60a }),
+    );
+    axisGuide.add(line);
+    const mid = new THREE.Vector3((axis.A.x + axis.B.x) / 2, 0.1, (axis.A.z + axis.B.z) / 2);
+    axisGuide.add(new THREE.ArrowHelper(
+      new THREE.Vector3(axis.normal.x, 0, axis.normal.z), mid, 1.1, 0x74d2ff, 0.27, 0.16,
+    ));
+  }
   const editorCam = new THREE.PerspectiveCamera(50, 1, 0.05, 300);
   editorCam.position.set(8, 9, 13);
   const orbit = new OrbitControls(editorCam, renderer.domElement);
@@ -167,6 +223,8 @@ export function openStage3d(setId) {
     p.x = Number(o.position.x.toFixed(2));
     p.z = Number(o.position.z.toFixed(2));
     dirty = true;
+    showAxis();
+    dialogueHint();
     showText();
   });
 
@@ -174,31 +232,41 @@ export function openStage3d(setId) {
   // tool picks every node's framing) ---
   const graphNow = () => graphOf(store.state);
   const wideSpec = { target: null, size: 'WS', angle: { kind: 'eye', side: 0 } };
+  const dialogueSpec = key => {
+    const axis = M.dialogueAxis(stage);
+    if (!axis) return null;
+    return { target: key === 'dialogue-a' ? axis.A : axis.B,
+      size: 'MCU', angle: { kind: 'ots', side: 0 } };
+  };
   // a node's framing on this stage — null for an insert / object shot the stage plays no part in
   const specOf = shot => (shot ? M.shotSpec(shot, stage, graphNow()) : null);
   let camKey = 'free';
   const camOf = key =>
-    M.shotCamera(stage, (key !== 'wide' && specOf(shots.find(s => s.id === key))) || wideSpec);
+    M.shotCamera(stage, dialogueSpec(key) || (key !== 'wide' && specOf(shots.find(s => s.id === key))) || wideSpec);
   const shotLabel = s => `${esc(s.name)}<small>${esc(M.framingLabel(specOf(s), nameOf))}</small>`;
   function listCams() {
     shots = usersOf(stage);
     const staged = shots.filter(s => specOf(s));
-    if (camKey !== 'free' && camKey !== 'wide' && !staged.some(s => s.id === camKey))
+    if (camKey.startsWith('dialogue-') && !M.dialogueAxis(stage)) camKey = 'wide';
+    if (camKey !== 'free' && camKey !== 'wide' && !camKey.startsWith('dialogue-') && !staged.some(s => s.id === camKey))
       camKey = 'wide';
     const inserts = shots.length - staged.length;
     $s('#s3dCams').innerHTML =
-      `<li data-cam="free" class="${camKey === 'free' ? 'active' : ''}">🎛 Góc dựng tự do (kéo người ở đây)</li>` +
-      `<li data-cam="wide" class="${camKey === 'wide' ? 'active' : ''}">🎥 Toàn cảnh (khán giả)</li>` +
+      `<li data-cam="free" class="${camKey === 'free' ? 'active' : ''}">🎛 ${t('stage3d.freeView')}</li>` +
+      `<li data-cam="wide" class="${camKey === 'wide' ? 'active' : ''}">🎥 ${t('stage3d.wideView')}</li>` +
+      (M.dialogueAxis(stage) ?
+        `<li data-cam="dialogue-a" class="${camKey === 'dialogue-a' ? 'active' : ''}">🎥 ${t('stage3d.previewA')} · ${esc(nameOf(stage.dialogue.a))}</li>` +
+        `<li data-cam="dialogue-b" class="${camKey === 'dialogue-b' ? 'active' : ''}">🎥 ${t('stage3d.previewB')} · ${esc(nameOf(stage.dialogue.b))}</li>` : '') +
       (staged.length
-        ? `<li class="s3d-group"><details${staged.some(s => s.id === camKey) ? ' open' : ''}><summary>Từng node dùng bối cảnh này (${staged.length})</summary><ul>${staged
+        ? `<li class="s3d-group"><details${staged.some(s => s.id === camKey) ? ' open' : ''}><summary>${t('stage3d.nodesUsingSet')} (${staged.length})</summary><ul>${staged
             .map(
               s =>
                 `<li data-cam="${esc(s.id)}" class="${camKey === s.id ? 'active' : ''}">${shotLabel(s)}</li>`,
             )
             .join('')}</ul></details></li>`
-        : '<li class="s3d-empty">Chưa có node nào dùng bối cảnh này. Nối node này vào các shot (hoặc vào bối cảnh của chúng) — chúng tự nhận vị trí.</li>') +
+        : `<li class="s3d-empty">${t('stage3d.noNodesUsingSet')}</li>`) +
       (inserts
-        ? `<li class="s3d-empty">${inserts} node cận đồ vật / chi tiết — không cần vị trí.</li>`
+        ? `<li class="s3d-empty">${inserts} ${t('stage3d.insertNodes')}</li>`
         : '');
     for (const li of root.querySelectorAll('#s3dCams [data-cam]'))
       li.onclick = () => {
@@ -207,6 +275,7 @@ export function openStage3d(setId) {
         const free = camKey === 'free';
         orbit.enabled = free;
         tc.enabled = free;
+        axisGuide.visible = free;
         showGizmo();
         listCams();
         showText();
@@ -215,34 +284,73 @@ export function openStage3d(setId) {
   // The blocking sentence the selected camera's node gets (names; the prompt adds image numbers).
   function showText() {
     const key = camKey === 'free' ? 'wide' : camKey;
-    const spec = specOf(shots.find(s => s.id === key)) || wideSpec;
+    const spec = dialogueSpec(key) || specOf(shots.find(s => s.id === key)) || wideSpec;
     // in the front wide, nobody may hide straight behind someone else
     const hid = M.hidden(stage, M.shotCamera(stage, wideSpec));
     $s('#s3dText').textContent =
       (camKey !== 'free' && camKey !== 'wide'
-        ? 'Đang xem khung hình tool chọn cho node này (chỉ xem). Về 🎛 Góc dựng tự do để kéo người.\n\n'
+        ? t('stage3d.nodePreviewHint') + '\n\n'
         : '') +
       (hid.length
-        ? '⚠ Góc toàn bị che: ' +
+        ? `⚠ ${t('stage3d.occlusionPrefix')}: ` +
           hid.map(h => `${nameOf(h.back)} đứng ngay sau ${nameOf(h.front)}`).join('; ') +
-          ' — dời sang trái/phải một chút.\n\n'
+          ` — ${t('stage3d.moveAside')}.\n\n`
         : '') +
-      (M.blockingText(stage, spec, nameOf) || 'Không có ai trong khung của góc máy này.');
+      (M.blockingText(stage, spec, nameOf) || t('stage3d.noPeopleInFrame'));
     if (camKey !== 'free') aim(shotCam, camOf(camKey));
   }
 
   // --- the performers panel ---
-  const GEAR_VI = {
-    mic: 'Micro (hát)',
-    grand_piano: 'Đàn grand piano',
-    keys: 'Đàn keyboard',
-    drums: 'Bộ trống',
-    guitar: 'Guitar',
-    bass: 'Bass',
-    violin: 'Violin',
-    cello: 'Cello',
-    none: '— không —',
+  const GEAR_LABELS = {
+    mic: 'stage3d.gearMic', grand_piano: 'stage3d.gearGrandPiano', keys: 'stage3d.gearKeys',
+    drums: 'stage3d.gearDrums', guitar: 'stage3d.gearGuitar', bass: 'stage3d.gearBass',
+    violin: 'stage3d.gearViolin', cello: 'stage3d.gearCello', none: 'stage3d.gearNone',
   };
+  let pairA = stage.dialogue?.a || '', pairB = stage.dialogue?.b || '';
+  let axisSide = stage.dialogue?.side || 1;
+  function dialogueHint() {
+    const axis = M.dialogueAxis(stage);
+    $s('#s3dAxisHint').textContent = axis
+      ? `${nameOf(axis.A.id)} ↔ ${nameOf(axis.B.id)} · ${axis.length.toFixed(1)} m · ${t('stage3d.axisLocked')}`
+      : pairA && pairB ? t('stage3d.moveApart') : t('stage3d.choosePair');
+  }
+  function listDialogue() {
+    const opts = selected => `<option value="">${t('stage3d.noPair')}</option>` +
+      stage.performers.map(p => `<option value="${esc(p.id)}" ${selected === p.id ? 'selected' : ''}>${esc(nameOf(p.id))}</option>`).join('');
+    const a = $s('#s3dDialogueA'), b = $s('#s3dDialogueB');
+    a.innerHTML = opts(pairA);
+    b.innerHTML = opts(pairB);
+    $s('#s3dAxisSide').value = String(axisSide);
+    const changed = () => {
+      pairA = a.value;
+      pairB = b.value;
+      if (pairA && pairB && pairA !== pairB) {
+        stage.dialogue = { a: pairA, b: pairB, side: axisSide };
+        const A = stage.performers.find(p => p.id === pairA), B = stage.performers.find(p => p.id === pairB);
+        if (A && B && Math.hypot(B.x - A.x, B.z - A.z) > 0.2) {
+          A.facing = Math.round((Math.atan2(B.x - A.x, B.z - A.z) * 180) / Math.PI);
+          B.facing = Math.round((Math.atan2(A.x - B.x, A.z - B.z) * 180) / Math.PI);
+        }
+      } else delete stage.dialogue;
+      dirty = true;
+      rebuild();
+    };
+    a.onchange = changed;
+    b.onchange = changed;
+    $s('#s3dAxisSide').onchange = e => {
+      axisSide = Number(e.target.value) === -1 ? -1 : 1;
+      if (stage.dialogue) stage.dialogue.side = axisSide;
+      dirty = true;
+      rebuild();
+    };
+    $s('#s3dDialogueAuto').onclick = () => {
+      if (!stage.dialogue) return toast(t('stage3d.choosePair'), true);
+      stage.performers = M.arrangeDialogue(stage);
+      dirty = true;
+      rebuild();
+    };
+    dialogueHint();
+  }
   function listPeople() {
     const on = new Map(stage.performers.map((p, i) => [p.id, i]));
     $s('#s3dPeople').innerHTML = people
@@ -256,14 +364,14 @@ export function openStage3d(setId) {
           (n.image ? `<img src="${esc(n.image.url)}" alt="">` : '') +
           `<b>${esc(labelOf(n))}</b></label>` +
           (p
-            ? `<div class="s3d-row"><select data-k="gear">${Object.entries(GEAR_VI)
+              ? `<div class="s3d-row"><select data-k="gear">${Object.entries(GEAR_LABELS)
                 .map(
                   ([k, v]) =>
-                    `<option value="${k}" ${p.gear === k ? 'selected' : ''}>${v}</option>`,
+                    `<option value="${k}" ${p.gear === k ? 'selected' : ''}>${t(v)}</option>`,
                 )
                 .join('')}</select>` +
-              `<select data-k="pose"><option value="stand" ${p.pose !== 'sit' ? 'selected' : ''}>Đứng</option><option value="sit" ${p.pose === 'sit' ? 'selected' : ''}>Ngồi</option></select></div>` +
-              `<label class="s3d-facing">Hướng mặt <input type="range" data-k="facing" min="-180" max="180" step="5" value="${p.facing}"><output>${p.facing}°</output></label>`
+              `<select data-k="pose"><option value="stand" ${p.pose !== 'sit' ? 'selected' : ''}>${t('stage3d.stand')}</option><option value="sit" ${p.pose === 'sit' ? 'selected' : ''}>${t('stage3d.sit')}</option></select></div>` +
+              `<label class="s3d-facing">${t('stage3d.facing')} <input type="range" data-k="facing" min="-180" max="180" step="5" value="${p.facing}"><output>${p.facing}°</output></label>`
             : '') +
           `</li>`
         );
@@ -276,7 +384,7 @@ export function openStage3d(setId) {
           if (stage.performers.length >= M.MAX_PERFORMERS)
             return (
               (e.target.checked = false),
-              toast(`Tối đa ${M.MAX_PERFORMERS} người trên một sân khấu.`, true)
+              toast(`${t('stage3d.maxPerformers')} ${M.MAX_PERFORMERS}.`, true)
             );
           const [spot] = M.autoLayout([g.node(pid)]);
           // a free spot near its slot, on the floor
@@ -336,7 +444,9 @@ export function openStage3d(setId) {
   }
   function rebuild() {
     buildPeople();
+    showAxis();
     listPeople();
+    listDialogue();
     listCams();
     showText();
   }
@@ -408,7 +518,7 @@ export function openStage3d(setId) {
   }
 
   // --- capture: a framing, 1280×720, no tags / grid / gizmo ---
-  const capture = c => shoot(renderer, scene, c, [tc.getHelper()]);
+  const capture = c => shoot(renderer, scene, c, [tc.getHelper(), axisGuide]);
 
   let saving = false,
     closed = false;
@@ -418,17 +528,39 @@ export function openStage3d(setId) {
     const clean = M.cleanStage(stage, id => g2.isPerson(g2.node(id)));
     stage.size = clean.size;
     stage.performers = clean.performers;
+    if (clean.dialogue) stage.dialogue = clean.dialogue;
+    else delete stage.dialogue;
+    pairA = stage.dialogue?.a || '';
+    pairB = stage.dialogue?.b || '';
     buildFloor();
     rebuild();
   }
   async function save() {
     const btn = $s('#s3dSave');
     btn.disabled = true;
-    btn.textContent = '⏳ Đang ghim…';
+    btn.textContent = t('stage3d.pinning');
     saving = true;
     try {
       const g2 = graphNow();
       normalize(g2);
+      if (shotMode) {
+        // Save the marks as THIS shot's override; no browser captures (Topview renders the layout,
+        // or the stage-keeper auto-captures the framing later by its sig).
+        store.state = await api('/api/stage3d/shot', { method: 'POST', body: { shotId, stage } });
+        const s = store.state.stage3dShot || {};
+        dirty = false;
+        saving = false;
+        render();
+        if (!closed) {
+          close();
+          inspect(shotId);
+        }
+        toast(
+          `📌 Đã dàn dựng riêng cho khung hình (${s.performers} người, đè lên cảnh)` +
+            (s.stale ? ` · ⚠ ${s.stale} node cần tạo lại ảnh` : ''),
+        );
+        return;
+      }
       const captures = usersOf(stage)
         .map(s => ({ s, spec: M.shotSpec(s, stage, g2) }))
         .filter(x => x.spec)
@@ -452,23 +584,23 @@ export function openStage3d(setId) {
       }
       toast(
         s.performers
-          ? `📌 Đã ghim ${s.performers} người · ${s.staged} node tự nhận vị trí (cỡ cảnh, góc máy tool tự tính)` +
+          ? `📌 ${t('stage3d.pinned')} ${s.performers} ${t('stage3d.peopleCount')} · ${s.staged} ${t('stage3d.nodesInherited')}` +
               (s.shots > s.staged ? ` · bỏ qua ${s.shots - s.staged} node cận đồ vật` : '') +
               (s.wired ? ` · thêm ${s.wired} người vào các node toàn cảnh` : '') +
               (s.stale ? ` · ⚠ ${s.stale} node đã có ảnh cần tạo lại` : '')
-          : 'Đã bỏ ghim — sân khấu không còn ai.',
+          : t('stage3d.unpinned'),
       );
     } catch (e) {
       saving = false;
       toast(e.message, true);
       btn.disabled = false;
-      btn.textContent = '📌 Ghim vị trí';
+      btn.textContent = `📌 ${t('stage3d.pin')}`;
     }
   }
   // Closing with marks moved but not pinned asks first.
   function leave() {
     if (saving) return;
-    if (dirty && !confirm('Đóng mà chưa ghim? Vị trí vừa đặt sẽ mất.')) return;
+    if (dirty && !confirm(t('stage3d.closeUnsaved'))) return;
     close();
   }
 
@@ -490,6 +622,75 @@ export function openStage3d(setId) {
 
   $s('#s3dClose').onclick = leave;
   $s('#s3dSave').onclick = save;
+  // "Về theo cảnh": clear this shot's own marks so it inherits the scene's blocking again.
+  if ($s('#s3dRevert'))
+    $s('#s3dRevert').onclick = async () => {
+      const btn = $s('#s3dRevert');
+      btn.disabled = true;
+      try {
+        store.state = await api('/api/stage3d/shot', { method: 'POST', body: { shotId, clear: true } });
+        dirty = false;
+        close();
+        inspect(shotId);
+        toast('↩ Khung hình đã về theo bố cục của cảnh.');
+      } catch (e) {
+        toast(e.message, true);
+        btn.disabled = false;
+      }
+    };
+  // Render the pinned shots' layout references in real 3D with topview-3d-cli (server-side).
+  // Pin first (it reads the saved stage); one headless render per shot, so it can take a while.
+  $s('#s3dTopview').onclick = async () => {
+    const btn = $s('#s3dTopview');
+    if (dirty) return toast('Hãy ghim (📌) trước rồi mới dựng layout 3D.', true);
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = '⏳ Đang dựng…';
+    try {
+      store.state = await api('/api/stage3d/topview', { method: 'POST', body: { sceneId: setId, shotId } });
+      const r = store.state.topview3d || {};
+      toast(
+        `🎬 Topview 3D: dựng ${r.done}/${r.total} layout` +
+          (r.errors?.length ? ` · ⚠ ${r.errors.length} lỗi: ${r.errors[0]}` : ''),
+        !!r.errors?.length,
+      );
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  };
+  // Render a 3D preview VIDEO (camera-move clip). cluster=true renders every staged shot and stitches
+  // them into one mp4. Slow (one headless render per frame), so warn and disable while it runs.
+  const renderVideo = cluster => async () => {
+    const btn = $s(cluster ? '#s3dVideoCluster' : '#s3dVideo');
+    if (dirty) return toast('Hãy ghim (📌) trước rồi mới dựng video 3D.', true);
+    const move = $s('#s3dMove')?.value || 'orbit';
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = '⏳ Đang render…';
+    try {
+      store.state = await api('/api/stage3d/topview-video', {
+        method: 'POST',
+        body: { sceneId: setId, shotId, move, cluster, seconds: 2.5 },
+      });
+      const r = store.state.topview3dVideo || {};
+      const made = cluster ? `cụm ${r.clips} cảnh` : `${r.clips?.length || 0} cảnh`;
+      toast(
+        `🎥 Topview 3D: xong video ${made} (${r.move})` +
+          (r.errors?.length ? ` · ⚠ ${r.errors.length} lỗi: ${r.errors[0]}` : ''),
+        !!r.errors?.length,
+      );
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  };
+  $s('#s3dVideo').onclick = renderVideo(false);
+  if ($s('#s3dVideoCluster')) $s('#s3dVideoCluster').onclick = renderVideo(true);
   $s('#s3dAuto').onclick = () => {
     stage.performers = M.autoLayout(stage.performers.map(p => g.node(p.id)).filter(Boolean));
     dirty = true;

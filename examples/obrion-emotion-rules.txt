@@ -1,0 +1,28 @@
+OBRION PERFORMANCE & FACS RULES — STARTER (bản gốc cho project, có thể sửa)
+
+Nguyên tắc diễn xuất
+- Diễn xuất bắt đầu từ ý định (muốn đạt điều gì), sau đó mới đến biểu cảm. Mỗi shot chỉ định một hành động tâm lý chính.
+- Intensity 0.0–0.25: kiềm chế, thay đổi rất nhỏ; phù hợp khi nhân vật che giấu.
+- Intensity 0.26–0.50: căng thẳng thấy được nhưng còn kiểm soát; ưu tiên mắt, hàm, nhịp thở.
+- Intensity 0.51–0.75: cảm xúc phá vỡ lớp phòng vệ; cử chỉ rõ nhưng vẫn có mục tiêu.
+- Intensity 0.76–1.00: chỉ dùng cho cao trào, mất mát hoặc nguy hiểm cấp bách; không kéo dài qua nhiều shot liên tiếp.
+
+Gaze, cơ thể và nhịp thở
+- Gaze locked: quyết tâm, thách thức hoặc đe dọa; giữ ngắn để tránh vô hồn.
+- Gaze aversion: xấu hổ, tính toán hoặc né tránh; cho nhân vật một điểm nhìn cụ thể.
+- Một nhịp nuốt khan, siết hàm, ngón tay chạm vật chứng hoặc đổi trọng tâm chân thường đáng tin hơn một cử chỉ lớn.
+- Hít vào nông trước lời khó nói; thở ra chậm khi quyết định; tăng nhịp thở khi nguy hiểm. Đừng mô tả tiếng thở nếu audio stem không cần nó.
+- Blink: bình thường và không đều. Giảm chớp mắt khi tập trung/căng thẳng; tăng chớp sau cú sốc hoặc khi tìm lời nói.
+
+FACS dùng tiết chế
+- AU4 (brow lowerer): căng thẳng, tập trung; phối với mắt hoặc hàm, không dùng đơn lẻ như giận dữ tuyệt đối.
+- AU1+2 (inner/outer brow raise): ngạc nhiên hoặc cầu xin; dùng nhẹ ở intensity thấp.
+- AU5 (upper lid raise): cảnh giác/sốc; không giữ lâu.
+- AU6+12 (cheek raise + lip corner puller): niềm vui thật; giảm cường độ nếu là nụ cười xã giao.
+- AU14 (dimpler): khinh thường hoặc nén ý; chỉ một bên khi phù hợp.
+- AU15 (lip corner depressor): buồn, thất vọng.
+- AU17+23/24 (chin raise + lip tighten/press): cố nén khóc, giận hoặc quyết định không nói.
+
+Thoại
+- delivery_tag phải phản ánh mục tiêu: whisper, restrained, breathless, clipped, breaking, controlled.
+- Không thêm lời thoại ngoài kịch bản. Foley và ambience chỉ hỗ trợ hành động có trong khung hình.

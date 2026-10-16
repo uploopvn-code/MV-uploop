@@ -1,7 +1,7 @@
 # Drama Tool · Web Worker (extension Chrome/Edge)
 
 Extension này biến trình duyệt của bạn thành **worker** cho Drama Tool: nhận job từ app và chạy
-bằng chính phiên đăng nhập của bạn. Có **hai worker bật/tắt riêng, chạy song song được**:
+bằng chính phiên đăng nhập của bạn. Có **ba worker bật/tắt riêng, chạy song song được**:
 
 - **🖼️ ChatGPT** — `kind: image` và `kind: text`:
   - **Tạo ảnh**: node ảnh đặt nguồn "ChatGPT (extension)" → extension tạo ảnh, trả về node.
@@ -10,9 +10,11 @@ bằng chính phiên đăng nhập của bạn. Có **hai worker bật/tắt ri�
 - **🎬 Google Vids** — `kind: video` (job gắn `site: googlevids`): node video đặt nguồn
   "Google Vids (extension)" → extension điều khiển Google Vids, điền prompt, chọn 1080p, bấm Tạo,
   bắt URL video 1080p rồi tải MP4 về node. **Không cần API key** — dùng phiên Google của bạn.
+- **Muse Chat** — `kind: image` hoặc `kind: video` (job gắn `site: musechat`): extension tạo
+  ảnh/video trong tab Muse riêng, rồi tải kết quả về node. **Không cần API key** — dùng phiên Muse.
 
-Cả hai dùng chung giao thức worker có sẵn (`/api/worker/claim` → `heartbeat` → `complete`), xác
-thực bằng **worker token** (một token dùng chung cho cả hai).
+Cả ba dùng chung giao thức worker có sẵn (`/api/worker/claim` → `heartbeat` → `complete`), xác
+thực bằng **worker token**.
 
 ## 1. Cài extension (chế độ Developer)
 
@@ -48,9 +50,10 @@ vài phút. Worker xử lý như sau:
 - **Lỗi trước khi gửi** (chưa đăng nhập, tải ảnh tham chiếu lỗi, tab không mở…): job thành *lỗi*,
   chạy lại an toàn. **Lỗi sau khi gửi** (không thấy ảnh, quá giờ, mất kết nối tab): job thành *cần
   kiểm tra* kèm link hội thoại và đoạn chữ ChatGPT trả lời (nếu có) — ảnh có thể vẫn đang được vẽ.
-- **Lấy lại ảnh** (job `recover`): app tự xếp lại job đó sau ít phút (tối đa 2 lần, chỉ khi đúng
+- **Lấy lại ảnh** (job `recover`): app tự xếp lại job đó sau ít phút (tối đa 3 lần, chỉ khi đúng
   worker đã chạy nó còn online) hoặc khi bạn bấm nút trong hàng đợi. Extension mở lại **đúng hội
   thoại đó** và lấy ảnh mới nhất — **không gửi prompt lại, không tốn thêm lượt**.
+
 - **Gửi kết quả bền hơn**: nếu app đang bận/khởi động lại, extension gửi lại kết quả sau 2, 5, 15,
   30, 60 giây; ảnh về muộn vẫn được app nhận (chỉ gắn vào node nếu node chưa đổi ảnh / chưa có job
   mới hơn).
@@ -58,6 +61,15 @@ vài phút. Worker xử lý như sau:
   ảnh hiện tại" thay vì ảnh). Mỗi lệnh có giới hạn: 10 phút cho ảnh / lấy lại ảnh, 12 phút cho
   Đạo diễn.
 - Tab worker được đặt **không bị Memory Saver loại bỏ** (`autoDiscardable: false`).
+
+### Muse Chat: ảnh, video và lấy lại kết quả cũ (0.5.35)
+
+Đăng nhập `muse.ai`, bật worker Muse Chat trong popup, rồi chọn Muse Chat làm nguồn ảnh hoặc video
+trên node. Mỗi job mới dùng một tab riêng. Sau khi gửi prompt, extension lưu link hội thoại vào
+hàng đợi. Nếu kết quả chưa về, nút **Lấy lại ảnh** hoặc **Kiểm tra lại** mở link đó, tìm đúng
+kết quả và tải về mà không gửi prompt thêm lần nữa. Luồng tự động tạo video còn thiếu kiểm tra
+job Muse cũ tối đa ba lần; nếu cả ba lần vẫn chưa xác định được kết quả, luồng báo lỗi và giữ
+nguyên job để tránh tạo trùng. Job lỗi chắc chắn trước khi gửi prompt có thể được tạo lại tự động.
 
 ## 4. Bật worker Google Vids (tạo video)
 

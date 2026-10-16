@@ -1,0 +1,8 @@
+[
+  {"title":"From emails to WMS orders", "narration":"Meet the Email-to-Order Agent. It turns shipping instructions from emails into warehouse orders, reducing repetitive data entry for your operations team."},
+  {"title":"One agent. Multiple email sources.", "narration":"The agent reads emails from customers, freight forwarders, and factory sites, including purchase orders, shipping instructions, and inbound delivery advice."},
+  {"title":"Understand the request", "narration":"It identifies inbound and outbound shipping intent, then extracts key order details, such as purchase order number, part number, quantity, and destination."},
+  {"title":"Check details. Flag exceptions.", "narration":"The agent validates order information and requests missing details. If order creation fails, a notification helps the team identify what needs attention."},
+  {"title":"Create the WMS order", "narration":"With the required information available, the agent creates the warehouse order in WMS and sends confirmation, helping the team prepare for warehouse operations."},
+  {"title":"Less manual work. More connected operations.", "narration":"Support covers Crane customers and warehouse transfers in Mexico, including a second warehouse. The benefits: faster order creation, fewer manual input errors, and cross-warehouse automation."}
+]

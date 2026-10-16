@@ -1,0 +1,47 @@
+1
+00:00:00,000 --> 00:00:05,000
+Meet the Email-to-Order Agent. It turns shipping instructions from emails into
+
+2
+00:00:05,000 --> 00:00:10,000
+warehouse orders, reducing repetitive data entry for your operations team.
+
+3
+00:00:10,000 --> 00:00:15,000
+The agent reads emails from customers, freight forwarders, and factory
+
+4
+00:00:15,000 --> 00:00:20,000
+sites, including purchase orders, shipping instructions, and inbound delivery advice.
+
+5
+00:00:20,000 --> 00:00:25,000
+It identifies inbound and outbound shipping intent, then extracts key order
+
+6
+00:00:25,000 --> 00:00:30,000
+details, such as purchase order number, part number, quantity, and destination.
+
+7
+00:00:30,000 --> 00:00:35,000
+The agent validates order information and requests missing details. If order
+
+8
+00:00:35,000 --> 00:00:40,000
+creation fails, a notification helps the team identify what needs attention.
+
+9
+00:00:40,000 --> 00:00:45,000
+With the required information available, the agent creates the warehouse order in
+
+10
+00:00:45,000 --> 00:00:50,000
+WMS and sends confirmation, helping the team prepare for warehouse operations.
+
+11
+00:00:50,000 --> 00:00:55,000
+Support covers Crane customers and warehouse transfers in Mexico, including a second warehouse.
+
+12
+00:00:55,000 --> 00:01:00,000
+The benefits: faster order creation, fewer manual input errors, and cross-warehouse automation.

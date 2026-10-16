@@ -144,6 +144,7 @@
     return m ? m[0] : '';
   };
   const POLL_MS = 5000;
+  const IMAGE_POLL_MS = 1500;
 
   // ---- per-job state ------------------------------------------------------
   // What was sent, the conversation it went to, and a keep-alive that re-posts the last progress
@@ -216,8 +217,8 @@
 
     if (images.length) {
       job.say('đính ' + images.length + ' ảnh tham chiếu');
-      await attachImages(images, editor);
-      await waitUploadsReady(images.length, job);
+      const beforeUploads = await attachImages(images, editor);
+      await waitUploadsReady(images.length, job, beforeUploads);
       editor = currentEditor() || editor; // the composer can re-render after an upload
     }
 
@@ -626,55 +627,137 @@
     for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
     return new File([arr], name || 'ref.png', { type: mime || 'image/png' });
   }
+  // Image thumbnails attached to the current composer. Excluding conversation turns prevents an
+  // older user/assistant image from satisfying the upload gate. data:image is included for builds
+  // that render a local preview before replacing it with blob:/oaiusercontent.
+  function composerUploadThumbs() {
+    const ed = currentEditor();
+    const form = ed?.closest('form');
+    let composer = form || ed;
+    for (let node = ed?.parentElement, depth = 0; node && depth < 8; node = node.parentElement, depth++) {
+      if (node.querySelector('#upload-files, input[type="file"], [data-testid*="attachment" i]')) {
+        composer = node;
+        if (node.querySelector('img[src^="blob:"], img[src^="data:image"], [data-testid*="attachment" i]')) break;
+      }
+    }
+    const main = document.querySelector('main');
+    const scopes = [...new Set([composer, form, main].filter(Boolean))];
+    return [...new Set(scopes.flatMap(scope => [...scope.querySelectorAll('img')]))].filter(
+      img =>
+        !img.closest(TURN_ANY) &&
+        /^(?:blob:|data:image)|estuary\/content|oaiusercontent|files\/download/.test(srcOf(img)),
+    );
+  }
   async function attachImages(images, editor) {
     const files = images.map((im, i) =>
       dataUrlToFile(im.dataUrl, im.name || 'ref-' + (i + 1) + '.png', im.mime),
     );
-    // The composer's own upload input is #upload-files (inside the form). The accept="image/*"
-    // inputs outside the form (#upload-photos, #upload-media, …) are decoys: files given to them
-    // are silently dropped. Other inputs are a last resort.
-    const input =
-      document.querySelector('#upload-files') ||
-      document.querySelector('form input[type="file"]') ||
-      [...document.querySelectorAll('input[type="file"]')].find(
-        el => !el.accept || /image|\*/.test(el.accept),
+    const before = new Set(composerUploadThumbs().map(srcOf));
+    // Wait for the current composer's real file input. Fresh tabs can expose the editor before the
+    // upload control mounts; grabbing the first document-wide input at that moment can hit a decoy.
+    const findInput = () => {
+      const ed = currentEditor() || editor;
+      const form = ed?.closest('form');
+      const candidates = [...document.querySelectorAll('input[type="file"]')].filter(
+        el => el.isConnected && !el.disabled && (!el.accept || /image|png|jpe?g|webp|\*/i.test(el.accept)),
       );
+      return candidates
+        .map(el => ({
+          el,
+          score:
+            (el.id === 'upload-files' ? 200 : 0) +
+            (form?.contains(el) ? 120 : 0) +
+            (ed && el.parentElement?.contains(ed) ? 60 : 0) +
+            (/image|png|jpe?g|webp/i.test(el.accept || '') ? 30 : 0),
+        }))
+        .sort((a, b) => b.score - a.score)[0]?.el || null;
+    };
+    const input = await waitFor(findInput, 10000).catch(() => null);
+    const paste = () => {
+      const dt = new DataTransfer();
+      for (const f of files) dt.items.add(f);
+      (currentEditor() || editor).dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }),
+      );
+    };
     if (input) {
       const dt = new DataTransfer();
       for (const f of files) dt.items.add(f);
       input.files = dt.files;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
-      return;
+      // A working upload input creates local thumbnails immediately. If it was a decoy or its
+      // listener was not mounted yet, retry once through the composer's paste handler.
+      await sleep(1500);
+      const added = composerUploadThumbs().filter(img => !before.has(srcOf(img)));
+      if (!added.length) paste();
+      return before;
     }
     // Fallback: paste the files onto the composer.
-    const dt = new DataTransfer();
-    for (const f of files) dt.items.add(f);
-    editor.dispatchEvent(
-      new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }),
-    );
+    paste();
+    return before;
   }
-  // Ready = the composer form shows a thumbnail per image, none still a local blob: preview (those
-  // are not on ChatGPT's server yet), and nothing in the form is busy. Never send half-uploaded.
-  async function waitUploadsReady(count, job) {
+  // Ready = the composer shows every attachment, their rendered state is stable, and no upload
+  // indicator remains. Current ChatGPT builds deliberately keep blob: thumbnail URLs even after
+  // the server upload finishes, so blob: is not an uploading signal.
+  async function waitUploadsReady(count, job, before = new Set()) {
     await sleep(600);
     const end = Date.now() + 90000;
+    let stableSignature = '', stableChecks = 0, lastCount = 0;
     for (;;) {
       job.check();
-      const ed = first(EDITOR);
-      const form =
-        (ed && ed.closest('form')) ||
-        document.querySelector('main form') ||
-        document.querySelector('form');
-      if (form) {
-        const thumbs = [...form.querySelectorAll('img')].filter(img =>
-          /^blob:|estuary\/content|oaiusercontent|files\/download/.test(srcOf(img)),
-        );
-        const busy = form.querySelector('[role="progressbar"], [aria-busy="true"]');
-        if (thumbs.length >= count && !thumbs.some(img => srcOf(img).startsWith('blob:')) && !busy)
-          return;
+      const ed = currentEditor();
+      const form = ed?.closest('form');
+      let composer = form || ed;
+      // The attachment bar is now a sibling of <form> in some ChatGPT builds.
+      // Walk up to the smallest ancestor that owns the upload input or attachment UI.
+      for (let node = ed?.parentElement, depth = 0; node && depth < 8; node = node.parentElement, depth++) {
+        if (node.querySelector('#upload-files, input[type="file"], [data-testid*="attachment" i]')) {
+          composer = node;
+          if (node.querySelector('img[src^="blob:"], [data-testid*="attachment" i]')) break;
+        }
       }
-      if (Date.now() > end) throw new Error('Ảnh tham chiếu chưa tải lên xong — chưa gửi.');
+      const main = document.querySelector('main');
+      const scopes = [...new Set([composer, form, main].filter(Boolean))];
+      if (scopes.length) {
+        const thumbs = composerUploadThumbs().filter(img => !before.has(srcOf(img)));
+        const busy = scopes.some(scope => !!scope.querySelector('[aria-busy="true"], [data-uploading="true"]')) ||
+          scopes.some(scope => [...scope.querySelectorAll('[role="progressbar"]')].some(el => {
+            const style = getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && el.getClientRects().length > 0;
+          }));
+        // Toasts may be portalled outside <main> and recent ChatGPT builds use either ARIA roles
+        // or Sonner/data-testid markers. Read them globally so an account quota stops the job
+        // immediately instead of waiting for the 90-second thumbnail timeout.
+        const uploadError = [
+          ...document.querySelectorAll(
+            '[role="alert"], [role="status"], [data-sonner-toast], [data-testid*="toast" i]',
+          ),
+        ]
+          .map(el => (el.innerText || el.textContent || '').trim())
+          .find(text =>
+            /upload|tải.*(ảnh|tệp)|file.*failed|too large|không thể.*tệp|(?:reached|hit).*limit.*(?:file|attachment)|(?:file|attachment).*limit|giới hạn.*(?:tệp|file|đính kèm)/i.test(
+              text,
+            ),
+          );
+        if (uploadError) throw new Error('ChatGPT báo lỗi tải ảnh: ' + uploadError.slice(0, 180));
+        const readyCount = thumbs.length;
+        lastCount = readyCount;
+        const signature = thumbs.map(srcOf).sort().join('|');
+        if (readyCount >= count && !busy) {
+          if (signature === stableSignature) stableChecks++;
+          else { stableSignature = signature; stableChecks = 1; }
+          // Three consecutive 500 ms polls prevent filling while the attachment
+          // bar is still being replaced, without relying on its persistent blob URL.
+          if (stableChecks >= 3) return;
+        } else {
+          stableSignature = ''; stableChecks = 0;
+        }
+      }
+      if (Date.now() > end)
+        throw new Error(
+          'Ảnh tham chiếu chưa tải đủ lên ChatGPT (đã thấy ' + lastCount + '/' + count + ') — chưa gửi prompt.',
+        );
       await sleep(500);
     }
   }
@@ -685,7 +768,7 @@
         const b = first(SEND);
         return b && !b.disabled ? b : null;
       },
-      15000,
+      45000,
       'Không bấm được nút gửi của ChatGPT',
     ).catch(() => null);
     if (btn) {
@@ -874,8 +957,13 @@
   }
 
   // ---- DOM fallback -------------------------------------------------------
+  // Current ChatGPT final-result structure (confirmed from the live page): gallery -> labelled
+  // generated-image-preview button -> decoded image. This is stronger than generic progress state.
+  const FINAL_GALLERY_IMG =
+    '[data-testid="generated-image-gallery"] button[data-testid="generated-image-preview"][aria-label^="Generated image" i] img:not([aria-hidden="true"])';
   const RESULT_IMG =
-    '[data-image-gen-result] img:not([aria-hidden="true"]), [data-testid="generated-image-preview"] img';
+    FINAL_GALLERY_IMG +
+    ', [data-image-gen-result] img:not([aria-hidden="true"]), [data-testid="generated-image-preview"] img';
   const RESULT_SRC = /estuary\/content|files\/download|oaiusercontent|^blob:/;
   // The newest assistant turn, or null.
   function assistantTurn() {
@@ -909,12 +997,37 @@
     const turn = assistantTurn();
     const scope = turn || document.querySelector('main');
     if (!scope) return [];
-    let imgs = [...scope.querySelectorAll(RESULT_IMG)];
-    if (!imgs.length && turn)
-      imgs = [...turn.querySelectorAll('img')].filter(i => RESULT_SRC.test(srcOf(i)));
-    return imgs.filter(
+    // Only explicit generated-image markers are eligible. Generic assistant
+    // images can be intermediate copies of the user's references.
+    return [...scope.querySelectorAll(RESULT_IMG)].filter(
       i => srcOf(i) && i.getAttribute('aria-hidden') !== 'true' && !i.closest(USER_TURN + ', form'),
     );
+  }
+
+  function imageGenerationInProgress() {
+    const scope = assistantTurn() || document.querySelector('main');
+    if (!scope) return false;
+    // Do not treat every aria-valuenow as image progress: the completed image viewer contains
+    // sliders/controls with that attribute. Only a visible progress control below 100%, or one
+    // explicitly labelled as image generation, keeps the result pending.
+    const progress = [...scope.querySelectorAll('[role="progressbar"], [data-testid*="progress" i]')];
+    for (const el of progress) {
+      const style = getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || !el.getClientRects().length)
+        continue;
+      const raw = el.getAttribute('aria-valuenow');
+      const value = raw == null || raw === '' ? NaN : Number(raw);
+      if (Number.isFinite(value)) {
+        if (value < 100) return true;
+        continue;
+      }
+      const label = [el.getAttribute('aria-label'), el.getAttribute('data-testid'), el.textContent]
+        .filter(Boolean)
+        .join(' ');
+      if (/image|generat|creating|progress|tweak|tạo ảnh|đang tạo/i.test(label)) return true;
+    }
+    const text = (scope.innerText || scope.textContent || '').replace(/\s+/g, ' ').slice(-1200);
+    return /\b(?:[0-9]|[1-9][0-9])%\b|one last tweak|creating (?:your )?image|generating image|đang tạo ảnh/i.test(text);
   }
 
   // Early exits that need a human. Each must hold on two polls in a row.
@@ -929,8 +1042,8 @@
     return '';
   }
 
-  // Wait for this job's generated image, polling every 5 s. The backend is the source of truth and
-  // the Stop button is never read as done or failed (images render after it disappears). It ends
+  // Wait for this job's generated image. API assets and the rendered result are checked together;
+  // the Stop button is never read as done or failed (images can finish before it disappears). It ends
   // early only on a clear signal: the reply finished without an image (two polls in a row, past
   // opt.refuseAfter), a rate-limit dialog, a Cloudflare challenge, or a login wall. The DOM is read
   // only while the API keeps failing (or the conversation id is unknown).
@@ -1012,9 +1125,10 @@
           noImage = 0;
           noImageSince = 0;
           phase = 'ảnh sắp xong';
-          // Settled = no background task left and the same pointer on two polls (or the turn is
-          // finished). A pointer unchanged for 90 s is taken whatever the status fields say.
-          if ((st.idle && (st.finished || steady >= POLL_MS - 1000)) || steady >= 90000) {
+          // Intermediate tool messages can expose the user's reference asset.
+          // Download only after the user-facing assistant turn has ended and
+          // the conversation API confirms no background image task remains.
+          if (st.idle && st.finished) {
             job.say('đã có ảnh, đang tải');
             try {
               const out = await downloadAsset(cid, asset);
@@ -1044,34 +1158,42 @@
         }
       }
 
-      // DOM fallback: only a stable, fully loaded, big image of the newest assistant turn, the same
-      // src for 10 s with nothing streaming. Any poll without it starts the 10 s over.
-      if (!cid || apiErrs >= 3 || dlErrs >= 3) {
-        const img = last(
-          domImages().filter(i => !skipSrc.has(srcOf(i)) && i.complete && i.naturalWidth >= 512),
+      // Check the rendered result on every poll, even while the conversation API still reports an
+      // async task. ChatGPT can leave async_status/end_turn stale long after the finished image is
+      // already rendered. domImages() only returns explicit generated-image markers from the newest
+      // assistant turn, so reference uploads are ineligible. A preview is accepted only after its
+      // src is stable for a full poll and both the progress UI and streaming state have disappeared.
+      const img = last(
+        domImages().filter(i => !skipSrc.has(srcOf(i)) && i.complete && i.naturalWidth >= 512),
+      );
+      const src = img ? srcOf(img) : '';
+      if (src !== domSrc) {
+        domSrc = src;
+        domSince = Date.now();
+      }
+      if (img) {
+        phase = 'đã thấy ảnh hoàn chỉnh, đang xác nhận';
+        const domSteady = Date.now() - domSince;
+        const finalGallery = !!img.closest?.(
+          '[data-testid="generated-image-gallery"] button[data-testid="generated-image-preview"][aria-label^="Generated image" i]',
         );
-        const src = img ? srcOf(img) : '';
-        if (src !== domSrc) {
-          domSrc = src;
-          domSince = Date.now();
-        }
-        if (img) {
-          phase = 'đã thấy ảnh trên trang, chờ ổn định';
-          if (Date.now() - domSince >= 10000 && !isStreaming()) {
-            try {
-              const out = await imgToResult(img);
-              if (!isRef(out)) return out;
-              skipSrc.add(src);
-              lastErr = 'ảnh trên trang trùng ảnh tham chiếu';
-            } catch (e) {
-              lastErr = 'đọc ảnh trên trang: ' + e.message;
-            }
+        // A stale Stop/streaming flag can survive after image generation has completed. At this
+        // point the element is an explicit generated-image result, fully decoded and stable. The
+        // labelled final gallery is conclusive; older layouts still use the progress detector.
+        if (domSteady >= IMAGE_POLL_MS && (finalGallery || !imageGenerationInProgress())) {
+          try {
+            const out = await imgToResult(img);
+            if (!isRef(out)) return out;
+            skipSrc.add(src);
+            lastErr = 'ảnh trên trang trùng ảnh tham chiếu';
+          } catch (e) {
+            lastErr = 'đọc ảnh trên trang: ' + e.message;
           }
         }
-      } else domSrc = '';
+      }
 
       job.say(phase);
-      await sleep(POLL_MS);
+      await sleep(IMAGE_POLL_MS);
     }
   }
 })();

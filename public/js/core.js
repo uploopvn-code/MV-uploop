@@ -1,19 +1,39 @@
 // Small helpers every feature uses: DOM lookup, HTML escaping, the API client, toasts,
 // download names, and the "workflow is busy" lock.
 import { store } from './store.js';
+import { t } from './i18n.js';
 
-// The workflow is read-only while any job is queued/running or an auto-run is active —
-// the server rejects edits then, so the UI mirrors that lock instead of letting the user
-// make changes that would only error or silently not persist.
+// A single image/video job runs against its captured inputs. An auto-run protects only
+// its own targets and ancestors; workflowBusy still reports that an auto-run is active.
 export const workflowBusy = () =>
   !!(
     typeof store.state !== 'undefined' &&
     store.state &&
     (store.state.autoRun?.status === 'running' ||
       store.state.autoVideoRun?.status === 'running' ||
-      store.state.autoImageRun?.status === 'running' ||
-      store.state.jobs?.some(j => ['queued', 'running'].includes(j.status) && !j.cancelRequested))
+      store.state.autoImageRun?.status === 'running')
   );
+export const workflowProcessing = () => workflowBusy() ||
+  !!store.state?.jobs?.some(j => ['queued', 'running'].includes(j.status) && !j.cancelRequested);
+export function workflowNodeLocked(id) {
+  if (!id || !workflowBusy()) return false;
+  const state = store.state;
+  const targets = new Set([
+    ...(state.autoRun?.status === 'running' ? state.autoRun.order || [] : []),
+    ...(state.autoImageRun?.status === 'running' ? state.autoImageRun.pending || [] : []),
+    ...(state.autoVideoRun?.status === 'running' ? Object.keys(state.autoVideoRun.versionTargets || {}) : []),
+  ]);
+  if (state.autoImageRun?.status === 'running')
+    for (const job of state.jobs || [])
+      if (job.autoImageId === state.autoImageRun.id && ['queued', 'running'].includes(job.status)) targets.add(job.nodeId);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of state.edges || [])
+      if (targets.has(edge.target) && !targets.has(edge.source)) { targets.add(edge.source); changed = true; }
+  }
+  return targets.has(id);
+}
 const pad2 = n => String(n || 0).padStart(2, '0');
 // Filesystem-safe version of a node name.
 const safeName = s =>
@@ -71,7 +91,7 @@ export async function api(url, options = {}) {
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
   const data = await r.json();
-  if (!r.ok) throw new Error(data.error || 'Không kết nối được');
+  if (!r.ok) throw new Error(data.error || t('common.connectionError'));
   return data;
 }
 export function toast(msg, error = false) {
@@ -84,8 +104,8 @@ export function toast(msg, error = false) {
 export async function copy(text) {
   try {
     await navigator.clipboard.writeText(text);
-    toast('Đã sao chép');
+    toast(t('common.copied'));
   } catch {
-    toast('Trình duyệt chưa cho phép sao chép. Chọn và copy nội dung prompt.', true);
+    toast(t('common.copyDenied'), true);
   }
 }

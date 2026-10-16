@@ -1,0 +1,222 @@
+{
+  "film": {
+    "title": "THE RECKLESS NEWCOMER / OBRION"
+  },
+  "assets": [
+    {
+      "key": "ami",
+      "role": "character",
+      "name": "Ami",
+      "code": "NV1",
+      "identity_label": "the young woman with cracked goggles",
+      "back_view": "dusty black hair tied low, patched rust-red hood and cracked goggle strap across the back of her head",
+      "physical_anchors": [
+        "young woman with dark eyes",
+        "dark hair tied in a low knot",
+        "small notch in left eyebrow",
+        "cracked left goggle lens",
+        "patched rust-red hood and dust-brown utility jacket"
+      ],
+      "voice_profile": {
+        "gender": "Female",
+        "age_sound": "Mid 20s",
+        "timbre": "low and breath-worn",
+        "accent": "Vietnamese",
+        "pacing": "short clipped breaths",
+        "emotional_baseline": "frightened but resisting panic"
+      },
+      "prompt": "Character model sheet turnaround of Ami, an original fictional 25-year-old woman with dark eyes, dark hair tied in a low knot and a small notch in her left eyebrow, wearing a patched rust-red hood over a dust-brown utility jacket and cracked protective goggles with the left lens fractured, a worn survival bow slung across her back; portrait on left, front, side and back views on right, neutral standing pose, solid gray background, neutral studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling any celebrity, public figure or existing model; any resemblance is purely coincidental."
+    },
+    {
+      "key": "ken",
+      "role": "character",
+      "name": "Ken",
+      "code": "NV2",
+      "identity_label": "the weathered driver",
+      "prompt": "Lean adult man, early forties, weathered face, dark short hair, left eyebrow scar, practical patched dark driver jacket, worn mechanical right-hand glove, guarded posture; the same man across all scenes. Original fictional character, realistic 35mm character turnaround on a neutral gray background, front, profile and back views; no text, no celebrity likeness."
+    },
+    {
+      "key": "rao",
+      "role": "character",
+      "name": "Rao",
+      "code": "NV3",
+      "identity_label": "the salt-market broker",
+      "prompt": "Adult woman in her fifties, angular face, dry lips, dark hair streaked gray and tied back, oil-stained hands, patched work apron; watchful and economical in movement. Original fictional character, realistic 35mm character turnaround on a neutral gray background, front, profile and back views; no text, no celebrity likeness."
+    },
+    {
+      "key": "tam",
+      "role": "character",
+      "name": "Tâm",
+      "code": "NV4",
+      "identity_label": "the wounded VCN archivist",
+      "prompt": "Adult Vietnamese woman in her thirties, cropped dark hair, tired eyes, torn off-white VCN medical overcoat with a left-side blood stain, practical gray shirt; never glamorous. Original fictional character, realistic 35mm character turnaround on a neutral gray background, front, profile and back views; no text, no celebrity likeness."
+    },
+    {
+      "key": "detained_girl",
+      "role": "character",
+      "name": "Bé gái bị giam",
+      "code": "NV5",
+      "identity_label": "the detained twelve-year-old girl",
+      "prompt": "Fictional twelve-year-old girl, short dark hair, narrow face, oversized dust-gray detention garment, faded registration ink at wrist; frightened but observant, no sexualization. Original fictional character, realistic 35mm character turnaround on a neutral gray background, front, profile and back views; no text, no celebrity likeness."
+    },
+    {
+      "key": "vcn_captain",
+      "role": "character",
+      "name": "Đội trưởng VCN",
+      "code": "NV6",
+      "identity_label": "the checkpoint captain",
+      "prompt": "Adult VCN officer in his forties, tired lined face, matte worn gray checkpoint armor, plain utilitarian insignia without readable text; no villain glamour. Original fictional character, realistic 35mm character turnaround on a neutral gray background, front, profile and back views; no text, no celebrity likeness."
+    },
+    {
+      "key": "vcn_guard",
+      "role": "character",
+      "name": "Lính VCN",
+      "code": "NV7",
+      "identity_label": "the VCN guard",
+      "prompt": "Adult VCN guard, practical scuffed gray armor, dusty visor, restrained non-heroic body language; generic guard design consistent in every location. Original fictional character, realistic 35mm character turnaround on a neutral gray background, front, profile and back views; no text, no celebrity likeness."
+    },
+    {
+      "key": "medic",
+      "role": "character",
+      "name": "Nhân viên y vụ Gamma",
+      "code": "NV8",
+      "identity_label": "the unarmed Gamma medic",
+      "prompt": "Adult Gamma medical worker, pale utilitarian scrubs, tired ordinary face, empty hands, frightened and unarmed; no resemblance to real people. Original fictional character, realistic 35mm character turnaround on a neutral gray background, front, profile and back views; no text, no celebrity likeness."
+    },
+    {
+      "key": "detainee",
+      "role": "character",
+      "name": "Người bị giam",
+      "code": "NV9",
+      "identity_label": "the adult detainee",
+      "prompt": "Exhausted adult prisoner, dust-gray detention clothing, thin face and a slight limp, no gore; same adult when seen inside and outside the cell. Original fictional character, realistic 35mm character turnaround on a neutral gray background, front, profile and back views; no text, no celebrity likeness."
+    },
+    {
+      "key": "ken_vehicle",
+      "role": "scene",
+      "name": "Khoang xe của Ken",
+      "lighting_profile": "Dry pale daylight through dirty right window; Ken frame-left, Ami frame-right; no axis flip.",
+      "prompt": "Interior of Ken’s old patched desert vehicle, damaged dashboard, scratched windshield, loose ID card on the dash, worn cloth seats; driver left, passenger right. Empty master location reference, no people, no readable writing, consistent architecture and axis across angles, photorealistic 35mm.",
+      "reverse_angles": false
+    },
+    {
+      "key": "checkpoint",
+      "role": "scene",
+      "name": "Trạm cân VCN",
+      "lighting_profile": "Ash-gray daylight, dirty tungsten under inspection canopy.",
+      "prompt": "Obrion desert VCN weighing checkpoint: two inspection lanes, barrier arm, scanning station, detention vehicle lane camera-right, dusty metal canopy and distant sand road. Empty master location reference, no people, no readable writing, consistent architecture and axis across angles, photorealistic 35mm.",
+      "reverse_angles": false
+    },
+    {
+      "key": "salt_market",
+      "role": "scene",
+      "name": "Chợ muối và quầy Rao",
+      "lighting_profile": "White hazy daylight outside; dirty amber bulbs under corrugated roof.",
+      "prompt": "Obrion salt market of patched corrugated roofing, narrow alleys, sacks of mineral salt, Rao’s small repair booth with a half curtain and old offline terminal, service hatch behind. Empty master location reference, no people, no readable writing, consistent architecture and axis across angles, photorealistic 35mm.",
+      "reverse_angles": false
+    },
+    {
+      "key": "service_tunnel",
+      "role": "scene",
+      "name": "Đường dịch vụ dưới Gamma",
+      "lighting_profile": "Aging green-blue fluorescents, deep shadow and occasional red warning spill.",
+      "prompt": "Low damp maintenance tunnels beneath Gamma, exposed live wires above salty runoff, mechanical pump, metal access hatches, branching passage and a cold-storage door. Empty master location reference, no people, no readable writing, consistent architecture and axis across angles, photorealistic 35mm.",
+      "reverse_angles": false
+    },
+    {
+      "key": "gamma_archive",
+      "role": "scene",
+      "name": "Kho ký ức Gamma",
+      "lighting_profile": "Cold white fluorescent light with restrained amber emergency lamps.",
+      "prompt": "Long Gamma archive with frosted data cabinets, one offline terminal, glass wall overlooking intake, narrow security door; practical worn infrastructure, no holograms. Empty master location reference, no people, no readable writing, consistent architecture and axis across angles, photorealistic 35mm.",
+      "reverse_angles": false
+    },
+    {
+      "key": "gamma_intake",
+      "role": "scene",
+      "name": "Khu nhận số 4",
+      "lighting_profile": "Cold overhead white with red alarm lamps that only switch on after the alarm.",
+      "prompt": "Gamma detention intake number four: three separate glass-front cells with individual manual valves, connecting corridor, local-battery emergency exit, service door and visible sightline to the archive. Empty master location reference, no people, no readable writing, consistent architecture and axis across angles, photorealistic 35mm.",
+      "reverse_angles": false
+    },
+    {
+      "key": "gamma_escape",
+      "role": "scene",
+      "name": "Lối thoát Gamma và bãi gió",
+      "lighting_profile": "Gray exterior night changing to a dusty red dawn; interior emergency red stays behind.",
+      "prompt": "Gamma maintenance stairwell opening onto a barren windy ridge, dry grass, low sand berm and distant facility floodlights; escape route has no clean safe haven. Empty master location reference, no people, no readable writing, consistent architecture and axis across angles, photorealistic 35mm.",
+      "reverse_angles": false
+    }
+  ],
+  "styles": [
+    {
+      "key": "style_obrion",
+      "name": "Obrion gritty realism",
+      "prompt": "Gritty photorealistic 35mm science fiction; physical dust, old metal, natural skin and exhaustion, compressed telephoto for enclosed threat, wide lens only for geography, static camera by default, no glossy heroics, no clean futuristic interfaces, no readable on-screen text."
+    }
+  ],
+  "cameras": [
+    {
+      "key": "cam_ws",
+      "name": "Wide / geography",
+      "config": "Locked wide shot, 24–35mm, preserve geography and 180-degree axis; physical movement only."
+    },
+    {
+      "key": "cam_ms",
+      "name": "Medium / blocking",
+      "config": "Locked medium shot, 35–50mm, body position and distance carry the action; no decorative pan."
+    },
+    {
+      "key": "cam_cu",
+      "name": "Close / microexpression",
+      "config": "Locked close-up, 50–85mm, realistic microexpression and shallow focus, no digital zoom."
+    },
+    {
+      "key": "cam_ecu",
+      "name": "Detail / evidence",
+      "config": "Locked extreme close-up or macro, 85mm equivalent, one physical detail, no hallucinated readable interface text."
+    },
+    {
+      "key": "cam_ots",
+      "name": "Over shoulder",
+      "config": "Static over-shoulder, 50mm, maintain established left/right axis and background continuity."
+    },
+    {
+      "key": "cam_pov",
+      "name": "Subjective view",
+      "config": "Static point of view at character eye height, preserve clear screen direction and plausible sightline."
+    },
+    {
+      "key": "cam_handheld",
+      "name": "Motivated handheld",
+      "config": "35mm restrained handheld only during actual running, impact or loss of balance; no ornamental shake."
+    }
+  ],
+  "audio": [
+    {
+      "key": "aud_road",
+      "name": "Road and checkpoint",
+      "prompt": "Worn vehicle engine, dry wind, metal chain rattle, checkpoint scanner; no heroic music or added dialogue."
+    },
+    {
+      "key": "aud_market",
+      "name": "Salt market",
+      "prompt": "Dry market ambience, salt under shoes, low human murmur and distant transport engine; no score or additional spoken words."
+    },
+    {
+      "key": "aud_tunnel",
+      "name": "Service tunnel",
+      "prompt": "Old pump, salty water, loose metal, strained breathing and distant guards; no score or additional spoken words."
+    },
+    {
+      "key": "aud_gamma",
+      "name": "Gamma facility",
+      "prompt": "Cold ventilation, electric lock clicks, distant alarm when specified, restrained footsteps; no score or additional spoken words."
+    },
+    {
+      "key": "aud_escape",
+      "name": "Escape and dawn",
+      "prompt": "Wind, dry grass, distant searchlight motors, injured breathing and intermittent crackling speaker; no triumphant score or additional spoken words."
+    }
+  ]
+}

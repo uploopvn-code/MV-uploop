@@ -54,8 +54,15 @@ assert.equal(byName('Style').zone, 'setup');
 assert.equal(byName('Ca sĩ').zone, 'character');
 assert.equal(byName('Sân khấu').zone, 'design');
 assert.equal(byName('Wide').settingType, 'camera');
-assert.equal(byName('Ca sĩ').prompt, 'singer model sheet');
-assert.equal(byName('Shot 1').videoInput, 'refs');
+// A character's blueprint prompt DESCRIBES the person; it becomes the description the server
+// wraps in its own turnaround sheet, exactly like a prop or a location. It must not replace
+// that sheet, or a terse blueprint line silently drops the clauses that make the image a real
+// model sheet (same scale, one baseline, same lighting, no scenery, no text).
+assert.equal(byName('Ca sĩ').prompt, '', 'a character description does not replace the sheet');
+assert.equal(byName('Ca sĩ').desc, 'singer model sheet', 'it becomes the sheet description');
+// Shot mặc định quay từ ảnh khung hình đã render của chính nó; đổi sang 'refs' trong Inspector
+// khi muốn gửi thẳng ảnh các node nối vào (xem test-video-input.mjs).
+assert.equal(byName('Shot 1').videoInput, 'self');
 assert.equal(byName('Shot 2').duration, 10);
 // Shot 1 wired to singer, stage, wide-camera and style.
 const s1 = byName('Shot 1').id;
@@ -870,9 +877,11 @@ try {
   // Drama shot: the wired camera + style text reaches the resolved image AND video prompts,
   // after the cast line; the @key becomes the character's name.
   const sa = r.data.nodes.find(n => n.name === 'SA');
+  // Shot mặc định quay từ ảnh khung hình của chính nó, nên prompt video mở đầu bằng câu
+  // keyframe. (Dạng "Reference subjects…" là của chế độ refs — xem test-video-input.mjs.)
   assert.match(
     sa.resolvedPrompts.video,
-    /^Reference subjects, in the order of the attached images: \[1\] Q\. Veo Q\. No spoken dialogue in this shot: nobody speaks and no lips move\. Audio is location sound only; no added music, no voice-over, no narration\. Camera: x Style: Cinematic/,
+    /^The attached image is the first frame of this shot: animate it, keeping every face, outfit, prop and the set exactly as they are\. Veo Q\. No spoken dialogue in this shot: nobody speaks and no lips move\. Audio is location sound only; no added music, no voice-over, no narration\. Camera: x Style: Cinematic/,
   );
   assert.match(
     sa.resolvedPrompts.image,
@@ -960,6 +969,11 @@ try {
   };
   r = await api('/api/director/build', 'POST', { blueprint: duo });
   assert.equal(r.status, 200, JSON.stringify(r.data));
+  // Dòng cast và số "(reference image N)" chỉ có ở chế độ "ảnh từ node nối vào"; shot mặc định
+  // quay từ keyframe của chính nó. Khối kiểm dưới đây nói về chế độ refs nên chuyển sang refs.
+  for (const sh of r.data.nodes.filter(n => !n.terminal && 'duration' in n))
+    r = await api('/api/node', 'PATCH', { id: sh.id, videoInput: 'refs' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
   const vp = r.data.nodes.find(n => n.name === 'D1').resolvedPrompts.video;
   assert.match(
     vp,
@@ -993,12 +1007,12 @@ try {
   assert.ok(!/Reference subjects/.test(vp2), 'no cast line when nobody is in frame');
   assert.equal(
     vp2,
-    'Veo: empty the hall at dawn. No spoken dialogue in this shot: nobody speaks and no lips move. Audio is location sound only; no added music, no voice-over, no narration.',
-    'scene tags resolve, and a shot with no line is told to stay silent',
+    'Veo: empty the hall at dawn. No spoken dialogue in this shot: nobody speaks and no lips move. Audio is location sound only; no added music, no voice-over, no narration. 16:9 horizontal frame.',
+    'scene tags resolve, a shot with no line is told to stay silent, and the frame aspect is stated',
   );
   assert.match(
     vp,
-    /only; everyone else stays silent and listens\. Voice lock for NV1: Female; timbre: low alto; accent: Hanoi; pacing: slow\. Delivery: whispered, tight\.$/,
+    /only; everyone else stays silent and listens\. Voice lock for NV1: Female; timbre: low alto; accent: Hanoi; pacing: slow\. Delivery: whispered, tight\. 16:9 horizontal frame\.$/,
     'voice lock = Bible voice_profile + the shot audio_delivery, by code, after the speaker line',
   );
   assert.ok(
@@ -1008,7 +1022,7 @@ try {
   const vp3 = r.data.nodes.find(n => n.name === 'D3').resolvedPrompts.video;
   assert.equal(
     vp3,
-    "Veo: the hall stands empty. Voice lock for NV1 (voiceover in NV1's own voice): Female; timbre: low alto; accent: Hanoi; pacing: slow. Delivery: serene.",
+    "Veo: the hall stands empty. Voice lock for NV1 (voiceover in NV1's own voice): Female; timbre: low alto; accent: Hanoi; pacing: slow. Delivery: serene. 16:9 horizontal frame.",
     'voice-over: no lip-sync line, the voice is still locked although the speaker is not in frame',
   );
   const vp4 = r.data.nodes.find(n => n.name === 'D4').resolvedPrompts.video;
@@ -1050,8 +1064,12 @@ try {
     /^A new camera angle of the location shown in the reference image\. Camera: Reverse angle A[\s\S]*not the reference framing[\s\S]*No people/,
   );
   assert.equal(plate.imageInputs, 1, 'the master is its image input');
+  // Dòng cast chỉ có ở chế độ "ảnh từ node nối vào" (mặc định là keyframe của shot).
+  const a1 = r.data.nodes.find(n => n.name === 'A1').id;
+  r = await api('/api/node', 'PATCH', { id: a1, videoInput: 'refs' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.match(
-    r.data.nodes.find(n => n.name === 'A1').resolvedPrompts.video,
+    r.data.nodes.find(n => n.id === a1).resolvedPrompts.video,
     /^Reference subjects, in the order of the attached images: \[1\] Ann; \[2\] the hall — Sảnh — góc cận A \(sau vai A nhìn B\)\. Veo Ann in the hall\./,
     'OTS A shot wired to angle A, named by its scene; @scene key resolves to it',
   );
@@ -1575,6 +1593,25 @@ try {
     /CHANGED study/,
     'edited staging drives the still prompt',
   );
+
+  // Phân cảnh ghép chọn nguồn render: Seedvis API hoặc Seedane · Dola (Dola là Seedance).
+  let msr = await api('/api/node', 'PATCH', {
+    id: ms.id,
+    seedvis: { video: false },
+    seedane: { video: { platform: 'dola', model: '2.0' } },
+  });
+  let md = msr.data.nodes.find(x => x.id === ms.id);
+  assert.equal(md.providers.video.type, 'seedane', 'phân cảnh ghép chạy được qua Seedane');
+  assert.equal(md.providers.video.platform, 'dola');
+  assert.equal(md.videoRefLimit, 9, 'Dola 2.0 nhận 9 ảnh khung');
+  msr = await api('/api/node', 'PATCH', {
+    id: ms.id,
+    seedane: { video: false },
+    seedvis: { video: { model: 'Veo-3.1', aspectRatio: '16:9' } },
+  });
+  md = msr.data.nodes.find(x => x.id === ms.id);
+  assert.equal(md.providers.video.type, 'seedvis', 'đổi lại Seedvis');
+  assert.equal(md.providers.video.model, 'Veo-3.1');
   assert.equal(
     (
       await api('/api/merged/staging', 'POST', {

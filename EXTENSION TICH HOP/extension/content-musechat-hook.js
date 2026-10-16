@@ -124,10 +124,10 @@
     return regions.length === 1 ? (conversationRoot = regions[0]) : null;
   }
   function restore(state) {
-    if (!state?.queueId || !state.sentAt || Date.now() - state.sentAt >= 20 * 60 * 1000) return false;
+    if (!state?.queueId || !state.sentAt || (!state.recovery && Date.now() - state.sentAt >= 20 * 60 * 1000)) return false;
     baseline = new Set(state.baseline || []);
-    baselineElements = new WeakSet(document.querySelectorAll('video, video source, a[href]'));
-    baselineDom = new WeakSet(document.querySelectorAll('*'));
+    baselineElements = new WeakSet(state.recovery ? [] : document.querySelectorAll('video, video source, a[href], img'));
+    baselineDom = new WeakSet(state.recovery ? [] : document.querySelectorAll('*'));
     const restored = { ...state }; delete restored.baseline;
     window.__dramaMuseChatActiveJob = restored;
     conversationRoot = null; best = null; save();
@@ -136,7 +136,7 @@
   window.__dramaMuseChatSnapshot = snapshot;
   window.__dramaMuseChatRestore = restore;
   const urlOf = el => el.currentSrc || el.src || el.href || el.getAttribute('src') || el.getAttribute('href') || '';
-  const media = root => [...root.querySelectorAll('video, video source, a[href]')];
+  const media = root => [...root.querySelectorAll('video, video source, a[href], img')];
   const mediaForJob = region => {
     // Muse renders generated cards through a React portal in some layouts. The
     // player can therefore be a sibling of the conversation/composer captured
@@ -148,7 +148,7 @@
     }
     return results;
   };
-  function arm(queueId, prompt) {
+  function arm(queueId, prompt, kind = 'video') {
     const existingMedia = media(document);
     baseline = new Set(existingMedia.map(urlOf).filter(Boolean));
     baselineElements = new WeakSet(existingMedia);
@@ -158,7 +158,7 @@
     const input = ui()?.composer(true);
     conversationRoot = input ? ui().scope(input) : null;
     window.__dramaMuseChatWarning = null;
-    window.__dramaMuseChatActiveJob = { queueId, prompt, sentAt: Date.now(), confirmed: false, requestStarted: false, scopeHint: scopeHint(conversationRoot) };
+    window.__dramaMuseChatActiveJob = { queueId, prompt, kind, sentAt: Date.now(), confirmed: false, requestStarted: false, scopeHint: scopeHint(conversationRoot) };
     save();
   }
   function confirm() { if (job()) { job().confirmed = true; save(); scan(); } }
@@ -184,7 +184,7 @@
     if (best && best.score > score) return;
     if (best?.url === url && best.score === score) return;
     best = { url, score };
-    window.__dramaMuseChatCaptured = { queueId: qid, videoUrl: url, score };
+    window.__dramaMuseChatCaptured = { queueId: qid, ...(active.kind === 'image' ? { imageUrl: url } : { videoUrl: url }), score };
   }
   function promptAnchor(active) {
     const needle = norm(active?.prompt).slice(0, 120);
@@ -217,8 +217,18 @@
     const region = regionForJob();
     for (const el of mediaForJob(region)) {
       if (el.closest('[data-message-author-role="user"], [data-role="user"]')) continue;
+      const image = active.kind === 'image';
+      if (image !== (el.tagName === 'IMG')) continue;
       const isPlayer = el.tagName === 'VIDEO' || el.tagName === 'SOURCE';
       const url = urlOf(el);
+      if (image) {
+        if (!url || el.closest('header, nav, aside, [role="banner"]') || !followsPrompt(el, active)) continue;
+        const result = el.closest('[data-message-author-role="assistant"], [data-role="assistant"], [data-result], [data-output], [data-generation]');
+        if (!result || baselineElements.has(el) || baseline.has(url)) continue;
+        if (el.naturalWidth && el.naturalWidth < 128) continue;
+        capture(url, 4, active.queueId);
+        continue;
+      }
       // A <video> URL need not have an extension. A generic blob link can be an image.
       if (!isPlayer && !/\.(mp4|webm)(?:[?#]|$)/i.test(url) && !/^video\//i.test(el.type || '')) continue;
       const player = el.tagName === 'SOURCE' ? el.parentElement : el;

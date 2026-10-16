@@ -1,0 +1,188 @@
+{
+  "project": {
+    "title": "Chiếc Phong Bì",
+    "theme": "film",
+    "genre": "Drama ngắn / Bí mật gia đình",
+    "logline": "Một cô gái nhận phong bì từ anh trai và biết sự thật về người mẹ đã mất.",
+    "country_setting": "Việt Nam, quán cà phê nhỏ trong một chiều mưa",
+    "aspect_ratio": "16:9",
+    "pacing_profile": "Chậm và căng; cao trào ở cuối",
+    "beat_sheet": {
+      "setup": "Lan đến quán cà phê vắng.",
+      "tension_rising": "Minh trao phong bì và do dự.",
+      "confrontation": "Lan mở phong bì, nhận ra nét chữ của mẹ.",
+      "reveal": "Bức thư cho biết mẹ vẫn còn sống.",
+      "aftermath": "Lan rời quán để tìm mẹ."
+    }
+  },
+  "styles": [
+    {
+      "key": "style_main",
+      "name": "Mưa và ký ức",
+      "prompt": "Photorealistic 35mm drama, natural skin texture, restrained cool-blue rain outside and warm tungsten inside, soft film grain, consistent color grade, no CGI, no on-screen text."
+    }
+  ],
+  "audio": [
+    {
+      "key": "aud_cafe",
+      "name": "Không khí quán cà phê",
+      "prompt": "Soft rain on the window, distant traffic and a quiet clock; dialogue stays intelligible, no lyrics, no crowd chatter."
+    }
+  ],
+  "assets": [
+    {
+      "key": "lan",
+      "role": "character",
+      "name": "Lan",
+      "code": "NV1",
+      "identity_label": "the woman with a short black bob",
+      "back_view": "short black bob above the collar of a navy coat",
+      "physical_anchors": ["short black bob", "oval face", "small scar above left eyebrow", "steady dark eyes"],
+      "voice_profile": {
+        "gender": "Female",
+        "age_sound": "Late 20s",
+        "timbre": "low and clear",
+        "accent": "Northern Vietnamese",
+        "pacing": "measured",
+        "emotional_baseline": "guarded grief"
+      },
+      "prompt": "Character model sheet turnaround of a fictional 28-year-old Vietnamese woman with a short black bob, oval face, a small scar above her left eyebrow and steady dark eyes, wearing a navy coat, portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling any celebrity, public figure or existing model; any resemblance is purely coincidental."
+    },
+    {
+      "key": "minh",
+      "role": "character",
+      "name": "Minh",
+      "code": "NV2",
+      "identity_label": "the man with close-cropped hair",
+      "back_view": "close-cropped black hair and charcoal jacket shoulders",
+      "physical_anchors": ["close-cropped black hair", "square jaw", "thin silver glasses", "tired brown eyes"],
+      "voice_profile": {
+        "gender": "Male",
+        "age_sound": "Early 30s",
+        "timbre": "slightly rough",
+        "accent": "Northern Vietnamese",
+        "pacing": "hesitant",
+        "emotional_baseline": "guilt held in check"
+      },
+      "prompt": "Character model sheet turnaround of a fictional 32-year-old Vietnamese man with close-cropped black hair, a square jaw, thin silver glasses and tired brown eyes, wearing a charcoal jacket, portrait on left, front, side and back views on right, neutral standing pose, solid gray background, studio lighting, consistent facial identity, cinematic 35mm photorealistic. This is an original fictional AI-generated character, not a real person and not resembling any celebrity, public figure or existing model; any resemblance is purely coincidental."
+    },
+    {
+      "key": "cafe",
+      "role": "scene",
+      "name": "Quán cà phê chiều mưa",
+      "lighting_profile": "Warm tungsten key from camera left, cool rainy window fill, gentle rim on both faces; no daylight change across cuts.",
+      "prompt": "Small Vietnamese cafe with dark wooden tables, a rain-streaked street window on camera right, warm pendant lamps and a wall clock; fixed table and window positions for every angle.",
+      "conversation": {
+        "place": "A two-person table in the cafe, the rainy window on camera right, no extra people in the background.",
+        "two_shot": "Camera on the aisle side of the table, holding both people on the same side of the 180-degree axis.",
+        "left": {
+          "anchor": "Lan sits by the aisle",
+          "background": "the cafe wall and clock",
+          "light": "warm pendant key on Lan's face, cool edge from the window"
+        },
+        "right": {
+          "anchor": "Minh sits beside the rainy window",
+          "background": "the rain-streaked window and street bokeh",
+          "light": "cool window fill on Minh's face, warm pendant rim"
+        }
+      }
+    },
+    {
+      "key": "letter",
+      "role": "prop",
+      "kind": "item",
+      "name": "Phong bì và thư",
+      "prompt": "One worn cream paper envelope containing a handwritten letter, slightly bent top-right corner, dark blue ink, no readable words on the sheet.",
+      "continuity_note": "Same cream envelope and bent corner in every shot; never change hands without a visible handoff."
+    }
+  ],
+  "wardrobe": [],
+  "cameras": [
+    {
+      "key": "cam_wide",
+      "name": "Toàn cảnh quán",
+      "config": "WS, eye level, 35mm lens, locked tripod with a very slow 30 cm push-in; keep the window to camera right."
+    },
+    {
+      "key": "cam_insert",
+      "name": "Cận phong bì",
+      "config": "ECU insert, 85mm macro lens, locked camera, shallow but readable focus on the envelope corner; no orbit."
+    },
+    {
+      "key": "cam_reveal",
+      "name": "Cận phản ứng của Lan",
+      "config": "CU, eye level, 50mm lens, slow 40 cm push-in to Lan's eyes, hold the final frame steady."
+    }
+  ],
+  "shots": [
+    {
+      "name": "01 - Lan đến quán",
+      "start": 0,
+      "duration": 5,
+      "beat": "setup",
+      "emotional_value": -1,
+      "uses": ["lan", "cafe", "cam_wide", "style_main", "aud_cafe"],
+      "camera": "cam_wide",
+      "style": "style_main",
+      "audio": "aud_cafe",
+      "dialogue": "",
+      "videoPrompt": "Veo Video Prompt: Compose the connected references seamlessly. @NV1 enters @cafe and sees an empty chair opposite her; she stops for a beat, then sits. Keep her coat and the window position consistent. Lighting & Physics: warm pendant key and cool rain fill, grounded footsteps and realistic wet reflections; clean footage, no text, no subtitles, no watermark, fictional characters only.",
+      "transition_to_next": "Hard cut on the chair movement."
+    },
+    {
+      "name": "02 - Minh trao phong bì",
+      "start": 5,
+      "duration": 8,
+      "beat": "tension_rising",
+      "emotional_value": -3,
+      "uses": ["lan", "minh", "cafe", "style_main", "aud_cafe"],
+      "style": "style_main",
+      "audio": "aud_cafe",
+      "place": "cafe",
+      "sides": { "left": "lan", "right": "minh" },
+      "setups": [
+        {
+          "framing": "ots_a",
+          "dialogue": "Minh: \"Mẹ để lại cái này cho em.\"",
+          "audio_delivery": "quietly, with hesitation",
+          "action": "Minh hesitates, then gestures toward something on the table outside the frame."
+        },
+        {
+          "framing": "ots_b",
+          "dialogue": "Lan: \"Anh giữ nó bao lâu rồi?\"",
+          "audio_delivery": "low and controlled",
+          "action": "Lan follows his glance toward the table, then looks back at him."
+        }
+      ]
+    },
+    {
+      "name": "03 - Góc cận lá thư",
+      "start": 13,
+      "duration": 5,
+      "beat": "confrontation",
+      "emotional_value": -4,
+      "uses": ["lan", "letter", "cafe", "cam_insert", "style_main", "aud_cafe"],
+      "camera": "cam_insert",
+      "style": "style_main",
+      "audio": "aud_cafe",
+      "dialogue": "",
+      "videoPrompt": "Veo Video Prompt: Compose the connected references seamlessly. @NV1 opens the same cream envelope and unfolds one handwritten page. Show the bent corner and dark blue ink, but no legible writing. Lighting & Physics: stable warm table light, realistic paper movement, no extra hands; clean footage, no text, no subtitles, no watermark, fictional characters only.",
+      "transition_to_next": "Cut on the unfold to Lan's eyes."
+    },
+    {
+      "name": "04 - Sự thật",
+      "start": 18,
+      "duration": 6,
+      "beat": "reveal",
+      "emotional_value": 4,
+      "uses": ["lan", "cafe", "cam_reveal", "style_main", "aud_cafe"],
+      "camera": "cam_reveal",
+      "style": "style_main",
+      "audio": "aud_cafe",
+      "dialogue": "Lan: \"Mẹ vẫn còn sống.\"",
+      "audio_delivery": "almost whispered, then certain",
+      "videoPrompt": "Veo Video Prompt: Compose the connected references seamlessly. @NV1 looks up from the letter, her grief changing into resolve; mouth articulates: \"Mẹ vẫn còn sống.\". Hold her gaze as she stands to leave. Lighting & Physics: the same warm pendant key and cool rainy window fill, realistic eye movement and coat motion; clean footage, no text, no subtitles, no watermark, fictional characters only.",
+      "transition_to_next": "Fade out after the held look."
+    }
+  ]
+}
