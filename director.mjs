@@ -195,8 +195,9 @@ LÀM THEO THỨ TỰ:
    nhạc cụ ghi ở dòng "Nhạc cụ" (tối đa 3). Dòng đó "không rõ": chỉ MỘT nhạc công — Pianist cho
    ballad, thánh ca, nhạc thờ phượng; Guitarist cho thể loại khác. Choir chỉ khi dòng "Nhạc cụ"
    có hợp xướng. Liệt kê luôn các Location: sân khấu, hàng ghế khán giả, và nơi khác nếu có thấy.
-4. Chia hàng theo lời (QUY TẮC NHỊP), phủ từng Section theo CÔNG THỨC PHỦ CẢNH, rồi viết từng hàng.
-5. Tự kiểm tra (VALIDATION) rồi mới xuất.
+4. Lập BẢNG LAYER NỀN: mỗi Section một dòng đèn / màn LED / hiệu ứng / đội hình (xem mục riêng).
+5. Chia hàng theo lời (QUY TẮC NHỊP), phủ từng Section theo CÔNG THỨC PHỦ CẢNH, rồi viết từng hàng.
+6. Tự kiểm tra (VALIDATION) rồi mới xuất.
 
 CÁC CỘT — đúng tên, đúng thứ tự, mỗi ô MỘT giá trị:
 ${SHOT_LIST_HEADER}
@@ -240,9 +241,14 @@ ${SHOT_LIST_HEADER}
 - Angle: eye level, low, high, 3/4, profile, overhead, rear.
 - Camera Movement: locked, slow push-in, pull-out, dolly left, dolly right, orbit, tracking,
   crane up, crane down, handheld, rack focus.
-- Action: một câu tiếng Anh tả việc nhìn thấy được (động tác, tay trên phím đàn, ánh sáng đổi…).
-  Chỉ nhắc người và nhạc cụ thật sự có trong khung — hàng Band phải nhắc đủ tên các nhạc công thấy
-  trong khung. Không lặp lại Emotion, không tả khẩu hình, không viết ca sĩ đang hát.
+- Action: tiếng Anh, viết theo ĐÚNG hai phần, nối bằng dấu chấm:
+  "<việc nhìn thấy được trong khung>. Stage lighting: <cụm LAYER NỀN của Section này>"
+  Phần đầu: động tác, tay trên phím đàn, người ngả về trước… Chỉ nhắc người và nhạc cụ thật sự có
+  trong khung — hàng Band phải nhắc đủ tên các nhạc công thấy trong khung. Không lặp lại Emotion,
+  không tả khẩu hình, không viết ca sĩ đang hát.
+  Phần sau: chép NGUYÊN VĂN cụm đèn + nền của Section đó từ BẢNG LAYER (xem mục dưới), để mọi
+  khung trong cùng một đoạn nhạc nằm dưới cùng một thứ ánh sáng. Hàng nào có khói, pháo giấy, tia
+  lửa hay beam quét thì viết thêm một mệnh đề nữa cho đúng cú đánh đó.
 - Vocal Delivery: CHỈ điền ở hàng CÓ Lyric; hàng không lời để TRỐNG. Tả CA SĨ hát câu đó thế nào —
   cảm xúc TRONG GIỌNG + độ to (soft / medium / full voice), tiếng Anh (vd "aching, almost
   whispered — soft voice"; "defiant, lifting — full voice"). Đây là dữ liệu DUY NHẤT cho luồng
@@ -265,17 +271,41 @@ QUY TẮC NHỊP (chia hàng theo TỪ — từ = các chữ cách nhau bởi d�
   Section riêng "Instrumental N", phủ bằng nhiều hàng ≤ 8 giây (cận người đang solo → nhạc cụ →
   toàn cảnh). Không chèn hàng không lời vào chỗ hai câu hát sát nhau (khoảng lặng < 1 giây).
 
+BẢNG LAYER NỀN (đèn · màn LED · hiệu ứng · đội hình) — khai trước, rồi chép vào Action:
+- Bối cảnh, gương mặt và trang phục đã được khoá bằng ảnh tham chiếu, nên thứ DUY NHẤT còn làm
+  một đoạn nhạc khác hẳn đoạn trước là đèn và nền. Trước khi viết hàng nào, lập một bảng: mỗi
+  Section một dòng, gồm bốn ô.
+  · ĐÈN: màu và hướng key, đèn ngược, beam moving head, độ dày haze, nhấp nháy hay đứng yên —
+    một cụm tiếng Anh 8–20 chữ (vd "cold blue key from stage left, single warm backlight, thin
+    haze, beams still"). Đi theo Energy: Energy thấp ít nguồn sáng và một màu; Energy cao thêm
+    đèn ngược, beam quét, tương phản mạnh. Hai Section liền nhau KHÔNG dùng cùng một cụm.
+  · MÀN LED / PHÔNG: đang chiếu gì (tối đen, hạt sáng trôi, hoa văn, camera trực tiếp của ca sĩ),
+    hoặc "no LED wall" nếu sân khấu không có. Khai rồi thì mọi hàng của Section phải thống nhất —
+    bỏ trống là mỗi clip một kiểu phông.
+  · HIỆU ỨNG: khói, CO2, pháo giấy, tia lửa lạnh, gió thổi tóc — và ĐÚNG giây chúng xảy ra. Chỉ
+    đặt vào chỗ có cú đánh nghe được (vào Chorus, drop, nhịp cuối Final Chorus). Không rải đều.
+  · ĐỘI HÌNH: ai đứng trên sân khấu ở đoạn này (chỉ ca sĩ / thêm nhạc công / cả ban). Người vào
+    hay rời sân khấu là công tắc dồn nén mạnh nhất, và nó chỉ được đổi ở ranh giới Section.
+- Vũ đoàn, hợp xướng, đám đông là NỀN, không phải Subject: viết họ trong Action ("four dancers
+  fan out behind the band"), đừng tạo giá trị Subject mới cho họ.
+- Đổi đèn giữa chừng một Section chỉ khi lời rẽ nghĩa, và khi đó viết rõ sự chuyển trong Action
+  của đúng hàng ấy ("stage wash shifts to warm gold"). KHÔNG đổi Location vì đèn đổi.
+
 CÔNG THỨC PHỦ CẢNH (phần việc chính của luồng A):
-- Trong mỗi Section, luân phiên 6 loại khung sau theo THỨ TỰ ƯU TIÊN 3 → 1 → 4 → 6 → 2 → 5, lấy
-  được bao nhiêu loại thì tùy số hàng của Section (Section dài đủ cả 6; Section ngắn chỉ vài loại
-  đầu). Muốn thêm một loại khung mà không đủ hàng thì TÁCH một câu dài thành 2 hàng, mỗi nửa một
-  góc khác.
+- Trong mỗi Section, luân phiên 7 loại khung sau theo THỨ TỰ ƯU TIÊN 3 → 1 → 4 → 6 → 2 → 7 → 5,
+  lấy được bao nhiêu loại thì tùy số hàng của Section (Section dài đủ cả 7; Section ngắn chỉ vài
+  loại đầu). Muốn thêm một loại khung mà không đủ hàng thì TÁCH một câu dài thành 2 hàng, mỗi nửa
+  một góc khác.
   1) WS hoặc EWS cả ban nhạc trên sân khấu (toàn);
   2) MS một nhóm 2–3 người đang chơi (trung);
   3) CU hoặc MCU một nhạc công đang chơi (cận) — chọn người có tiếng nghe rõ nhất ở Section đó;
   4) Macro hoặc ECU đúng nhạc cụ đang dẫn Section (phím đàn, dây guitar, mặt trống, cần kéo);
   5) EWS toàn cảnh sân khấu trong không gian (thấy cả khán phòng hoặc cả chiều cao sân khấu);
-  6) khán giả phản ứng — CU một khuôn mặt hoặc WS hàng ghế, Location "Audience rows".
+  6) khán giả phản ứng — CU một khuôn mặt hoặc WS hàng ghế, Location "Audience rows";
+  7) ĐÈN và HIỆU ỨNG là chủ thể — beam quét qua haze, khói cuộn trên sàn, pháo giấy rơi trước đèn
+     ngược, bóng người in lên màn LED. Subject để TRỐNG hoặc là một vật (Location vẫn phải điền),
+     Shot Size thường EWS hoặc WS, và chỉ đặt hàng loại này ở đúng giây có cú đánh trong nhạc.
+     Đây là hàng cứu nhịp: nó cắt được vào bất cứ đâu mà không lộ sai khẩu hình hay sai tay đàn.
 - Nhạc cụ phải ĐÚNG LÚC: chỉ cận hay Macro nhạc cụ nào thật sự đang nghe thấy ở giây đó.
 - Thứ tự luân phiên theo Energy, để một Section không lặp một cỡ cảnh:
   Energy 1–3: mở bằng Macro hoặc CU chi tiết, ít người; kết Section bằng một WS.
@@ -323,7 +353,9 @@ QUY TẮC BỐI CẢNH:
 
 XUẤT KẾT QUẢ:
 1. Tóm tắt ngắn: BPM, nhịp, cấu trúc + năng lượng + nhạc cụ dẫn từng đoạn (ghi rõ đo hay ước
-   lượng), hành trình cảm xúc, danh sách Subject và Location.
+   lượng), hành trình cảm xúc, danh sách Subject và Location, và BẢNG LAYER NỀN (mỗi Section một
+   dòng: đèn / màn LED / hiệu ứng / đội hình) — người dựng đọc bảng này để biết mỗi đoạn phải
+   nhìn ra sao, và để dựng kho hình sân khấu trước khi render.
 2. ĐÚNG MỘT khối \`\`\`csv … \`\`\` với header ở trên (dấu phẩy phân cách; bọc "…" mọi ô có dấu
    phẩy — luôn bọc Lyric, Emotion, Action khi có chữ; ô trống để trống). Tạo luôn file .csv để
    tải về.
@@ -337,6 +369,11 @@ XUẤT KẾT QUẢ:
    - mỗi hàng CÓ Lyric đều có Vocal Delivery; mỗi hàng KHÔNG Lyric có Vocal Delivery trống;
    - mỗi Section luân phiên cỡ cảnh theo CÔNG THỨC PHỦ CẢNH (không lặp Subject + Shot Size ở hai
      hàng liền nhau);
+   - mọi hàng có Action đều kết bằng "Stage lighting: " + cụm đèn của Section mình trong BẢNG
+     LAYER, chép giống hệt nhau trong cùng một Section; hai Section liền nhau không dùng chung
+     một cụm đèn;
+   - số Section dài từ 4 hàng trở lên mà không có hàng khán giả = 0; số Section từ 6 hàng trở lên
+     mà không có hàng đèn/hiệu ứng (loại 7) = 0;
    - nối cột Lyric theo thứ tự, bỏ dấu câu, so từng từ với LỜI CHÍNH THỨC (sau khi đổi số trong đó
      thành chữ như ở cột Lyric): số từ thừa = 0, số từ thiếu = 0.
 Ưu tiên: PHỦ KÍN BÀI → LỜI ĐÚNG → THỨ TỰ → CẢM XÚC → BỐI CẢNH, MÁY → ĐẸP.`;

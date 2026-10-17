@@ -391,6 +391,33 @@ assert.match(DEEP_MUSIC_ANALYSIS_PROMPT, /LUỒNG A/, 'the prompt says which str
 assert.match(DEEP_MUSIC_ANALYSIS_PROMPT, /Lip Sync: LUÔN là NO/);
 assert.match(DEEP_MUSIC_ANALYSIS_PROMPT, /Location: BẮT BUỘC điền ở MỌI hàng/);
 assert.match(DEEP_MUSIC_ANALYSIS_PROMPT, /CÔNG THỨC PHỦ CẢNH/, 'the coverage recipe is in it');
+// The reference images freeze the set, the faces and the clothes, so the only layer left to tell
+// one section from the next is the stage itself: its lighting state, its LED wall, its effects
+// and who is standing on it. The prompt therefore makes that a declared table, carried into every
+// row's Action, and gives the coverage recipe a seventh framing where the light IS the subject.
+assert.match(DEEP_MUSIC_ANALYSIS_PROMPT, /BẢNG LAYER NỀN/, 'the per-section layer table is asked for');
+for (const layer of [/ĐÈN:/, /MÀN LED \/ PHÔNG:/, /HIỆU ỨNG:/, /ĐỘI HÌNH:/])
+  assert.match(DEEP_MUSIC_ANALYSIS_PROMPT, layer, 'the table covers ' + layer);
+assert.match(
+  DEEP_MUSIC_ANALYSIS_PROMPT,
+  /7\) ĐÈN và HIỆU ỨNG là chủ thể/,
+  'coverage has a lighting/effect framing of its own',
+);
+assert.match(
+  DEEP_MUSIC_ANALYSIS_PROMPT,
+  /3 → 1 → 4 → 6 → 2 → 7 → 5/,
+  'and that framing is in the rotation order',
+);
+assert.match(
+  DEEP_MUSIC_ANALYSIS_PROMPT,
+  /Stage lighting: <cụm LAYER NỀN của Section này>/,
+  "the lighting clause is labelled, so it reads as lighting in the shot's own prompt",
+);
+assert.match(
+  DEEP_MUSIC_ANALYSIS_PROMPT,
+  /kết bằng "Stage lighting: " \+ cụm đèn của Section mình/,
+  'validation checks the lighting clause reached every Action',
+);
 const STD_CSV =
   SHOT_LIST_HEADER +
   '\n' +
