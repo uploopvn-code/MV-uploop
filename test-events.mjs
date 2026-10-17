@@ -3,6 +3,7 @@
 // image/video shows up without waiting for a poll. No mocks — a real server, a real SSE connection
 // over HTTP, a real worker claim/complete with a real MP4.
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -33,9 +34,73 @@ async function api(p, method = 'GET', body, headers = {}) {
   return { status: r.status, data };
 }
 
+// A real (1x1) PNG, what the Seedvis stand-in hands back.
+const png = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jKJkAAAAASUVORK5CYII=',
+  'base64',
+);
+// Seedvis itself, over real HTTP on this machine: the tool's OWN generation path (the server polls
+// the API and stores the file), which is not the worker path tested below — and the one a user
+// actually waits on in front of the canvas.
+const SV_KEY = 'sv-events-key-1234';
+const SV_PORT = 17802;
+const SV_API = 'http://127.0.0.1:' + SV_PORT + '/api/v1';
+const svJobs = new Map();
+const seedvisMock = http.createServer(async (req, res) => {
+  let raw = '';
+  for await (const c of req) raw += c;
+  const send = (status, obj) => {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(obj));
+  };
+  if (req.url.startsWith('/cdn/')) {
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+    return res.end(png);
+  }
+  if (req.headers.authorization !== 'Bearer ' + SV_KEY)
+    return send(401, { error: { code: 'unauthorized', message: 'Invalid key' } });
+  if (req.url === '/api/v1/account/info') return send(200, { data: { balance: 7, plan: 'Pro' } });
+  if (req.url === '/api/v1/models') return send(200, { data: [{ id: 'GEM_PIX_2' }] });
+  const life = (id, j) => ({
+    id,
+    status: j.status,
+    is_final: j.status === 'completed',
+    next: j.status === 'completed'
+      ? { action: 'done' }
+      : { action: 'poll', url: SV_API + '/developer/generations/' + id + '?wait=0', after_seconds: 1 },
+    outputs:
+      j.status === 'completed'
+        ? [{ type: 'image', url: 'http://127.0.0.1:' + SV_PORT + '/cdn/' + id + '_0' }]
+        : [],
+    references: [],
+  });
+  const poll = req.url.match(/^\/api\/v1\/developer\/generations\/([\w-]+)\?wait=0$/);
+  if (poll && req.method === 'GET') {
+    const j = svJobs.get(poll[1]);
+    if (!j) return send(404, { error: { code: 'not_found', message: 'Generation not found' } });
+    j.polls = (j.polls || 0) + 1;
+    j.status = j.polls >= 2 ? 'completed' : 'processing';
+    return send(200, { success: true, data: life(poll[1], j) });
+  }
+  if (req.method === 'POST') {
+    const id = req.headers['idempotency-key'];
+    if (!svJobs.has(id)) svJobs.set(id, { status: 'queued' });
+    return send(202, life(id, svJobs.get(id)));
+  }
+  send(404, {});
+});
+await new Promise(r => seedvisMock.listen(SV_PORT, '127.0.0.1', r));
+
 const proc = spawn(process.execPath, ['server.mjs'], {
   cwd: new URL('.', import.meta.url),
-  env: { ...process.env, MV_PORT: String(PORT), MV_DATA_DIR: dir },
+  env: {
+    ...process.env,
+    SEEDVIS_API_KEY: '',
+    MV_PORT: String(PORT),
+    MV_DATA_DIR: dir,
+    MV_SEEDVIS_URL: SV_API,
+    MV_SEEDVIS_POLL_MS: '30',
+  },
   stdio: 'pipe',
 });
 let errLog = '';
@@ -143,6 +208,58 @@ try {
     'kết quả worker KHÔNG được tăng revision (kế hoạch trợ lý so revision để huỷ)',
   );
 
+  // 2b. The SAME must hold for the tool's own generation path (Seedvis): the server submits, polls
+  //     and stores the image itself, so no worker ever calls /api/worker/complete. Without a push
+  //     here the window is blind — the result does not bump the revision, and by the next poll the
+  //     job is no longer active, so nothing ever tells the canvas the picture arrived (F5 did).
+  assert.equal((await api('/api/seedvis/key', 'POST', { key: SV_KEY })).data.configured, true);
+  const svNode = (await api('/api/nodes', 'POST', { name: 'SeedvisShot' })).data.nodes.find(
+    n => n.name === 'SeedvisShot',
+  ).id;
+  assert.equal(
+    (
+      await api('/api/node', 'PATCH', {
+        id: svNode,
+        seedvis: { image: { model: 'GEM_PIX_2', aspectRatio: '16:9', upscale: 'none' } },
+      })
+    ).status,
+    200,
+  );
+  const svRevisionBefore = (await api('/api/revision')).data.revision;
+  const svLastDoneBefore = (await api('/api/revision')).data.lastDone;
+  const svBefore = stream.events.length;
+  const svJob = await api('/api/jobs', 'POST', { nodeId: svNode, kind: 'image' });
+  assert.equal(svJob.status, 201, JSON.stringify(svJob.data));
+  // the job's own events (queued → running) may or may not land; what must land is one AFTER it
+  // finished, and the image must be on the node by then.
+  for (let i = 0; i < 200; i++) {
+    const j = (await api('/api/state')).data.jobs.find(x => x.id === svJob.data.job.id);
+    if (!['queued', 'running'].includes(j.status)) {
+      assert.equal(j.status, 'completed', j.error);
+      break;
+    }
+    await new Promise(r => setTimeout(r, 50));
+  }
+  const withImage = (await api('/api/state')).data.nodes.find(n => n.id === svNode);
+  assert.ok(withImage.image, 'ảnh Seedvis phải nằm trên node');
+  await waitForEvents(stream, svBefore + 1, 'ảnh Seedvis xong phải đẩy sự kiện');
+  assert.equal(
+    (await api('/api/revision')).data.revision,
+    svRevisionBefore,
+    'và vẫn KHÔNG tăng revision (kế hoạch trợ lý so revision để huỷ)',
+  );
+  // The poll's safety net, for a window whose push connection was missed: the heartbeat carries
+  // when the last job finished, which is the only thing in it that moved.
+  const beat = (await api('/api/revision')).data;
+  assert.ok(beat.lastDone, 'nhịp /api/revision nói job vừa xong lúc nào');
+  assert.equal(beat.active, 0, 'và lúc này không còn job chạy — nhịp cũ sẽ mù ở đây');
+  assert.ok(
+    beat.lastDone > svLastDoneBefore,
+    `mốc job xong phải tiến (${svLastDoneBefore} → ${beat.lastDone})`,
+  );
+  const render = fs.readFileSync(new URL('./public/js/render.js', import.meta.url), 'utf8');
+  assert.match(render, /lastDone/, 'và poll của trình duyệt đọc mốc đó');
+
   // 3. A second window gets its own stream, and both are served.
   const second = await openStream();
   await api('/api/nodes', 'POST', { name: 'SecondWindow' });
@@ -156,7 +273,7 @@ try {
   await waitForEvents(stream, stream.events.length + 1, 'luồng còn lại vẫn nhận đẩy');
 
   console.log(
-    'PASS: push channel — /api/events là text/event-stream, thêm node đẩy "change", worker nộp kết quả đẩy sự kiện DÙ revision không đổi (video vào node nhánh), nhiều cửa sổ cùng nhận, đóng một luồng không ảnh hưởng luồng khác',
+    'PASS: push channel — /api/events là text/event-stream, thêm node đẩy "change", worker nộp kết quả đẩy sự kiện DÙ revision không đổi (video vào node nhánh), ảnh Seedvis do chính tool tạo cũng đẩy sự kiện khi xong, nhịp /api/revision mang mốc job xong để poll làm lưới an toàn, nhiều cửa sổ cùng nhận, đóng một luồng không ảnh hưởng luồng khác',
   );
 } catch (e) {
   console.error('FAIL:', e.message);
@@ -165,6 +282,7 @@ try {
 } finally {
   stream?.close();
   proc.kill();
+  seedvisMock.close();
   await new Promise(r => setTimeout(r, 300));
   fs.rmSync(dir, { recursive: true, force: true });
 }

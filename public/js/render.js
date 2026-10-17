@@ -928,13 +928,20 @@ export async function refresh() {
 // The background poll: it asks a cheap /api/revision first and only pulls the full ~1.8 MB state +
 // re-renders when the graph actually changed (another window edited it) OR a job is live (progress
 // to show). An idle window on a steady project does nothing. Paused while the tab is hidden.
+let lastDoneSeen = null;
 export async function pollState() {
   if (typeof document !== 'undefined' && document.hidden) return;
   try {
     const r = await api('/api/revision');
+    // A finished job does not bump the revision, and the tick after it finished sees nothing
+    // active — so without lastDone the poll cannot tell "a picture just landed" from "nothing is
+    // happening", and an idle canvas keeps the old image until a reload. First answer only
+    // records the mark; the window already has whatever finished before it opened.
+    const landed = lastDoneSeen !== null && r.lastDone !== lastDoneSeen;
+    lastDoneSeen = r.lastDone ?? '';
     // store.state.revision is kept current by refresh() and by every action that returns full
     // state, so comparing against it never triggers a redundant fetch after a local edit.
-    if (r.revision !== store.state?.revision || r.active > 0) await refresh();
+    if (r.revision !== store.state?.revision || r.active > 0 || landed) await refresh();
   } catch {}
 }
 
